@@ -116,9 +116,9 @@ export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
                   className="flex items-center gap-2 bg-white border border-[#d9d9d9] rounded-lg px-3 py-2 hover:border-[#c9242b]/40 transition-colors"
                 >
                   {/* Descripción */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-[#111111] truncate">{s.concepto}</p>
-                    <p className="text-[10px] text-[#6e6e6e] flex items-center gap-1">
+                  <div className="flex-1 min-w-0" title={s.concepto}>
+                    <p className="text-xs font-medium text-[#111111] leading-tight line-clamp-2">{s.concepto}</p>
+                    <p className="text-[10px] text-[#6e6e6e] flex items-center gap-1 mt-0.5">
                       {s.codigo} · por {s.unidad}
                       {tieneRango ? ` · Rango $${s.precio_base}–$${s.precio_max}` : ""}
                       {isTecnicoRate && (
