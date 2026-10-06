@@ -3,17 +3,8 @@ import { Document, Page, Text, View, StyleSheet, Image as PDFImage, Font, pdf } 
 import { formatUSD, formatFecha } from "@/lib/utils";
 import { LOGO_BLANCO_B64 } from "@/lib/assets/logo-b64"; // Reusamos el logo base64
 
-Font.register({
-  family: "Inter",
-  fonts: [
-    { src: "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyeMZhrib2Bg-4.ttf", fontWeight: 400 },
-    { src: "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuG1fMZhrib2Bg-4.ttf", fontWeight: 700 },
-    { src: "https://fonts.gstatic.com/s/inter/v12/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuFuYMZhrib2Bg-4.ttf", fontWeight: 900 }
-  ],
-});
-
 const S = StyleSheet.create({
-  page: { padding: 40, fontFamily: "Inter", backgroundColor: "#ffffff" },
+  page: { padding: 40, fontFamily: "Helvetica", backgroundColor: "#ffffff" },
   header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 30 },
   
   // Header Izquierdo (Logo e Info Empresa)
