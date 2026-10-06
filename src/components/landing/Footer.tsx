@@ -20,9 +20,12 @@ export default function Footer() {
               className="h-10 w-auto object-contain"
             />
           </div>
-          <p className="text-sm leading-relaxed text-[#6e6e6e]">
-            Distribuidor Oficial Hikvision. Soluciones en seguridad electrónica,
-            automatización, redes y domótica para Venezuela.
+          <p className="text-sm leading-relaxed text-[#6e6e6e] italic mt-2">
+            "Tu seguridad, es nuestra prioridad."
+          </p>
+          <p className="text-sm leading-relaxed text-[#6e6e6e] mt-2">
+            Tienda especializada en seguridad electrónica, automatización y redes.
+            Equipos Hikvision, HiLook, EZVIZ, Tapo, TP-Link y más.
           </p>
           <div className="mt-3 space-y-1">
             <p className="text-xs text-[#6e6e6e] flex items-center gap-1.5">

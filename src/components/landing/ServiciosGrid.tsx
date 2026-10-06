@@ -1,107 +1,115 @@
-import { Camera, Home, Network, Wrench } from "lucide-react";
+import Image from "next/image";
+import { CheckCircle2 } from "lucide-react";
+import { ALL_BRANDS } from "@/lib/brand-logos";
 
 const servicios = [
   {
-    icon: Camera,
-    titulo: "Videovigilancia (CCTV / IP / Hikvision)",
+    titulo: "Videovigilancia CCTV / IP",
     descripcion:
-      "Instalación y configuración de cámaras analógicas, IP y DVR/NVR Hikvision. Monitoreo remoto 24/7 desde cualquier dispositivo.",
-    acento: "#c9242b",
-    items: ["Cámaras Bullet y Domo", "DVR / NVR hasta 64ch", "Visión nocturna y PTZ", "App Hik-Connect"],
+      "Instalación y configuración de cámaras analógicas, IP, DVR y NVR. Monitoreo remoto 24/7 desde cualquier dispositivo.",
+    foto: "https://images.unsplash.com/photo-1601979031925-424e53b6caaa?w=600&q=80",
+    items: ["Cámaras Bullet, Domo y PTZ", "DVR / NVR hasta 64 canales", "Visión nocturna full-color", "App de monitoreo remoto"],
   },
   {
-    icon: Home,
     titulo: "Domótica & Control de Acceso",
     descripcion:
-      "Automatización de cerraduras inteligentes, portones eléctricos, iluminación y control de acceso biométrico.",
-    acento: "#c9242b",
-    items: ["Cerraduras electrónicas", "Portones automáticos", "Control biométrico / facial", "Iluminación inteligente"],
+      "Automatización de cerraduras inteligentes, portones eléctricos, iluminación y acceso biométrico para tu hogar o empresa.",
+    foto: "https://images.unsplash.com/photo-1558002038-1055907df827?w=600&q=80",
+    items: ["Cerraduras electrónicas", "Portones automáticos", "Control facial / huella", "Iluminación inteligente"],
   },
   {
-    icon: Network,
     titulo: "Cableado Estructurado & Redes",
     descripcion:
-      "Diseño e instalación de infraestructura de red Cat5e/Cat6, fibra óptica, racks, switches y Wi-Fi empresarial.",
-    acento: "#05235b",
-    items: ["Certificación Cat5e / Cat6", "Rack y patchpanel", "Wi-Fi empresarial", "Garantía hasta 5 años"],
+      "Infraestructura de red Cat5e/Cat6, fibra óptica, racks y Wi-Fi empresarial certificado. Garantía hasta 5 años.",
+    foto: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=600&q=80",
+    items: ["Certificación Cat5e / Cat6", "Rack y patch panel", "Wi-Fi empresarial", "Garantía hasta 5 años"],
   },
   {
-    icon: Wrench,
-    titulo: "Mantenimiento Industrial & Residencial",
+    titulo: "Mantenimiento Preventivo",
     descripcion:
-      "Planes de mantenimiento preventivo y correctivo para sistemas de seguridad, equipos de red e instalaciones eléctricas.",
-    acento: "#05235b",
-    items: ["Mantenimiento de cámaras", "Revisión DVR / NVR", "Reparación de equipos", "Contratos anuales"],
+      "Planes de mantenimiento para sistemas de seguridad, equipos de red y domótica. Técnicos certificados.",
+    foto: "https://images.unsplash.com/photo-1504917595217-d4dc5ebe6122?w=600&q=80",
+    items: ["Limpieza y calibración", "Actualización firmware", "Revisión DVR / NVR", "Contratos anuales"],
   },
 ];
 
 export default function ServiciosGrid() {
   return (
-    <section id="servicios" className="py-24 bg-[#f8fafc]">
+    <section id="servicios" className="py-24 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
         {/* Encabezado */}
         <div className="text-center mb-16">
-          <span className="text-[#c9242b] text-sm font-semibold uppercase tracking-widest">
+          <span className="text-[#c9242b] text-xs font-bold uppercase tracking-widest">
             Lo que hacemos
           </span>
-          <h2 className="mt-2 text-3xl sm:text-4xl font-extrabold text-[#111111]">
+          <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold text-[#111111]">
             Soluciones Tecnológicas a tu Medida
           </h2>
           <p className="mt-4 text-[#6e6e6e] max-w-2xl mx-auto text-base">
-            Cobertura completa desde la instalación hasta el mantenimiento, con
-            garantía certificada y soporte técnico continuo.
+            Desde la instalación hasta el mantenimiento, con garantía certificada
+            y soporte técnico continuo.
           </p>
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {servicios.map((s) => {
-            const Icon = s.icon;
-            return (
-              <div
-                key={s.titulo}
-                className="bg-white rounded-2xl shadow-sm border border-[#d9d9d9] hover:shadow-md hover:-translate-y-1 transition-all overflow-hidden group"
-              >
-                {/* Barra de acento superior */}
-                <div
-                  className="h-1 w-full"
-                  style={{ backgroundColor: s.acento }}
+        {/* Grid de servicios */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {servicios.map((s) => (
+            <div
+              key={s.titulo}
+              className="group bg-white rounded-2xl border border-[#e5e5e5] overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+            >
+              {/* Foto */}
+              <div className="relative h-48 overflow-hidden">
+                <Image
+                  src={s.foto}
+                  alt={s.titulo}
+                  fill
+                  className="object-cover group-hover:scale-105 transition-transform duration-500"
                 />
-                <div className="p-8">
-                  {/* Ícono */}
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
-                    style={{ backgroundColor: `${s.acento}15` }}
-                  >
-                    <Icon
-                      className="w-6 h-6"
-                      style={{ color: s.acento }}
-                    />
-                  </div>
-
-                  <h3 className="text-xl font-bold text-[#111111] mb-3">
-                    {s.titulo}
-                  </h3>
-                  <p className="text-[#6e6e6e] text-sm leading-relaxed mb-5">
-                    {s.descripcion}
-                  </p>
-
-                  {/* Lista */}
-                  <ul className="space-y-2">
-                    {s.items.map((item) => (
-                      <li key={item} className="flex items-center gap-2 text-sm text-[#111111]">
-                        <span
-                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: s.acento }}
-                        />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                {/* Barra roja superior */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-[#c9242b]" />
+                {/* Título sobre foto */}
+                <h3 className="absolute bottom-4 left-5 text-white font-bold text-lg leading-tight">
+                  {s.titulo}
+                </h3>
               </div>
-            );
-          })}
+
+              {/* Contenido */}
+              <div className="p-6">
+                <p className="text-[#6e6e6e] text-sm leading-relaxed mb-4">
+                  {s.descripcion}
+                </p>
+                <ul className="space-y-2">
+                  {s.items.map((item) => (
+                    <li key={item} className="flex items-center gap-2 text-sm text-[#111111]">
+                      <CheckCircle2 className="w-4 h-4 text-[#c9242b] flex-shrink-0" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── STRIP DE MARCAS ── */}
+        <div className="mt-20 pt-12 border-t border-[#e5e5e5]">
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-[#6e6e6e] mb-8">
+            Trabajamos con las mejores marcas
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+            {ALL_BRANDS.map(({ name, Logo }) => (
+              <div
+                key={name}
+                className="flex items-center justify-center text-[#999] hover:text-[#111111] transition-colors duration-200"
+                title={name}
+              >
+                <Logo className="h-6 w-auto" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>

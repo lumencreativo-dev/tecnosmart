@@ -12,6 +12,7 @@ import {
 } from "@react-pdf/renderer";
 import type { Cliente, LineaDetalle, ResumenCotizacion } from "@/lib/types";
 import { formatFecha } from "@/lib/utils";
+import { LOGO_BLANCO_B64 } from "@/lib/assets/logo-b64";
 
 // ── Estilos ───────────────────────────────────────────────────
 const S = StyleSheet.create({
@@ -204,9 +205,9 @@ function CotizacionDocument({
         {/* ── HEADER ── */}
         <View style={S.header}>
           <View style={S.headerLeft}>
-            <PDFImage src="/logo-blanco.png" style={S.logoImg} />
+            <PDFImage src={LOGO_BLANCO_B64} style={S.logoImg} />
             <Text style={S.logoSub}>
-              DISTRIBUIDOR OFICIAL · SOLUCIONES TECNOLÓGICAS
+              TIENDA ESPECIALIZADA · SOLUCIONES TECNOLÓGICAS
             </Text>
             <View style={S.headerMeta}>
               <Text style={S.headerMetaLine}>RIF: J-50701960-8  |  Telf: 0412-2789273</Text>

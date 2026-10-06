@@ -1,62 +1,74 @@
+import Image from "next/image";
 import { ArrowRight, BadgeCheck } from "lucide-react";
 
 const beneficios = [
-  "Precios de distribuidor mayorista",
-  "Soporte técnico y asesoría comercial",
-  "Acceso a catálogo completo Hikvision",
-  "Capacitación e instalación conjunta",
+  "Precios especiales para técnicos e instaladores",
+  "Soporte técnico y asesoría comercial directa",
+  "Acceso a catálogo completo de equipos",
+  "Capacitación e instalación conjunta disponible",
 ];
 
 export default function BannerB2B() {
   const wa = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "584122789273";
 
   return (
-    <section id="b2b" className="py-20 bg-[#05235b] relative overflow-hidden">
-      {/* Patrón de fondo */}
-      <div
-        className="absolute inset-0 opacity-5"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle, #ffffff 1px, transparent 1px)",
-          backgroundSize: "30px 30px",
-        }}
-      />
+    <section id="b2b" className="py-0 relative overflow-hidden">
+      {/* Foto de fondo — técnico trabajando */}
+      <div className="relative h-auto">
+        <Image
+          src="https://images.unsplash.com/photo-1521791136064-7986c2920216?w=1400&q=80"
+          alt="Técnico en instalación profesional"
+          width={1400}
+          height={600}
+          className="w-full h-[500px] sm:h-[420px] object-cover object-center"
+        />
+        {/* Overlay negro fuerte */}
+        <div className="absolute inset-0 bg-[#111111]/88" />
 
-      <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
-        {/* Badge */}
-        <span className="inline-block bg-[#c9242b] text-white text-xs font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-6">
-          Canal B2B · Distribución Oficial
-        </span>
+        {/* Línea roja superior */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-[#c9242b]" />
 
-        <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-4 leading-tight">
-          ¿Eres instalador independiente o técnico de seguridad?
-        </h2>
-        <p className="text-[#d9d9d9] text-lg max-w-3xl mx-auto mb-10 leading-relaxed">
-          Únete a nuestro canal de distribución oficial Hikvision y obtén{" "}
-          <strong className="text-white">precios preferenciales</strong>,
-          capacitación y soporte técnico para hacer crecer tu negocio.
-        </p>
+        {/* Contenido centrado */}
+        <div className="absolute inset-0 flex items-center">
+          <div className="max-w-5xl mx-auto px-6 w-full">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
 
-        {/* Beneficios */}
-        <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto mb-10 text-left">
-          {beneficios.map((b) => (
-            <li key={b} className="flex items-start gap-3 text-[#d9d9d9] text-sm">
-              <BadgeCheck className="w-5 h-5 text-[#c9242b] flex-shrink-0 mt-0.5" />
-              {b}
-            </li>
-          ))}
-        </ul>
+              {/* Texto */}
+              <div>
+                <span className="inline-block bg-[#c9242b] text-white text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
+                  Técnicos e Instaladores
+                </span>
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-3 leading-tight">
+                  ¿Eres técnico o instalador independiente?
+                </h2>
+                <p className="text-[#a0a0a0] text-base leading-relaxed">
+                  Conseguí tus equipos de seguridad a <strong className="text-white">precio especial de técnico</strong>, diferente al precio de cliente final. Sin compromisos, sin mínimos de compra.
+                </p>
+              </div>
 
-        {/* CTA */}
-        <a
-          href={`https://wa.me/${wa}?text=Hola%20TecnoSmart%2C%20me%20interesa%20el%20canal%20de%20distribuci%C3%B3n%20B2B`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-[#c9242b] hover:bg-red-700 text-white font-bold text-base px-8 py-4 rounded-lg shadow-lg transition-all hover:scale-105"
-        >
-          Quiero ser Distribuidor
-          <ArrowRight className="w-5 h-5" />
-        </a>
+              {/* Lista + CTA */}
+              <div>
+                <ul className="space-y-3 mb-7">
+                  {beneficios.map((b) => (
+                    <li key={b} className="flex items-start gap-3 text-[#d9d9d9] text-sm">
+                      <BadgeCheck className="w-5 h-5 text-[#c9242b] flex-shrink-0 mt-0.5" />
+                      {b}
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href={`https://wa.me/${wa}?text=Hola%20TecnoSmart%2C%20soy%20t%C3%A9cnico%20instalador%20y%20me%20interesa%20precio%20especial`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-[#c9242b] hover:bg-red-700 text-white font-bold px-6 py-3.5 rounded-lg transition-all hover:scale-105 shadow-lg shadow-red-900/30"
+                >
+                  Consultar precio de técnico
+                  <ArrowRight className="w-4 h-4" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );
