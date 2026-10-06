@@ -16,6 +16,7 @@ export interface Producto {
   marca?: string;
   precio_costo: number;
   precio_venta: number;
+  precio_tecnico?: number;   // Precio especial para técnicos
   stock: number;
   datasheet_url?: string;
   especificaciones_json?: Record<string, unknown>;
@@ -28,6 +29,7 @@ export interface ServicioManoObra {
   concepto: string;
   precio_base: number;
   precio_max?: number;
+  precio_tecnico?: number;   // Precio especial para técnicos
   unidad: string;
   categoria?: string;
 }
@@ -40,6 +42,8 @@ export interface Cliente {
   email?: string;
   telefono?: string;
   direccion?: string;
+  tipo?: "cliente_normal" | "tecnico";  // Tipo para precios diferenciados
+  notas?: string;
 }
 
 export type TipoItem = "producto" | "servicio";

@@ -21,20 +21,22 @@ const S = StyleSheet.create({
     backgroundColor: "#ffffff",
     paddingBottom: 60,
   },
-  // Header — más compacto
+  // Header — compacto con isotipo + texto
   header: {
     backgroundColor: "#c9242b",
     paddingHorizontal: 30,
-    paddingVertical: 12,          // ← reducido de 20 → 12
+    paddingVertical: 10,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  headerLeft: { flexDirection: "column", justifyContent: "center" },
-  logoImg: { height: 22, marginBottom: 3 },  // ← reducido de 35 → 22
-  logoSub: { color: "#ffcccc", fontSize: 6.5, letterSpacing: 1.2 },
-  headerMeta: { flexDirection: "column", marginTop: 4 },
-  headerMetaLine: { color: "#ffdddd", fontSize: 6.5, marginTop: 1 },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 10 },
+  logoImg: { height: 28, width: 28 },                         // Isotipo cuadrado
+  headerBrand: { flexDirection: "column", justifyContent: "center" },
+  logoName: { color: "#ffffff", fontSize: 13, fontFamily: "Helvetica-Bold", letterSpacing: 0.5 },
+  logoSub: { color: "#ffcccc", fontSize: 6, letterSpacing: 1.2, marginTop: 1 },
+  headerMeta: { flexDirection: "column", marginTop: 3 },
+  headerMetaLine: { color: "#ffdddd", fontSize: 6, marginTop: 1 },
   headerRight: { alignItems: "flex-end" },
   cotNum: { color: "#ffffff", fontSize: 13, fontFamily: "Helvetica-Bold" },
   cotFecha: { color: "#ffcccc", fontSize: 8, marginTop: 2 },
@@ -205,24 +207,22 @@ function CotizacionDocument({
         {/* ── HEADER ── */}
         <View style={S.header}>
           <View style={S.headerLeft}>
+            {/* Isotipo (solo ícono) */}
             <PDFImage src={LOGO_BLANCO_B64} style={S.logoImg} />
-            <Text style={S.logoSub}>
-              TIENDA ESPECIALIZADA · SOLUCIONES TECNOLÓGICAS
-            </Text>
-            <View style={S.headerMeta}>
-              <Text style={S.headerMetaLine}>RIF: J-50701960-8  |  Telf: 0412-2789273</Text>
-              <Text style={S.headerMetaLine}>tecnosmartvzla@gmail.com</Text>
-              <Text style={S.headerMetaLine}>Av. Bolívar C/C c. Páez, Edif. Sta. Eduviges II, local-02, Tinaquillo, Cojedes</Text>
+            {/* Nombre + slogan + datos */}
+            <View style={S.headerBrand}>
+              <Text style={S.logoName}>TECNO SMART VZL C.A</Text>
+              <Text style={S.logoSub}>TIENDA ESPECIALIZADA · SOLUCIONES TECNOLÓGICAS</Text>
+              <View style={S.headerMeta}>
+                <Text style={S.headerMetaLine}>RIF: J-50701960-8  ·  Telf: 0412-2789273  ·  tecnosmartvzla@gmail.com</Text>
+                <Text style={S.headerMetaLine}>Av. Bolívar C/C c. Páez, Edif. Sta. Eduviges II, local-02, Tinaquillo, Cojedes</Text>
+              </View>
             </View>
           </View>
           <View style={S.headerRight}>
             <Text style={S.cotNum}>{numeroCot}</Text>
-            <Text style={S.cotFecha}>
-              Fecha: {formatFecha(fecha)}
-            </Text>
-            <Text style={[S.cotFecha, { marginTop: 1 }]}>
-              Válido hasta: {formatFecha(vencimiento)}
-            </Text>
+            <Text style={S.cotFecha}>Fecha: {formatFecha(fecha)}</Text>
+            <Text style={[S.cotFecha, { marginTop: 1 }]}>Válido hasta: {formatFecha(vencimiento)}</Text>
           </View>
         </View>
 

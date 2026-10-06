@@ -1,26 +1,31 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
-import { FileDown, Save, RotateCcw, FileText } from "lucide-react";
+import { FileDown, RotateCcw, CheckCircle2, Package } from "lucide-react";
 
 import type { Cliente, LineaDetalle, ResumenCotizacion } from "@/lib/types";
 import { generarNumeroCot, tempId } from "@/lib/utils";
+import { supabase } from "@/lib/supabase/client";
 
-import BuscadorProductos  from "./BuscadorProductos";
-import ServiciosPicker    from "./ServiciosPicker";
-import TablaDetalle       from "./TablaDetalle";
-import ResumenFinanciero  from "./ResumenFinanciero";
-import ClienteForm        from "./ClienteForm";
+import BuscadorProductos from "./BuscadorProductos";
+import ServiciosPicker   from "./ServiciosPicker";
+import TablaDetalle      from "./TablaDetalle";
+import ResumenFinanciero from "./ResumenFinanciero";
+import ClientePicker     from "./ClientePicker";
 
 const DESCUENTO_UMBRAL = 500;
 
+const CLIENTE_VACIO: Cliente = { contacto: "" };
+
 export default function CotizadorWizard() {
-  const [numeroCot] = useState(() => generarNumeroCot());
-  const [lineas, setLineas]     = useState<LineaDetalle[]>([]);
-  const [descuento, setDescuento] = useState(0);
-  const [notas, setNotas]       = useState("");
-  const [cliente, setCliente]   = useState<Cliente>({ contacto: "" });
+  const [numeroCot]              = useState(() => generarNumeroCot());
+  const [lineas, setLineas]      = useState<LineaDetalle[]>([]);
+  const [descuento, setDescuento]= useState(0);
+  const [notas, setNotas]        = useState("");
+  const [cliente, setCliente]    = useState<Cliente>(CLIENTE_VACIO);
   const [exportando, setExportando] = useState(false);
+  const [guardado, setGuardado]  = useState(false);
+  const [cotizacionId, setCotizacionId] = useState<string | null>(null);
 
   // ── Gestión de líneas ─────────────────────────────────────
   const addLinea = useCallback((l: LineaDetalle) => {
@@ -71,27 +76,79 @@ export default function CotizadorWizard() {
     };
   }, [lineas, descuento]);
 
-  // ── Exportar PDF ──────────────────────────────────────────
+  // ── Guardar en Supabase + Exportar PDF ───────────────────
   const handleExportPDF = async () => {
     if (lineas.length === 0) {
       alert("Agrega al menos un ítem antes de exportar.");
       return;
     }
-    if (!cliente.contacto) {
-      alert("Completa el nombre del cliente antes de exportar.");
+    if (!cliente.contacto && !cliente.empresa) {
+      alert("Selecciona o crea un cliente antes de exportar.");
       return;
     }
     setExportando(true);
     try {
+      // 1. Upsert cliente (si ya tiene id, actualiza; si no, inserta)
+      let clienteId = cliente.id;
+      if (!clienteId) {
+        const { data: cData, error: cErr } = await supabase
+          .from("clientes")
+          .insert([{
+            empresa: cliente.empresa,
+            rif_cedula: cliente.rif_cedula,
+            contacto: cliente.contacto,
+            email: cliente.email,
+            telefono: cliente.telefono,
+            direccion: cliente.direccion,
+            tipo: cliente.tipo ?? "cliente_normal",
+          }])
+          .select("id")
+          .single();
+        if (cErr) throw new Error("Error guardando cliente: " + cErr.message);
+        clienteId = cData.id;
+      }
+
+      // 2. Insertar cotización
+      const { data: cotData, error: cotErr } = await supabase
+        .from("cotizaciones")
+        .insert([{
+          numero_cotizacion: numeroCot,
+          cliente_id: clienteId,
+          fecha: new Date().toISOString().split("T")[0],
+          subtotal: resumen.subtotal,
+          descuento: resumen.descuento,
+          total: resumen.total,
+          anticipo_monto: resumen.anticipo,
+          saldo_monto: resumen.saldo,
+          notas,
+          estado: "enviada",
+        }])
+        .select("id")
+        .single();
+      if (cotErr) throw new Error("Error guardando cotización: " + cotErr.message);
+      setCotizacionId(cotData.id);
+
+      // 3. Insertar líneas de detalle
+      const detalles = lineas.map((l) => ({
+        cotizacion_id: cotData.id,
+        tipo_item: l.tipo_item,
+        item_id: l.item_id ?? null,
+        descripcion: l.descripcion,
+        cantidad: l.cantidad,
+        precio_unitario: l.precio_unitario,
+      }));
+      const { error: detErr } = await supabase.from("cotizacion_detalles").insert(detalles);
+      if (detErr) throw new Error("Error guardando detalles: " + detErr.message);
+
+      setGuardado(true);
+
+      // 4. Exportar PDF
       const { exportarCotizacionPDF } = await import("@/components/pdf/CotizacionPDF");
-      await exportarCotizacionPDF({
-        numeroCot,
-        fecha: new Date(),
-        cliente,
-        lineas,
-        resumen,
-        notas,
-      });
+      await exportarCotizacionPDF({ numeroCot, fecha: new Date(), cliente, lineas, resumen, notas });
+
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Error desconocido";
+      alert(msg);
     } finally {
       setExportando(false);
     }
@@ -147,7 +204,7 @@ export default function CotizadorWizard() {
           {/* Buscador de productos */}
           <div className="bg-white rounded-xl border border-[#d9d9d9] p-5">
             <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-4 h-4 text-[#c9242b]" />
+              <Package className="w-4 h-4 text-[#c9242b]" />
               <h2 className="text-sm font-bold text-[#111111] uppercase tracking-wide">
                 Productos & Equipos
               </h2>
@@ -163,8 +220,17 @@ export default function CotizadorWizard() {
 
         {/* ── Columna derecha: Tabla + Resumen ── */}
         <div className="space-y-5">
-          {/* Datos del cliente */}
-          <ClienteForm cliente={cliente} onChange={setCliente} />
+
+          {/* Selector / Creador de cliente */}
+          <div>
+            <h2 className="text-sm font-bold text-[#111111] uppercase tracking-wide mb-2">
+              Cliente
+            </h2>
+            <ClientePicker
+              onSelect={setCliente}
+              clienteSeleccionado={cliente}
+            />
+          </div>
 
           {/* Tabla de ítems */}
           <div>
@@ -193,7 +259,7 @@ export default function CotizadorWizard() {
               rows={3}
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
-              placeholder="Ej: Incluye mano de obra en el segundo piso. Materiales suministrados por el cliente."
+              placeholder="Ej: Incluye mano de obra en segundo piso. Materiales suministrados por el cliente."
               className="w-full border border-[#d9d9d9] rounded-lg px-3 py-2.5 text-sm text-[#111111] placeholder-[#6e6e6e] focus:outline-none focus:ring-2 focus:ring-[#c9242b]/40 focus:border-[#c9242b] resize-none"
             />
           </div>
@@ -205,7 +271,15 @@ export default function CotizadorWizard() {
             onDescuentoChange={setDescuento}
           />
 
-          {/* Botón exportar inferior */}
+          {/* Badge guardado */}
+          {guardado && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-2.5 rounded-lg">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              Cotización <strong>{numeroCot}</strong> guardada en Supabase correctamente.
+            </div>
+          )}
+
+          {/* Botón exportar */}
           <button
             onClick={handleExportPDF}
             disabled={exportando}
@@ -214,12 +288,12 @@ export default function CotizadorWizard() {
             {exportando ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Generando PDF...
+                Guardando y generando PDF...
               </>
             ) : (
               <>
                 <FileDown className="w-5 h-5" />
-                Exportar Cotización en PDF
+                {guardado ? "Descargar PDF nuevamente" : "Guardar y Exportar PDF"}
               </>
             )}
           </button>
