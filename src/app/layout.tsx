@@ -9,15 +9,25 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "TecnoSmart VZL | Seguridad Electrónica & Automatización",
+  title: "TecnoSmart VZL | Tienda Especializada en Soluciones Tecnológicas",
   description:
-    "Distribuidor oficial Hikvision en Venezuela. Sistemas de videovigilancia, domótica, redes y control de acceso para empresas y hogares.",
-  keywords: ["hikvision", "cámaras de seguridad", "venezuela", "tinaquillo", "CCTV", "automatización"],
+    "Tienda especializada en tecnología, seguridad electrónica y automatización en Tinaquillo, Venezuela. Ofrecemos equipos CCTV, Starlink, redes, control de acceso y servicio técnico profesional.",
+  keywords: [
+    "cámaras de seguridad", "CCTV", "Starlink", "internet satelital", "redes", "domótica",
+    "Hikvision", "Ezviz", "Tapo", "HiLook", "Tinaquillo", "Cojedes", "Venezuela", "tecnología"
+  ],
   openGraph: {
-    title: "TecnoSmart VZL",
-    description: "Seguridad Electrónica & Automatización Inteligente",
+    title: "TecnoSmart VZL | Seguridad & Tecnología",
+    description: "Equipos de seguridad, redes e internet satelital en Venezuela. Instalación y servicio técnico profesional.",
+    url: "https://tecnosmartvzl.com", // Puedes ajustarlo luego
+    siteName: "TecnoSmart VZL",
     type: "website",
+    locale: "es_VE",
   },
+  robots: {
+    index: true,
+    follow: true,
+  }
 };
 
 export default function RootLayout({

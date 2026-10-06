@@ -40,6 +40,9 @@ export default function CotizadorLayout({
             <Link href="/cotizador/importar" className="text-[#d9d9d9] hover:text-white transition-colors">
               📦 Importar PDF
             </Link>
+            <Link href="/cotizador/inventario" className="text-[#d9d9d9] hover:text-white transition-colors">
+              📊 Inventario
+            </Link>
           </div>
           <Link
             href="/"
