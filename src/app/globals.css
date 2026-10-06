@@ -1,26 +1,34 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ── TecnoSmart Design System ─────────────────────────────── */
+@theme {
+  /* Colores de marca */
+  --color-brand-red:     #c9242b;
+  --color-brand-black:   #111111;
+  --color-brand-gray:    #6e6e6e;
+  --color-brand-navy:    #05235b;
+  --color-brand-light:   #d9d9d9;
+  --color-brand-surface: #f8fafc;
+
+  /* Tipografía */
+  --font-family-sans: "Inter", "Roboto", "Montserrat", ui-sans-serif, system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    color: #111111;
+    background: #ffffff;
+    font-family: var(--font-family-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
 }
