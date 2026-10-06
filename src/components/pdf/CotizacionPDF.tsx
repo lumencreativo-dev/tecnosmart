@@ -183,6 +183,8 @@ interface CotizacionPDFProps {
   lineas:      LineaDetalle[];
   resumen:     ResumenCotizacion;
   notas?:      string;
+  esFactura?:  boolean;
+  numeroFactura?: string;
 }
 
 function CotizacionDocument({
@@ -192,15 +194,19 @@ function CotizacionDocument({
   lineas,
   resumen,
   notas,
+  esFactura,
+  numeroFactura,
 }: CotizacionPDFProps) {
   const vencimiento = new Date(fecha);
   vencimiento.setDate(vencimiento.getDate() + 15);
 
+  const docTitle = esFactura ? (numeroFactura ?? numeroCot) : numeroCot;
+
   return (
     <Document
-      title={`TecnoSmart - ${numeroCot}`}
+      title={`TecnoSmart - ${docTitle}`}
       author="TecnoSmart VZL"
-      subject="Cotización de Servicios"
+      subject={esFactura ? "Factura de Servicios" : "Cotización de Servicios"}
     >
       <Page size="A4" style={S.page}>
 
@@ -220,9 +226,16 @@ function CotizacionDocument({
             </View>
           </View>
           <View style={S.headerRight}>
-            <Text style={S.cotNum}>{numeroCot}</Text>
+            <Text style={[S.cotNum, esFactura ? { color: "#ffffff" } : undefined]}>
+              {esFactura ? "FACTURA" : "COTIZACIÓN"}
+            </Text>
+            <Text style={[S.cotNum, { fontSize: 11, marginTop: 2 }]}>
+              {docTitle}
+            </Text>
             <Text style={S.cotFecha}>Fecha: {formatFecha(fecha)}</Text>
-            <Text style={[S.cotFecha, { marginTop: 1 }]}>Válido hasta: {formatFecha(vencimiento)}</Text>
+            {!esFactura && (
+              <Text style={[S.cotFecha, { marginTop: 1 }]}>Válido hasta: {formatFecha(vencimiento)}</Text>
+            )}
           </View>
         </View>
 
@@ -356,7 +369,8 @@ export async function exportarCotizacionPDF(props: CotizacionPDFProps) {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
   a.href     = url;
-  a.download = `${props.numeroCot}.pdf`;
+  const fileName = props.esFactura ? (props.numeroFactura ?? props.numeroCot) : props.numeroCot;
+  a.download = `${fileName}.pdf`;
   a.click();
   URL.revokeObjectURL(url);
 }

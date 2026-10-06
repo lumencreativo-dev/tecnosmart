@@ -29,12 +29,25 @@ export default function CotizadorLayout({
           </div>
           <span className="text-[#c9242b] text-xs font-semibold hidden md:block">· Tabulador Interno</span>
         </div>
-        <Link
-          href="/"
-          className="text-xs text-[#6e6e6e] hover:text-[#c9242b] transition-colors"
-        >
-          ← Sitio web
-        </Link>
+        <nav className="flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-4 text-sm">
+            <Link href="/cotizador" className="text-[#d9d9d9] hover:text-white transition-colors">
+              📝 Nueva Cotización
+            </Link>
+            <Link href="/cotizador/facturacion" className="text-[#d9d9d9] hover:text-white transition-colors">
+              🧾 Facturación
+            </Link>
+            <Link href="/cotizador/importar" className="text-[#d9d9d9] hover:text-white transition-colors">
+              📦 Importar PDF
+            </Link>
+          </div>
+          <Link
+            href="/"
+            className="text-xs text-[#6e6e6e] hover:text-[#c9242b] transition-colors border-l border-[#333] pl-4 ml-2"
+          >
+            ← Sitio web
+          </Link>
+        </nav>
       </header>
 
       {children}
