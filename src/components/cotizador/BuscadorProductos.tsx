@@ -8,9 +8,10 @@ import { buscarProductos } from "@/lib/supabase/servicios";
 
 interface Props {
   onAdd: (linea: LineaDetalle) => void;
+  clienteTipo?: "cliente_normal" | "tecnico";
 }
 
-export default function BuscadorProductos({ onAdd }: Props) {
+export default function BuscadorProductos({ onAdd, clienteTipo }: Props) {
   const [query, setQuery] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,14 +35,15 @@ export default function BuscadorProductos({ onAdd }: Props) {
   }, [query]);
 
   const handleSelect = (p: Producto) => {
+    const precio = clienteTipo === "tecnico" && p.precio_tecnico != null ? p.precio_tecnico : p.precio_venta;
     onAdd({
       id: tempId(),
       tipo_item: "producto",
       item_id: p.id,
       descripcion: `${p.codigo_sku} – ${p.nombre}`,
       cantidad: 1,
-      precio_unitario: p.precio_venta,
-      subtotal: p.precio_venta,
+      precio_unitario: precio,
+      subtotal: precio,
     });
     setQuery("");
     setResultados([]);

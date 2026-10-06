@@ -20,16 +20,21 @@ const SERVICIOS_FALLBACK: ServicioManoObra[] = [
   { id: "10",codigo: "MTO-DVR",      concepto: "Mantenimiento DVR (batería/firmware)",     precio_base: 50,  precio_max: 50,  unidad: "equipo",  categoria: "Mantenimiento" },
   { id: "11",codigo: "LOG-LOCAL",    concepto: "Logística Local (Tinaquillo)",             precio_base: 5,   precio_max: 10,  unidad: "día",     categoria: "Logística" },
   { id: "12",codigo: "LOG-FORANEO",  concepto: "Transporte + Comida Foráneo / técnico",   precio_base: 30,  precio_max: 30,  unidad: "día",     categoria: "Logística" },
+  // Starlink
+  { id: "SL1", codigo: "SL-INS",      concepto: "Instalación de Antena Starlink",         precio_base: 80,  precio_max: 120, unidad: "global",  categoria: "Starlink" },
+  { id: "SL2", codigo: "SL-CFG",      concepto: "Configuración de red Starlink",          precio_base: 50,  precio_max: 50,  unidad: "equipo",  categoria: "Starlink" },
+  { id: "SL3", codigo: "SL-MENS",     concepto: "Gestión mensual Starlink (Comisión)",    precio_base: 10,  precio_max: 10,  unidad: "mes",     categoria: "Starlink" },
 ];
 
 interface Props {
   onAdd: (linea: LineaDetalle) => void;
+  clienteTipo?: "cliente_normal" | "tecnico";
 }
 
-export default function ServiciosPicker({ onAdd }: Props) {
+export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
   const [servicios, setServicios] = useState<ServicioManoObra[]>(SERVICIOS_FALLBACK);
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
-  const [precios, setPrecios] = useState<Record<string, number>>({});
+  const [preciosCustom, setPreciosCustom] = useState<Record<string, number>>({});
 
   useEffect(() => {
     cargarServicios().then((data) => {
@@ -48,18 +53,28 @@ export default function ServiciosPicker({ onAdd }: Props) {
     {}
   );
 
+  const getPrecioCalculado = (s: ServicioManoObra) => {
+    // 1. Si el usuario sobreescribió el precio manualmente en el input, usar ese
+    if (preciosCustom[s.id] !== undefined) return preciosCustom[s.id];
+    // 2. Si es técnico y hay precio_tecnico, usar precio_tecnico
+    if (clienteTipo === "tecnico" && s.precio_tecnico != null) return s.precio_tecnico;
+    // 3. Fallback a precio base
+    return s.precio_base;
+  };
+
   const addServicio = (s: ServicioManoObra) => {
     const cant = cantidades[s.id] ?? 1;
-    const precio = precios[s.id] ?? s.precio_base;
+    const finalPrecio = getPrecioCalculado(s);
     onAdd({
       id: tempId(),
       tipo_item: "servicio",
       item_id: s.id,
       descripcion: `${s.concepto} (${s.unidad})`,
       cantidad: cant,
-      precio_unitario: precio,
-      subtotal: cant * precio,
+      precio_unitario: finalPrecio,
+      subtotal: cant * finalPrecio,
     });
+
   };
 
   const catColors: Record<string, string> = {
@@ -90,8 +105,9 @@ export default function ServiciosPicker({ onAdd }: Props) {
 
           <div className="space-y-2">
             {items.map((s) => {
-              const precio = precios[s.id] ?? s.precio_base;
               const cant   = cantidades[s.id] ?? 1;
+              const precioCalculado = getPrecioCalculado(s);
+              const isTecnicoRate = clienteTipo === "tecnico" && s.precio_tecnico != null;
               const tieneRango = s.precio_max && s.precio_max !== s.precio_base;
 
               return (
@@ -102,23 +118,28 @@ export default function ServiciosPicker({ onAdd }: Props) {
                   {/* Descripción */}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-[#111111] truncate">{s.concepto}</p>
-                    <p className="text-[10px] text-[#6e6e6e]">
+                    <p className="text-[10px] text-[#6e6e6e] flex items-center gap-1">
                       {s.codigo} · por {s.unidad}
                       {tieneRango ? ` · Rango $${s.precio_base}–$${s.precio_max}` : ""}
+                      {isTecnicoRate && (
+                        <span className="text-[#c9242b] font-bold tracking-tight bg-[#c9242b]/10 px-1 rounded">Precio Técnico</span>
+                      )}
                     </p>
                   </div>
 
                   {/* Precio editable */}
                   <input
                     type="number"
-                    min={s.precio_base}
+                    min={0}
                     max={s.precio_max ?? undefined}
                     step={0.5}
-                    value={precio}
+                    value={preciosCustom[s.id] ?? precioCalculado}
                     onChange={(e) =>
-                      setPrecios((p) => ({ ...p, [s.id]: parseFloat(e.target.value) || s.precio_base }))
+                      setPreciosCustom((p) => ({ ...p, [s.id]: parseFloat(e.target.value) || precioCalculado }))
                     }
-                    className="w-20 text-xs border border-[#d9d9d9] rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
+                    className={`w-20 text-xs border rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b] ${
+                      isTecnicoRate ? "border-[#c9242b]/50 bg-[#c9242b]/5 text-[#c9242b] font-bold" : "border-[#d9d9d9]"
+                    }`}
                     title="Precio unitario"
                   />
                   <span className="text-[10px] text-[#6e6e6e]">USD</span>

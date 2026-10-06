@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { FileDown, RotateCcw, CheckCircle2, Package } from "lucide-react";
 
 import type { Cliente, LineaDetalle, ResumenCotizacion } from "@/lib/types";
@@ -18,7 +18,7 @@ const DESCUENTO_UMBRAL = 500;
 const CLIENTE_VACIO: Cliente = { contacto: "" };
 
 export default function CotizadorWizard() {
-  const [numeroCot]              = useState(() => generarNumeroCot());
+  const [numeroCot, setNumeroCot] = useState("Cargando...");
   const [lineas, setLineas]      = useState<LineaDetalle[]>([]);
   const [descuento, setDescuento]= useState(0);
   const [notas, setNotas]        = useState("");
@@ -26,6 +26,19 @@ export default function CotizadorWizard() {
   const [exportando, setExportando] = useState(false);
   const [guardado, setGuardado]  = useState(false);
   const [cotizacionId, setCotizacionId] = useState<string | null>(null);
+
+  // Obtener número correlativo real de Supabase al cargar
+  useEffect(() => {
+    async function fetchNumero() {
+      const { data, error } = await supabase.rpc("next_cotizacion_number");
+      if (!error && data) {
+        setNumeroCot(data);
+      } else {
+        setNumeroCot(generarNumeroCot()); // Fallback
+      }
+    }
+    fetchNumero();
+  }, []);
 
   // ── Gestión de líneas ─────────────────────────────────────
   const addLinea = useCallback((l: LineaDetalle) => {
@@ -209,12 +222,12 @@ export default function CotizadorWizard() {
                 Productos & Equipos
               </h2>
             </div>
-            <BuscadorProductos onAdd={addLinea} />
+            <BuscadorProductos onAdd={addLinea} clienteTipo={cliente.tipo} />
           </div>
 
           {/* Servicios y mano de obra */}
           <div className="bg-white rounded-xl border border-[#d9d9d9] p-5 max-h-[600px] overflow-y-auto">
-            <ServiciosPicker onAdd={addLinea} />
+            <ServiciosPicker onAdd={addLinea} clienteTipo={cliente.tipo} />
           </div>
         </div>
 
