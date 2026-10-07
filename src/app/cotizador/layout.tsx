@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 
-import { FileEdit, Receipt, UploadCloud, Package, Globe } from "lucide-react";
+import { FileEdit, Receipt, UploadCloud, Package, Globe, Sparkles } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Tabulador Comercial | TecnoSmart",
@@ -46,6 +46,9 @@ export default function CotizadorLayout({
           <Link href="/cotizador/importar" className="flex items-center gap-2 px-4 py-2 text-[#6e6e6e] hover:text-[#c9242b] hover:bg-red-50 rounded-lg transition-colors">
             <UploadCloud className="w-4 h-4" /> Importar
           </Link>
+          <Link href="/cotizador/novedades" className="flex items-center gap-2 px-4 py-2 text-[#6e6e6e] hover:text-[#c9242b] hover:bg-red-50 rounded-lg transition-colors">
+            <Sparkles className="w-4 h-4" /> Novedades
+          </Link>
           
           <div className="w-px h-5 bg-[#e5e5e5] mx-2"></div>
           
@@ -72,9 +75,9 @@ export default function CotizadorLayout({
           <Package className="w-5 h-5 mb-1" />
           <span className="text-[10px] font-medium">Stock</span>
         </Link>
-        <Link href="/" className="flex flex-col items-center justify-center w-full h-full text-[#6e6e6e] hover:text-[#111]">
-          <Globe className="w-5 h-5 mb-1" />
-          <span className="text-[10px] font-medium">Web</span>
+        <Link href="/cotizador/novedades" className="flex flex-col items-center justify-center w-full h-full text-[#6e6e6e] hover:text-[#c9242b]">
+          <Sparkles className="w-5 h-5 mb-1" />
+          <span className="text-[10px] font-medium">Novedades</span>
         </Link>
       </nav>
     </div>

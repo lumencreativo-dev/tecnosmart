@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, Plus, Edit2, Package, Save, X, Filter, ChevronDown } from "lucide-react";
+import { Search, Plus, Edit2, Package, Save, X, Filter, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD } from "@/lib/utils";
 
@@ -21,14 +21,18 @@ export default function InventarioManager() {
   const [editingProd, setEditingProd] = useState<Producto | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Eliminación con confirmación
+  const [confirmDelete, setConfirmDelete] = useState<Producto | null>(null);
+  const [deleting, setDeleting] = useState(false);
   
   // Form
   const [form, setForm] = useState({
     nombre: "",
     codigo_sku: "",
     marca: "Hikvision",
-    categoria: "Cámaras",
+    categoria: "Cámaras Analógicas",
     precio_venta: 0,
+    precio_costo: 0,
     precio_tecnico: 0,
     stock: 0,
   });
@@ -87,12 +91,13 @@ export default function InventarioManager() {
         marca: prod.marca || "",
         categoria: prod.categoria || "",
         precio_venta: prod.precio_venta || 0,
+        precio_costo: prod.precio_costo || 0,
         precio_tecnico: prod.precio_tecnico || 0,
         stock: prod.stock || 0,
       });
     } else {
       setEditingProd(null);
-      setForm({ nombre: "", codigo_sku: "", marca: "Hikvision", categoria: "Cámaras", precio_venta: 0, precio_tecnico: 0, stock: 0 });
+      setForm({ nombre: "", codigo_sku: "", marca: "Hikvision", categoria: "Cámaras Analógicas", precio_venta: 0, precio_costo: 0, precio_tecnico: 0, stock: 0 });
     }
     setModalOpen(true);
   };
@@ -110,6 +115,7 @@ export default function InventarioManager() {
       marca: form.marca,
       categoria: form.categoria,
       precio_venta: form.precio_venta,
+      precio_costo: form.precio_costo || 0,
       precio_tecnico: form.precio_tecnico || null,
       stock: form.stock,
       activo: true,
@@ -134,6 +140,18 @@ export default function InventarioManager() {
     setSaving(false);
     closeModal();
     cargarProductos();
+  };
+
+  const eliminarProducto = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    const { error } = await supabase
+      .from("productos")
+      .delete()
+      .eq("id", confirmDelete.id);
+    setDeleting(false);
+    setConfirmDelete(null);
+    if (!error) cargarProductos();
   };
 
   return (
@@ -227,7 +245,7 @@ export default function InventarioManager() {
                 <th className="px-5 py-3 font-semibold border-b border-[#e5e5e5] hidden lg:table-cell">Categoría</th>
                 <th className="px-5 py-3 font-semibold border-b border-[#e5e5e5] text-right">Precio</th>
                 <th className="px-5 py-3 font-semibold border-b border-[#e5e5e5] text-center">Stock</th>
-                <th className="px-5 py-3 font-semibold border-b border-[#e5e5e5] text-center w-16"></th>
+                <th className="px-5 py-3 font-semibold border-b border-[#e5e5e5] text-center w-20"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f0f0f0]">
@@ -280,13 +298,22 @@ export default function InventarioManager() {
                       </span>
                     </td>
                     <td className="px-5 py-3 text-center">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openModal(p); }}
-                        className="text-[#d9d9d9] group-hover:text-[#c9242b] transition-colors p-1"
-                        title="Editar"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openModal(p); }}
+                          className="text-[#d9d9d9] group-hover:text-[#c9242b] transition-colors p-1"
+                          title="Editar"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(p); }}
+                          className="text-[#d9d9d9] hover:text-red-600 transition-colors p-1"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -295,6 +322,47 @@ export default function InventarioManager() {
           </table>
         </div>
       </div>
+
+      {/* ── Modal Confirmar Eliminación ── */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-7 h-7 text-red-600" />
+              </div>
+              <h2 className="text-lg font-bold text-[#111] mb-1">¿Eliminar producto?</h2>
+              <p className="text-sm text-[#6e6e6e] mb-1">
+                <span className="font-mono font-bold text-[#c9242b]">{confirmDelete.codigo_sku}</span>
+              </p>
+              <p className="text-sm text-[#6e6e6e] mb-5">{confirmDelete.nombre}</p>
+              <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-5">
+                ⚠️ Esta acción es permanente y no se puede deshacer.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmDelete(null)}
+                  className="flex-1 px-4 py-2 text-sm font-medium text-[#6e6e6e] hover:bg-[#f5f5f5] rounded-lg transition-colors border border-[#e5e5e5]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={eliminarProducto}
+                  disabled={deleting}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors"
+                >
+                  {deleting ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal Add/Edit ── */}
       {modalOpen && (
@@ -375,9 +443,9 @@ export default function InventarioManager() {
                 </select>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">Precio Público</label>
+                  <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">Precio Público (Venta)</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6e6e6e]">$</span>
                     <input required type="number" step="0.01" min="0" value={form.precio_venta}
@@ -386,7 +454,19 @@ export default function InventarioManager() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">Precio Técnico</label>
+                  <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">Costo (Precio de compra)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6e6e6e]">$</span>
+                    <input type="number" step="0.01" min="0" value={form.precio_costo}
+                      onChange={(e) => setForm({ ...form, precio_costo: parseFloat(e.target.value) || 0 })}
+                      className="w-full pl-7 pr-3 py-2 border border-[#d9d9d9] rounded-lg text-sm font-bold text-amber-700 focus:outline-none focus:border-[#c9242b]" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">Precio Técnico (15% menos)</label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6e6e6e]">$</span>
                     <input type="number" step="0.01" min="0" value={form.precio_tecnico}
