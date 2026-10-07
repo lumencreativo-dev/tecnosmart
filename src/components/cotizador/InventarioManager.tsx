@@ -320,9 +320,26 @@ export default function InventarioManager() {
                 </div>
                 <div>
                   <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">Marca</label>
-                  <input required type="text" value={form.marca}
+                  <select required value={form.marca}
                     onChange={(e) => setForm({ ...form, marca: e.target.value })}
-                    className="w-full px-3 py-2 border border-[#d9d9d9] rounded-lg text-sm focus:outline-none focus:border-[#c9242b]" />
+                    className="w-full px-3 py-2 border border-[#d9d9d9] rounded-lg text-sm focus:outline-none focus:border-[#c9242b] bg-white appearance-none"
+                  >
+                    <option value="Hikvision">Hikvision</option>
+                    <option value="HiLook">HiLook</option>
+                    <option value="Ezviz">Ezviz</option>
+                    <option value="Dahua">Dahua</option>
+                    <option value="Tapo">Tapo</option>
+                    <option value="TP-Link">TP-Link</option>
+                    <option value="Marsiva">Marsiva</option>
+                    <option value="ZKTeco">ZKTeco</option>
+                    <option value="CDP">CDP</option>
+                    <option value="Must">Must</option>
+                    <option value="Starlink">Starlink</option>
+                    <option value="Western Digital">Western Digital</option>
+                    <option value="Seagate">Seagate</option>
+                    <option value="Genérico">Genérico</option>
+                    <option value="Otra">Otra</option>
+                  </select>
                 </div>
               </div>
               
@@ -336,10 +353,26 @@ export default function InventarioManager() {
               
               <div>
                 <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">Categoría</label>
-                <input required type="text" value={form.categoria}
+                <select required value={form.categoria}
                   onChange={(e) => setForm({ ...form, categoria: e.target.value })}
-                  className="w-full px-3 py-2 border border-[#d9d9d9] rounded-lg text-sm focus:outline-none focus:border-[#c9242b]"
-                  placeholder="Cámaras Analógicas" />
+                  className="w-full px-3 py-2 border border-[#d9d9d9] rounded-lg text-sm focus:outline-none focus:border-[#c9242b] bg-white appearance-none"
+                >
+                  <option value="Cámaras Analógicas">Cámaras Analógicas</option>
+                  <option value="Cámaras IP">Cámaras IP</option>
+                  <option value="Cámaras WiFi / PTZ">Cámaras WiFi / PTZ</option>
+                  <option value="DVR / NVR">DVR / NVR</option>
+                  <option value="Discos Duros">Discos Duros</option>
+                  <option value="Cables y Bobinas">Cables y Bobinas</option>
+                  <option value="Conectores y Baluns">Conectores y Baluns</option>
+                  <option value="Fuentes de Poder / UPS">Fuentes de Poder / UPS</option>
+                  <option value="Control de Acceso">Control de Acceso</option>
+                  <option value="Redes y Routers">Redes y Routers</option>
+                  <option value="Alarmas">Alarmas</option>
+                  <option value="Domótica">Domótica</option>
+                  <option value="Accesorios">Accesorios</option>
+                  <option value="Servicios">Servicios</option>
+                  <option value="Otros">Otros</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
