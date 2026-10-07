@@ -63,7 +63,9 @@ function parsearPagina(pageItems: { str: string; transform: number[] }[]): Produ
     "nombre", "precio", "venta", "usd", "costo",
     "descripcion", "descripción", "marca", "categoría",
     "categoria", "product", "items", "item", "código",
-    "codigo", "15%", "%",
+    "codigo", "15%", "%", "total", "subtotal",
+    // Encabezados multi-palabra comunes en listas de precios
+    "precio venta", "precio venta (usd)", "sku / modelo",
   ]);
 
   // 5. Procesar cada fila detectada
@@ -77,14 +79,15 @@ function parsearPagina(pageItems: { str: string; transform: number[] }[]): Produ
 
     const posibleSKU = textos[0];
 
-    // Descartar encabezados
+    // Descartar encabezados conocidos
     if (HEADERS.has(posibleSKU.toLowerCase())) continue;
     // Debe empezar con letra
     if (!/^[A-Za-z]/.test(posibleSKU)) continue;
-    // Un SKU nunca tiene espacios
-    if (posibleSKU.includes(" ")) continue;
-    // Longitud razonable
-    if (posibleSKU.length < 2 || posibleSKU.length > 45) continue;
+    // Longitud razonable (SKUs legítimos raramente superan 50 chars)
+    if (posibleSKU.length < 2 || posibleSKU.length > 50) continue;
+    // NOTA: NO filtramos por espacios — hay SKUs válidos como "PA 1M",
+    // "CANALETAS 39*19", "CANALETAS R25". El filtro de "sin precios = no producto"
+    // es suficiente para descartar filas espurias.
 
     // Extraer números de la fila (ignorar el SKU)
     const numeros = textos
@@ -95,15 +98,30 @@ function parsearPagina(pageItems: { str: string; transform: number[] }[]): Produ
     // Sin precios → no es fila de producto
     if (numeros.length === 0) continue;
 
-    // Nombre = texto no-numérico después del SKU
-    const nombreParts = textos
-      .slice(1)
-      .filter(t => isNaN(parseFloat(t.replace(",", "."))));
-    const nombre = nombreParts.join(" ").trim() || `[Sin nombre] ${posibleSKU}`;
+    // Separar texto no-numérico (nombre y posibles fragmentos del SKU)
+    const restoParts = textos.slice(1).filter(t => isNaN(parseFloat(t.replace(",", "."))));
+
+    // Reconectar SKUs partidos por "/"
+    // Si el PDF dividió "CAJ-PLAS/R-PEQ" en ["CAJ-PLAS", "/", "R-PEQ"],
+    // el primer fragmento de restoParts será "/" o "/ALGO" → unirlo al SKU
+    let skuFinal = posibleSKU;
+    let nombreParts = restoParts;
+
+    if (restoParts.length > 0) {
+      const primer = restoParts[0];
+      // Si empieza con "/" o es exactamente "/", es continuación del SKU
+      if (primer.startsWith("/") || primer === "/") {
+        skuFinal = posibleSKU + primer;
+        // El siguiente token podría ser aún más del SKU (p.ej. "R-PEQ" sin "/")
+        nombreParts = restoParts.slice(1);
+      }
+    }
+
+    const nombre = nombreParts.join(" ").trim() || `[Sin nombre] ${skuFinal}`;
 
     // Columnas: Precio Venta | Costo | 15% (Técnico)
     productos.push({
-      codigo_sku:    posibleSKU.toUpperCase(),
+      codigo_sku:    skuFinal.toUpperCase(),
       nombre,
       precio_venta:   numeros[0] ?? 0,
       precio_costo:   numeros[1] ?? 0,
