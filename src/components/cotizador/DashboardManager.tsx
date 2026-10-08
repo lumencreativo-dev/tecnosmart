@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   TrendingUp, DollarSign, Users, Save, Calendar, CheckCircle,
-  Clock, AlertTriangle, ArrowRight, Settings, Phone, Activity, Globe
+  Clock, AlertTriangle, ArrowRight, Settings, Phone, Activity, Globe, Package
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -18,6 +18,7 @@ export default function DashboardManager() {
   // Data state
   const [cotizaciones, setCotizaciones] = useState<any[]>([]);
   const [clientes, setClientes] = useState<any[]>([]);
+  const [facturas, setFacturas] = useState<any[]>([]);
   const [config, setConfig] = useState<any>({});
   const [tasaBcv, setTasaBcv] = useState<{ dolar: number; eur: number; fecha: string } | null>(null);
 
@@ -51,6 +52,13 @@ export default function DashboardManager() {
     // Obtener clientes
     const { data: cliData } = await supabase.from("clientes").select("*").order("created_at", { ascending: false });
     if (cliData) setClientes(cliData);
+
+    // Obtener facturas activas con sus detalles para métricas de productos
+    const { data: facData } = await supabase
+      .from("facturas")
+      .select("*, factura_detalles(*), cotizaciones(clientes(empresa, contacto))")
+      .eq("estado", "activa");
+    if (facData) setFacturas(facData);
 
     // Fetch BCV
     try {
@@ -110,6 +118,41 @@ export default function DashboardManager() {
 
     return { ingresoReal, ingresoProyectado, aprobadasNoFacturadas };
   }, [cotizaciones, diasValidez]);
+
+  // ── TICKET PROMEDIO ──
+  const ticketPromedio = useMemo(() => {
+    const facturadas = cotizaciones.filter(c => c.estado === "facturada");
+    if (!facturadas.length) return 0;
+    const total = facturadas.reduce((s, c) => s + Number(c.total || 0), 0);
+    return total / facturadas.length;
+  }, [cotizaciones]);
+
+  // ── PRODUCTO MÁS VENDIDO ──
+  const productoTopData = useMemo(() => {
+    const conteo: Record<string, { descripcion: string; cantidad: number; ingresos: number }> = {};
+    facturas.forEach(f => {
+      (f.factura_detalles || []).forEach((d: any) => {
+        const key = d.descripcion || "Desconocido";
+        if (!conteo[key]) conteo[key] = { descripcion: key, cantidad: 0, ingresos: 0 };
+        conteo[key].cantidad += Number(d.cantidad || 0);
+        conteo[key].ingresos += Number(d.subtotal || 0);
+      });
+    });
+    const sorted = Object.values(conteo).sort((a, b) => b.cantidad - a.cantidad);
+    return sorted.slice(0, 3); // Top 3
+  }, [facturas]);
+
+  // ── CLIENTE MÁS FRECUENTE ──
+  const clienteTopData = useMemo(() => {
+    const conteo: Record<string, { nombre: string; facturas: number; total: number }> = {};
+    cotizaciones.filter(c => c.estado === "facturada").forEach(c => {
+      const nombre = c.clientes?.empresa || c.clientes?.contacto || "Sin nombre";
+      if (!conteo[nombre]) conteo[nombre] = { nombre, facturas: 0, total: 0 };
+      conteo[nombre].facturas += 1;
+      conteo[nombre].total += Number(c.total || 0);
+    });
+    return Object.values(conteo).sort((a, b) => b.facturas - a.facturas).slice(0, 3);
+  }, [cotizaciones]);
 
   // ── RECORDATORIOS DE SEGUIMIENTO (5 y 15 Días) ──
   const recordatorios = useMemo(() => {
@@ -260,6 +303,67 @@ export default function DashboardManager() {
               <p className="text-xs ts-text-muted animate-pulse">Obteniendo tasa...</p>
             )}
           </div>
+        </div>
+
+      </div>
+
+      {/* ── SECCIÓN 1.5: MÉTRICAS ADICIONALES ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+        {/* Ticket Promedio */}
+        <div className="ts-surface ts-radius p-5 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-violet-500/10 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5 text-violet-400" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-1">Ticket Promedio</p>
+            <p className="text-2xl font-black ts-text">{formatUSD(ticketPromedio)}</p>
+            <p className="text-[10px] ts-text-muted mt-1">Por factura emitida</p>
+          </div>
+        </div>
+
+        {/* Producto Más Vendido */}
+        <div className="ts-surface ts-radius p-5">
+          <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Package className="w-3.5 h-3.5" /> Productos Top
+          </p>
+          {productoTopData.length === 0 ? (
+            <p className="text-xs ts-text-muted">Sin datos aún.</p>
+          ) : (
+            <div className="space-y-2">
+              {productoTopData.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                    i === 0 ? "bg-amber-400/20 text-amber-500" : "bg-[var(--ts-border)] ts-text-muted"
+                  }`}>{i + 1}</span>
+                  <span className="text-xs ts-text flex-1 truncate font-medium">{p.descripcion}</span>
+                  <span className="text-xs font-bold ts-text-muted shrink-0">{p.cantidad} uds.</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Cliente Más Frecuente */}
+        <div className="ts-surface ts-radius p-5">
+          <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
+            <Users className="w-3.5 h-3.5" /> Clientes Frecuentes
+          </p>
+          {clienteTopData.length === 0 ? (
+            <p className="text-xs ts-text-muted">Sin datos aún.</p>
+          ) : (
+            <div className="space-y-2">
+              {clienteTopData.map((c, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                    i === 0 ? "bg-amber-400/20 text-amber-500" : "bg-[var(--ts-border)] ts-text-muted"
+                  }`}>{i + 1}</span>
+                  <span className="text-xs ts-text flex-1 truncate font-medium">{c.nombre}</span>
+                  <span className="text-xs font-bold ts-text-muted shrink-0">{c.facturas} fac.</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>
