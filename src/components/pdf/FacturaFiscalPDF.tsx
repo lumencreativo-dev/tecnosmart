@@ -1,7 +1,7 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image as PDFImage, Font, pdf } from "@react-pdf/renderer";
 import { formatUSD, formatFecha } from "@/lib/utils";
-import { LOGO_BLANCO_B64 } from "@/lib/assets/logo-b64"; // Reusamos el logo base64
+import { ISOLOGO_ROJO_B64 } from "@/lib/assets/isologo-rojo-b64"; // Isologo rojo para la factura
 
 const S = StyleSheet.create({
   page: { padding: 40, fontFamily: "Helvetica", backgroundColor: "#ffffff" },
@@ -9,10 +9,10 @@ const S = StyleSheet.create({
   
   // Header Izquierdo (Logo e Info Empresa)
   headerLeft: { flexDirection: "column", width: "55%" },
-  headerLogoRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
-  logoImg: { width: 36, height: 36, marginRight: 8 },
-  brandTitle: { fontSize: 15, fontWeight: 900, color: "#c9242b" },
-  brandSub: { fontSize: 8, color: "#6e6e6e", fontWeight: 700, marginTop: 1 },
+  headerLogoRow: { flexDirection: "column", marginBottom: 8 },
+  logoImg: { width: 160, height: 52, marginBottom: 6, objectFit: "contain" },
+  companyName: { fontSize: 8, color: "#222222", fontWeight: 700, marginBottom: 1 },
+  companyRif: { fontSize: 8, color: "#6e6e6e", fontWeight: 700, marginBottom: 2 },
   companyData: { fontSize: 8, color: "#6e6e6e", marginBottom: 2, lineHeight: 1.4 },
   
   // Header Derecho (Forma Libre / Número de Control)
@@ -97,13 +97,11 @@ export const FacturaFiscalDocument = ({
         {/* ── HEADER ── */}
         <View style={S.header}>
           <View style={S.headerLeft}>
-            {/* Fila: logo + nombre de marca */}
+            {/* Isologo + info empresa */}
             <View style={S.headerLogoRow}>
-              <PDFImage src={LOGO_BLANCO_B64} style={S.logoImg} />
-              <View>
-                <Text style={S.brandTitle}>TECNOSMART VZL</Text>
-                <Text style={S.brandSub}>RIF: J-50701960-8</Text>
-              </View>
+              <PDFImage src={ISOLOGO_ROJO_B64} style={S.logoImg} />
+              <Text style={S.companyName}>TECNO SMART VZL C.A</Text>
+              <Text style={S.companyRif}>RIF: J-50701960-8</Text>
             </View>
             {/* Dirección debajo del logo */}
             <Text style={S.companyData}>Av. Bolívar C/C c. Páez, Edif. Sta. Eduviges II, local-02</Text>

@@ -24,6 +24,23 @@ export const metadata: Metadata = {
     siteName: "TecnoSmart VZL",
     type: "website",
     locale: "es_VE",
+    images: [{ url: "/isologo-rojo.png", width: 512, height: 512 }],
+  },
+  icons: {
+    icon: [
+      { url: "/isotipo-rojo.png", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/isotipo-rojo.png",
+  },
+  manifest: "/manifest.json",
+  themeColor: "#c9242b",
+  appleWebApp: {
+    capable: true,
+    title: "TecnoSmart",
+    statusBarStyle: "black-translucent",
   },
   robots: { index: true, follow: true }
 };

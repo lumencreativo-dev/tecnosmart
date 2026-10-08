@@ -43,20 +43,23 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#111111] via-[#1a1a1a] to-[#111111] flex items-center justify-center p-4 relative overflow-hidden">
       {/* Fondo decorativo */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[var(--ts-red-subtle)] rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[var(--ts-red)]/5 rounded-full blur-3xl"></div>
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-[var(--ts-red)]/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-[var(--ts-red)]/5 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[var(--ts-red)]/3 rounded-full blur-[120px]"></div>
+        {/* Grid decorativo sutil */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{backgroundImage: "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)", backgroundSize: "40px 40px"}}></div>
       </div>
 
       <div className="relative w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
           <Image
-            src="/logo-blanco.png"
+            src="/isologo-blanco.png"
             alt="TecnoSmart VZL"
-            width={200}
-            height={60}
-            className="mx-auto h-12 w-auto object-contain mb-4"
+            width={220}
+            height={70}
+            className="mx-auto h-14 w-auto object-contain mb-5 drop-shadow-[0_0_20px_rgba(201,36,43,0.4)]"
           />
           <div className="flex items-center justify-center gap-2 text-[var(--ts-text-muted)]">
             <Shield className="w-4 h-4 text-[var(--ts-red)]" />

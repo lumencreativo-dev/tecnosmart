@@ -81,6 +81,8 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
     return pathname.startsWith(href);
   };
 
+  const isLoginPage = pathname === "/cotizador/login";
+
   const THEME_OPTIONS = [
     { key: "light",  icon: Sun,     label: "Claro"     },
     { key: "dark",   icon: Moon,    label: "Oscuro"    },
@@ -88,16 +90,17 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-screen bg-[var(--ts-bg)] pb-20 md:pb-0 transition-colors duration-200">
+    <div className={`min-h-screen bg-[var(--ts-bg)] transition-colors duration-200 ${!isLoginPage ? "pb-20 md:pb-0" : ""}`}>
 
       {/* ══════════════════════════════════════════════
           HEADER DESKTOP
       ══════════════════════════════════════════════ */}
+      {!isLoginPage && (
       <header className="hidden md:flex bg-[var(--ts-surface)] border-b border-[var(--ts-border)] px-4 lg:px-6 h-14 items-center justify-between sticky top-0 z-40 shadow-[var(--ts-shadow)]">
 
         {/* Logo */}
         <Link href="/cotizador/dashboard" className="flex items-center gap-2.5 shrink-0">
-          <Image src="/logo-color.png" alt="TecnoSmart" width={110} height={30} className="h-7 w-auto object-contain" />
+          <Image src="/isotipo-rojo.png" alt="TecnoSmart" width={32} height={32} className="h-8 w-auto object-contain" />
           <span className="bg-[var(--ts-red-subtle)] text-[var(--ts-red)] px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest hidden sm:block">
             Portal
           </span>
@@ -197,6 +200,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
+      )}
 
       {/* ══════════════════════════════════════════════
           CONTENIDO PRINCIPAL
@@ -206,6 +210,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       {/* ══════════════════════════════════════════════
           BOTTOM NAV MÓVIL
       ══════════════════════════════════════════════ */}
+      {!isLoginPage && (
       <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[var(--ts-surface)] border-t border-[var(--ts-border)] z-50 shadow-[var(--ts-shadow)]">
         <div className="flex items-end justify-around h-16 px-2">
 
@@ -256,6 +261,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
 
         </div>
       </nav>
+      )}
     </div>
   );
 }
