@@ -26,18 +26,23 @@ export default function CotizadorWizard() {
   const [exportando, setExportando] = useState(false);
   const [guardado, setGuardado]  = useState(false);
   const [cotizacionId, setCotizacionId] = useState<string | null>(null);
+  const [descuentoTecnico, setDescuentoTecnico] = useState(15); // porcentaje
 
-  // Obtener número correlativo real de Supabase al cargar
+  // Obtener número correlativo y configuración global de Supabase al cargar
   useEffect(() => {
-    async function fetchNumero() {
-      const { data, error } = await supabase.rpc("next_cotizacion_number");
-      if (!error && data) {
-        setNumeroCot(data);
-      } else {
-        setNumeroCot(generarNumeroCot()); // Fallback
+    async function fetchInit() {
+      const [{ data: numData, error: numErr }, { data: confData }] = await Promise.all([
+        supabase.rpc("next_cotizacion_number"),
+        supabase.from("configuracion").select("clave,valor").eq("clave", "descuento_tecnico").single(),
+      ]);
+      if (!numErr && numData) setNumeroCot(numData);
+      else setNumeroCot(generarNumeroCot());
+      if (confData) {
+        const pct = parseFloat(String(confData.valor));
+        if (!isNaN(pct)) setDescuentoTecnico(pct);
       }
     }
-    fetchNumero();
+    fetchInit();
   }, []);
 
   // ── Gestión de líneas ─────────────────────────────────────
@@ -173,11 +178,11 @@ export default function CotizadorWizard() {
       {/* ── Barra superior ── */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#111111]">
+          <h1 className="text-2xl font-extrabold text-[var(--ts-text-primary)]">
             Tabulador Comercial
           </h1>
-          <p className="text-sm text-[#6e6e6e] mt-0.5">
-            <span className="font-mono text-[#c9242b] font-bold">{numeroCot}</span>
+          <p className="text-sm text-[var(--ts-text-muted)] mt-0.5">
+            <span className="font-mono text-[var(--ts-red)] font-bold">{numeroCot}</span>
             {" · "}
             {new Date().toLocaleDateString("es-VE", {
               day: "2-digit", month: "long", year: "numeric",
@@ -189,7 +194,7 @@ export default function CotizadorWizard() {
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={resetear}
-            className="flex items-center gap-1.5 text-sm text-[#6e6e6e] hover:text-[#c9242b] border border-[#d9d9d9] hover:border-[#c9242b] px-3 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 text-sm text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] border border-[var(--ts-border)] hover:border-[var(--ts-red)] px-3 py-2 rounded-lg transition-colors"
           >
             <RotateCcw className="w-4 h-4" />
             Limpiar
@@ -197,7 +202,7 @@ export default function CotizadorWizard() {
           <button
             onClick={handleExportPDF}
             disabled={exportando}
-            className="flex items-center gap-2 bg-[#c9242b] hover:bg-red-700 disabled:opacity-50 text-white font-semibold text-sm px-5 py-2 rounded-lg transition-colors shadow-md shadow-red-900/30"
+            className="flex items-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 disabled:opacity-50 text-[var(--ts-text-primary)] font-semibold text-sm px-5 py-2 rounded-lg transition-colors shadow-md shadow-red-900/30"
           >
             {exportando ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -215,19 +220,19 @@ export default function CotizadorWizard() {
         {/* ── Columna izquierda: Selectores ── */}
         <div className="space-y-5">
           {/* Buscador de productos */}
-          <div className="bg-white rounded-xl border border-[#d9d9d9] p-5">
+          <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-5">
             <div className="flex items-center gap-2 mb-4">
-              <Package className="w-4 h-4 text-[#c9242b]" />
-              <h2 className="text-sm font-bold text-[#111111] uppercase tracking-wide">
+              <Package className="w-4 h-4 text-[var(--ts-red)]" />
+              <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
                 Productos & Equipos
               </h2>
             </div>
-            <BuscadorProductos onAdd={addLinea} clienteTipo={cliente.tipo} />
+            <BuscadorProductos onAdd={addLinea} clienteTipo={cliente.tipo} descuentoTecnico={descuentoTecnico} />
           </div>
 
           {/* Servicios y mano de obra */}
-          <div className="bg-white rounded-xl border border-[#d9d9d9] p-5 max-h-[600px] overflow-y-auto">
-            <ServiciosPicker onAdd={addLinea} clienteTipo={cliente.tipo} />
+          <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-5 max-h-[600px] overflow-y-auto">
+            <ServiciosPicker onAdd={addLinea} clienteTipo={cliente.tipo} descuentoTecnico={descuentoTecnico} />
           </div>
         </div>
 
@@ -236,7 +241,7 @@ export default function CotizadorWizard() {
 
           {/* Selector / Creador de cliente */}
           <div>
-            <h2 className="text-sm font-bold text-[#111111] uppercase tracking-wide mb-2">
+            <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide mb-2">
               Cliente
             </h2>
             <ClientePicker
@@ -248,9 +253,9 @@ export default function CotizadorWizard() {
           {/* Tabla de ítems */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-bold text-[#111111] uppercase tracking-wide">
+              <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
                 Ítems de Cotización
-                <span className="ml-2 text-xs font-normal text-[#6e6e6e] normal-case">
+                <span className="ml-2 text-xs font-normal text-[var(--ts-text-muted)] normal-case">
                   ({lineas.length} ítem{lineas.length !== 1 ? "s" : ""})
                 </span>
               </h2>
@@ -265,7 +270,7 @@ export default function CotizadorWizard() {
 
           {/* Notas */}
           <div>
-            <label className="block text-xs font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">
+            <label className="block text-xs font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
               Notas / Observaciones (opcional)
             </label>
             <textarea
@@ -273,7 +278,7 @@ export default function CotizadorWizard() {
               value={notas}
               onChange={(e) => setNotas(e.target.value)}
               placeholder="Ej: Incluye mano de obra en segundo piso. Materiales suministrados por el cliente."
-              className="w-full border border-[#d9d9d9] rounded-lg px-3 py-2.5 text-sm text-[#111111] placeholder-[#6e6e6e] focus:outline-none focus:ring-2 focus:ring-[#c9242b]/40 focus:border-[#c9242b] resize-none"
+              className="w-full border border-[var(--ts-border)] rounded-lg px-3 py-2.5 text-sm text-[var(--ts-text-primary)] placeholder-[#6e6e6e] focus:outline-none focus:ring-2 focus:ring-[#c9242b]/40 focus:border-[var(--ts-red)] resize-none"
             />
           </div>
 
@@ -296,7 +301,7 @@ export default function CotizadorWizard() {
           <button
             onClick={handleExportPDF}
             disabled={exportando}
-            className="w-full flex items-center justify-center gap-2 bg-[#c9242b] hover:bg-red-700 disabled:opacity-50 text-white font-bold text-base py-4 rounded-xl transition-colors shadow-lg shadow-red-900/30"
+            className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 disabled:opacity-50 text-[var(--ts-text-primary)] font-bold text-base py-4 rounded-xl transition-colors shadow-lg shadow-red-900/30"
           >
             {exportando ? (
               <>

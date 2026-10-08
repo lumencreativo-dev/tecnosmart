@@ -264,36 +264,36 @@ export default function ImportarPage() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
       <div>
-        <h1 className="text-2xl font-extrabold text-[#111111]">
+        <h1 className="text-2xl font-extrabold text-[var(--ts-text-primary)]">
           Importar Catálogo PDF
         </h1>
-        <p className="text-sm text-[#6e6e6e] mt-1">
+        <p className="text-sm text-[var(--ts-text-muted)] mt-1">
           Sube una lista de precios en PDF con columnas: <strong>SKU / Modelo · Nombre · Precio Venta · Costo · 15%</strong>
         </p>
       </div>
 
       {/* ── Defaults globales ── */}
-      <div className="bg-[#f8fafc] border border-[#e5e5e5] rounded-xl p-4 flex flex-wrap gap-4 items-end">
+      <div className="bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl p-4 flex flex-wrap gap-4 items-end">
         <div>
-          <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">
+          <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
             Marca por defecto
           </label>
           <select
             value={marcaGlobal}
             onChange={(e) => setMarcaGlobal(e.target.value)}
-            className="border border-[#d9d9d9] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#c9242b]"
+            className="border border-[var(--ts-border)] rounded-lg px-3 py-2 text-sm bg-[var(--ts-surface)] focus:outline-none focus:border-[var(--ts-red)]"
           >
             {MARCAS.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-[10px] font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">
+          <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
             Categoría por defecto
           </label>
           <select
             value={categoriaGlobal}
             onChange={(e) => setCategoriaGlobal(e.target.value)}
-            className="border border-[#d9d9d9] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#c9242b]"
+            className="border border-[var(--ts-border)] rounded-lg px-3 py-2 text-sm bg-[var(--ts-surface)] focus:outline-none focus:border-[var(--ts-red)]"
           >
             {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -301,12 +301,12 @@ export default function ImportarPage() {
         {items.length > 0 && (
           <button
             onClick={aplicarGlobal}
-            className="px-4 py-2 bg-[#111] hover:bg-[#333] text-white text-xs font-bold rounded-lg transition-colors"
+            className="px-4 py-2 bg-[#111] hover:bg-[#333] text-[var(--ts-text-primary)] text-xs font-bold rounded-lg transition-colors"
           >
             Aplicar a todos
           </button>
         )}
-        <p className="text-xs text-[#6e6e6e] self-end">
+        <p className="text-xs text-[var(--ts-text-muted)] self-end">
           Puedes modificar marca y categoría por fila individualmente.
         </p>
       </div>
@@ -320,14 +320,14 @@ export default function ImportarPage() {
           const f = e.dataTransfer.files[0];
           if (f) handleFile(f);
         }}
-        className="border-2 border-dashed border-[#d9d9d9] hover:border-[#c9242b] rounded-2xl py-14 px-8 text-center cursor-pointer transition-colors group"
+        className="border-2 border-dashed border-[var(--ts-border)] hover:border-[var(--ts-red)] rounded-2xl py-14 px-8 text-center cursor-pointer transition-colors group"
       >
-        <Upload className="w-10 h-10 text-[#6e6e6e] group-hover:text-[#c9242b] mx-auto mb-3 transition-colors" />
-        <p className="text-sm font-medium text-[#111111]">
+        <Upload className="w-10 h-10 text-[var(--ts-text-muted)] group-hover:text-[var(--ts-red)] mx-auto mb-3 transition-colors" />
+        <p className="text-sm font-medium text-[var(--ts-text-primary)]">
           Arrastra un PDF aquí o{" "}
-          <span className="text-[#c9242b] underline">haz clic para seleccionar</span>
+          <span className="text-[var(--ts-red)] underline">haz clic para seleccionar</span>
         </p>
-        <p className="text-xs text-[#6e6e6e] mt-1">
+        <p className="text-xs text-[var(--ts-text-muted)] mt-1">
           Listas de precios con tabla de SKU, nombre y precios
         </p>
         <input
@@ -364,23 +364,23 @@ export default function ImportarPage() {
       {items.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-[#111111] uppercase tracking-wide">
+            <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
               Productos detectados ({items.length})
             </h2>
             <button
               onClick={guardarEnSupabase}
               disabled={estado === "procesando"}
-              className="flex items-center gap-2 bg-[#c9242b] hover:bg-red-700 disabled:opacity-50 text-white text-sm font-bold px-5 py-2 rounded-lg transition-colors"
+              className="flex items-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 disabled:opacity-50 text-[var(--ts-text-primary)] text-sm font-bold px-5 py-2 rounded-lg transition-colors"
             >
               <CheckCircle className="w-4 h-4" />
               Importar a Catálogo
             </button>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-[#d9d9d9]">
+          <div className="overflow-x-auto rounded-xl border border-[var(--ts-border)]">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-[#111111] text-white">
+                <tr className="bg-[var(--ts-surface-raised)] text-white">
                   <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">SKU / Modelo</th>
                   <th className="text-left px-3 py-2 font-semibold">Nombre del Producto</th>
                   <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">Marca</th>
@@ -396,10 +396,10 @@ export default function ImportarPage() {
                 {items.map((p, i) => (
                   <tr
                     key={`${p.codigo_sku}-${i}`}
-                    className={`border-b border-[#d9d9d9] ${i % 2 === 0 ? "bg-white" : "bg-[#f8fafc]"}`}
+                    className={`border-b border-[var(--ts-border)] ${i % 2 === 0 ? "bg-[var(--ts-surface)]" : "bg-[var(--ts-surface-2)]"}`}
                   >
                     {/* SKU */}
-                    <td className="px-3 py-1.5 font-mono font-bold text-[#c9242b] whitespace-nowrap">
+                    <td className="px-3 py-1.5 font-mono font-bold text-[var(--ts-red)] whitespace-nowrap">
                       {p.codigo_sku}
                     </td>
 
@@ -413,7 +413,7 @@ export default function ImportarPage() {
                             prev.map((x, xi) => xi === i ? { ...x, nombre: e.target.value } : x)
                           )
                         }
-                        className="w-full min-w-[200px] border border-[#d9d9d9] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
+                        className="w-full min-w-[200px] border border-[var(--ts-border)] rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
                       />
                     </td>
 
@@ -426,7 +426,7 @@ export default function ImportarPage() {
                             prev.map((x, xi) => xi === i ? { ...x, marca: e.target.value } : x)
                           )
                         }
-                        className="border border-[#d9d9d9] rounded px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
+                        className="border border-[var(--ts-border)] rounded px-1.5 py-1 text-xs bg-[var(--ts-surface)] focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
                       >
                         {MARCAS.map(m => <option key={m} value={m}>{m}</option>)}
                       </select>
@@ -441,7 +441,7 @@ export default function ImportarPage() {
                             prev.map((x, xi) => xi === i ? { ...x, categoria: e.target.value } : x)
                           )
                         }
-                        className="border border-[#d9d9d9] rounded px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
+                        className="border border-[var(--ts-border)] rounded px-1.5 py-1 text-xs bg-[var(--ts-surface)] focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
                       >
                         {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
@@ -457,7 +457,7 @@ export default function ImportarPage() {
                             prev.map((x, xi) => xi === i ? { ...x, precio_venta: parseFloat(e.target.value) || 0 } : x)
                           )
                         }
-                        className="w-20 border border-[#d9d9d9] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
+                        className="w-20 border border-[var(--ts-border)] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
                       />
                     </td>
 
@@ -471,7 +471,7 @@ export default function ImportarPage() {
                             prev.map((x, xi) => xi === i ? { ...x, precio_costo: parseFloat(e.target.value) || 0 } : x)
                           )
                         }
-                        className="w-20 border border-[#d9d9d9] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
+                        className="w-20 border border-[var(--ts-border)] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
                       />
                     </td>
 
@@ -485,7 +485,7 @@ export default function ImportarPage() {
                             prev.map((x, xi) => xi === i ? { ...x, precio_tecnico: parseFloat(e.target.value) || 0 } : x)
                           )
                         }
-                        className="w-20 border border-[#d9d9d9] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
+                        className="w-20 border border-[var(--ts-border)] rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
                       />
                     </td>
 
@@ -516,7 +516,7 @@ export default function ImportarPage() {
             </table>
           </div>
 
-          <p className="text-xs text-[#6e6e6e] mt-2">
+          <p className="text-xs text-[var(--ts-text-muted)] mt-2">
             💡 Puedes editar cualquier campo antes de importar. Se usa <strong>upsert</strong> por SKU, así que actualiza productos existentes si el SKU ya existe.
           </p>
         </div>

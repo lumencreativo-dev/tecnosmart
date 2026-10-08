@@ -23,8 +23,8 @@ export function tempId(): string {
 }
 
 /** Fecha formateada para cotizaciones */
-export function formatFecha(date?: Date): string {
-  const d = date ?? new Date();
+export function formatFecha(date?: Date | string | null): string {
+  const d = date ? (typeof date === "string" ? new Date(date) : date) : new Date();
   return d.toLocaleDateString("es-VE", {
     day: "2-digit",
     month: "long",

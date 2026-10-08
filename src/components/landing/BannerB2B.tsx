@@ -23,10 +23,10 @@ export default function BannerB2B() {
           className="w-full h-[500px] sm:h-[420px] object-cover object-center"
         />
         {/* Overlay negro fuerte */}
-        <div className="absolute inset-0 bg-[#111111]/88" />
+        <div className="absolute inset-0 bg-[var(--ts-surface-raised)]/88" />
 
         {/* Línea roja superior */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-[#c9242b]" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-[var(--ts-red)]" />
 
         {/* Contenido centrado */}
         <div className="absolute inset-0 flex items-center">
@@ -35,13 +35,13 @@ export default function BannerB2B() {
 
               {/* Texto */}
               <div>
-                <span className="inline-block bg-[#c9242b] text-white text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
+                <span className="inline-block bg-[var(--ts-red)] text-[var(--ts-text-primary)] text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
                   Técnicos e Instaladores
                 </span>
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-3 leading-tight">
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--ts-text-primary)] mb-3 leading-tight">
                   ¿Eres técnico o instalador independiente?
                 </h2>
-                <p className="text-[#a0a0a0] text-base leading-relaxed">
+                <p className="text-[var(--ts-text-muted)] text-base leading-relaxed">
                   Conseguí tus equipos de seguridad a <strong className="text-white">precio especial de técnico</strong>, diferente al precio de cliente final. Sin compromisos, sin mínimos de compra.
                 </p>
               </div>
@@ -51,7 +51,7 @@ export default function BannerB2B() {
                 <ul className="space-y-3 mb-7">
                   {beneficios.map((b) => (
                     <li key={b} className="flex items-start gap-3 text-[#d9d9d9] text-sm">
-                      <BadgeCheck className="w-5 h-5 text-[#c9242b] flex-shrink-0 mt-0.5" />
+                      <BadgeCheck className="w-5 h-5 text-[var(--ts-red)] flex-shrink-0 mt-0.5" />
                       {b}
                     </li>
                   ))}
@@ -60,7 +60,7 @@ export default function BannerB2B() {
                   href={`https://wa.me/${wa}?text=Hola%20TecnoSmart%2C%20soy%20t%C3%A9cnico%20instalador%20y%20me%20interesa%20precio%20especial`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-[#c9242b] hover:bg-red-700 text-white font-bold px-6 py-3.5 rounded-lg transition-all hover:scale-105 shadow-lg shadow-red-900/30"
+                  className="inline-flex items-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-[var(--ts-text-primary)] font-bold px-6 py-3.5 rounded-lg transition-all hover:scale-105 shadow-lg shadow-red-900/30"
                 >
                   Consultar precio de técnico
                   <ArrowRight className="w-4 h-4" />

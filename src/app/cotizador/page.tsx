@@ -1,5 +1,5 @@
-import CotizadorWizard from "@/components/cotizador/CotizadorWizard";
+import { redirect } from "next/navigation";
 
-export default function CotizadorPage() {
-  return <CotizadorWizard />;
+export default function CotizadorIndex() {
+  redirect("/cotizador/dashboard");
 }

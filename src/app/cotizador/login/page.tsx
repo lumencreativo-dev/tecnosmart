@@ -44,8 +44,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-[#111111] via-[#1a1a1a] to-[#111111] flex items-center justify-center p-4 relative overflow-hidden">
       {/* Fondo decorativo */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[#c9242b]/10 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[#c9242b]/5 rounded-full blur-3xl"></div>
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-[var(--ts-red-subtle)] rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-[var(--ts-red)]/5 rounded-full blur-3xl"></div>
       </div>
 
       <div className="relative w-full max-w-sm">
@@ -58,54 +58,54 @@ export default function LoginPage() {
             height={60}
             className="mx-auto h-12 w-auto object-contain mb-4"
           />
-          <div className="flex items-center justify-center gap-2 text-[#6e6e6e]">
-            <Shield className="w-4 h-4 text-[#c9242b]" />
+          <div className="flex items-center justify-center gap-2 text-[var(--ts-text-muted)]">
+            <Shield className="w-4 h-4 text-[var(--ts-red)]" />
             <span className="text-xs font-medium uppercase tracking-widest">Portal Interno</span>
           </div>
         </div>
 
         {/* Card */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-white text-lg font-bold mb-6 text-center">Iniciar Sesión</h2>
+        <div className="bg-[var(--ts-surface)]/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
+          <h2 className="text-[var(--ts-text-primary)] text-lg font-bold mb-6 text-center">Iniciar Sesión</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Usuario */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#a0a0a0] uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wider mb-1.5">
                 Usuario
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6e6e6e]" />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--ts-text-muted)]" />
                 <input
                   type="text"
                   required
                   value={usuario}
                   onChange={(e) => setUsuario(e.target.value)}
                   placeholder="Ingresa tu usuario"
-                  className="w-full pl-10 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-[#6e6e6e] focus:outline-none focus:border-[#c9242b] focus:ring-1 focus:ring-[#c9242b]/30 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 bg-[var(--ts-surface)]/5 border border-white/10 rounded-xl text-[var(--ts-text-primary)] text-sm placeholder:text-[var(--ts-text-muted)] focus:outline-none focus:border-[var(--ts-red)] focus:ring-1 focus:ring-[#c9242b]/30 transition-colors"
                 />
               </div>
             </div>
 
             {/* Contraseña */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#a0a0a0] uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wider mb-1.5">
                 Contraseña
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#6e6e6e]" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--ts-text-muted)]" />
                 <input
                   type={showPass ? "text" : "password"}
                   required
                   value={clave}
                   onChange={(e) => setClave(e.target.value)}
                   placeholder="••••••••••"
-                  className="w-full pl-10 pr-12 py-3 bg-white/5 border border-white/10 rounded-xl text-white text-sm placeholder:text-[#6e6e6e] focus:outline-none focus:border-[#c9242b] focus:ring-1 focus:ring-[#c9242b]/30 transition-colors"
+                  className="w-full pl-10 pr-12 py-3 bg-[var(--ts-surface)]/5 border border-white/10 rounded-xl text-[var(--ts-text-primary)] text-sm placeholder:text-[var(--ts-text-muted)] focus:outline-none focus:border-[var(--ts-red)] focus:ring-1 focus:ring-[#c9242b]/30 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6e6e6e] hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors"
                 >
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -114,7 +114,7 @@ export default function LoginPage() {
 
             {/* Error */}
             {error && (
-              <div className="bg-[#c9242b]/10 border border-[#c9242b]/30 text-[#c9242b] text-xs font-medium px-4 py-2.5 rounded-lg text-center">
+              <div className="bg-[var(--ts-red-subtle)] border border-[var(--ts-red)]/30 text-[var(--ts-red)] text-xs font-medium px-4 py-2.5 rounded-lg text-center">
                 {error}
               </div>
             )}
@@ -123,7 +123,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#c9242b] hover:bg-red-700 disabled:opacity-50 text-white font-bold text-sm py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-red-900/30 hover:shadow-red-900/50 mt-2"
+              className="w-full bg-[var(--ts-red)] hover:bg-red-700 disabled:opacity-50 text-[var(--ts-text-primary)] font-bold text-sm py-3.5 rounded-xl transition-all duration-200 shadow-lg shadow-red-900/30 hover:shadow-red-900/50 mt-2"
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
@@ -138,7 +138,7 @@ export default function LoginPage() {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-[#6e6e6e] text-[10px] mt-6">
+        <p className="text-center text-[var(--ts-text-muted)] text-[10px] mt-6">
           TECNO SMART VZL C.A · RIF: J-50701960-8
         </p>
       </div>

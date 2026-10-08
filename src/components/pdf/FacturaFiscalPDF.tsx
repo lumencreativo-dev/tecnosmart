@@ -8,11 +8,12 @@ const S = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", marginBottom: 30 },
   
   // Header Izquierdo (Logo e Info Empresa)
-  headerLeft: { flexDirection: "row", width: "55%" },
-  logoImg: { width: 40, height: 40, marginRight: 8 },
-  brandTitle: { fontSize: 16, fontWeight: 900, color: "#c9242b", marginBottom: 2 },
-  brandSub: { fontSize: 8, color: "#6e6e6e", fontWeight: 700 },
-  companyData: { fontSize: 8, color: "#6e6e6e", marginTop: 4, lineHeight: 1.3 },
+  headerLeft: { flexDirection: "column", width: "55%" },
+  headerLogoRow: { flexDirection: "row", alignItems: "center", marginBottom: 6 },
+  logoImg: { width: 36, height: 36, marginRight: 8 },
+  brandTitle: { fontSize: 15, fontWeight: 900, color: "#c9242b" },
+  brandSub: { fontSize: 8, color: "#6e6e6e", fontWeight: 700, marginTop: 1 },
+  companyData: { fontSize: 8, color: "#6e6e6e", marginBottom: 2, lineHeight: 1.4 },
   
   // Header Derecho (Forma Libre / Número de Control)
   headerRight: { width: "40%", textAlign: "right" },
@@ -96,17 +97,18 @@ export const FacturaFiscalDocument = ({
         {/* ── HEADER ── */}
         <View style={S.header}>
           <View style={S.headerLeft}>
-            <PDFImage src={LOGO_BLANCO_B64} style={S.logoImg} />
-            <View>
-              <Text style={S.brandTitle}>TECNO SMART</Text>
-              <Text style={S.brandSub}>TECNO SMART VZL C.A</Text>
-              <Text style={S.brandSub}>RIF: J-50701960-8</Text>
+            {/* Fila: logo + nombre de marca */}
+            <View style={S.headerLogoRow}>
+              <PDFImage src={LOGO_BLANCO_B64} style={S.logoImg} />
+              <View>
+                <Text style={S.brandTitle}>TECNOSMART VZL</Text>
+                <Text style={S.brandSub}>RIF: J-50701960-8</Text>
+              </View>
             </View>
-            <View style={{ marginLeft: 20 }}>
-              <Text style={S.companyData}>Av. Bolívar C/C c. Páez, Edif. Sta. Eduviges II, local-02</Text>
-              <Text style={S.companyData}>Tel: 0412-2789273  ·  tecnosmartvzla@gmail.com</Text>
-              <Text style={S.companyData}>Tinaquillo, Edo. Cojedes</Text>
-            </View>
+            {/* Dirección debajo del logo */}
+            <Text style={S.companyData}>Av. Bolívar C/C c. Páez, Edif. Sta. Eduviges II, local-02</Text>
+            <Text style={S.companyData}>Tinaquillo, Edo. Cojedes</Text>
+            <Text style={S.companyData}>Tel: 0412-2789273  ·  tecnosmartvzla@gmail.com</Text>
           </View>
           <View style={S.headerRight}>
             <Text style={S.formaLibre}>FORMA LIBRE</Text>
@@ -167,7 +169,7 @@ export const FacturaFiscalDocument = ({
               <Text style={S.resumenVal}>{formatBs(subtotalBs)}</Text>
             </View>
             <View style={S.resumenRow}>
-              <Text style={S.resumenLabel}>IVA (16%):</Text>
+              <Text style={S.resumenLabel}>IVA ({ivaBs > 0 ? "16%" : "0%"}):</Text>
               <Text style={S.resumenVal}>{formatBs(ivaBs)}</Text>
             </View>
             {aplicaIgtf && (

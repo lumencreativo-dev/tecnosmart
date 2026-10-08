@@ -29,9 +29,10 @@ const SERVICIOS_FALLBACK: ServicioManoObra[] = [
 interface Props {
   onAdd: (linea: LineaDetalle) => void;
   clienteTipo?: "cliente_normal" | "tecnico";
+  descuentoTecnico?: number;
 }
 
-export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
+export default function ServiciosPicker({ onAdd, clienteTipo, descuentoTecnico = 15 }: Props) {
   const [servicios, setServicios] = useState<ServicioManoObra[]>(SERVICIOS_FALLBACK);
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
   const [preciosCustom, setPreciosCustom] = useState<Record<string, number>>({});
@@ -56,9 +57,11 @@ export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
   const getPrecioCalculado = (s: ServicioManoObra) => {
     // 1. Si el usuario sobreescribió el precio manualmente en el input, usar ese
     if (preciosCustom[s.id] !== undefined) return preciosCustom[s.id];
-    // 2. Si es técnico y hay precio_tecnico, usar precio_tecnico
-    if (clienteTipo === "tecnico" && s.precio_tecnico != null) return s.precio_tecnico;
-    // 3. Fallback a precio base
+    // 2. Si es técnico y hay precio_tecnico explícito, usarlo
+    if (clienteTipo === "tecnico" && s.precio_tecnico != null && s.precio_tecnico > 0) return s.precio_tecnico;
+    // 3. Si es técnico, calcular descuento dinámico
+    if (clienteTipo === "tecnico") return parseFloat((s.precio_base * (1 - descuentoTecnico / 100)).toFixed(2));
+    // 4. Fallback a precio base
     return s.precio_base;
   };
 
@@ -87,7 +90,7 @@ export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
 
   return (
     <div className="space-y-4">
-      <h3 className="text-xs font-bold text-[#6e6e6e] uppercase tracking-widest">
+      <h3 className="text-xs font-bold text-[var(--ts-text-muted)] uppercase tracking-widest">
         Servicios & Mano de Obra
       </h3>
 
@@ -113,16 +116,16 @@ export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
               return (
                 <div
                   key={s.id}
-                  className="flex items-center gap-2 bg-white border border-[#d9d9d9] rounded-lg px-3 py-2 hover:border-[#c9242b]/40 transition-colors"
+                  className="flex items-center gap-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-3 py-2 hover:border-[var(--ts-red)]/40 transition-colors"
                 >
                   {/* Descripción */}
                   <div className="flex-1 min-w-0" title={s.concepto}>
-                    <p className="text-xs font-medium text-[#111111] leading-tight line-clamp-2">{s.concepto}</p>
-                    <p className="text-[10px] text-[#6e6e6e] flex items-center gap-1 mt-0.5">
+                    <p className="text-xs font-medium text-[var(--ts-text-primary)] leading-tight line-clamp-2">{s.concepto}</p>
+                    <p className="text-[10px] text-[var(--ts-text-muted)] flex items-center gap-1 mt-0.5">
                       {s.codigo} · por {s.unidad}
                       {tieneRango ? ` · Rango $${s.precio_base}–$${s.precio_max}` : ""}
                       {isTecnicoRate && (
-                        <span className="text-[#c9242b] font-bold tracking-tight bg-[#c9242b]/10 px-1 rounded">Precio Técnico</span>
+                        <span className="text-[var(--ts-red)] font-bold tracking-tight bg-[var(--ts-red-subtle)] px-1 rounded">Precio Técnico</span>
                       )}
                     </p>
                   </div>
@@ -138,11 +141,11 @@ export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
                       setPreciosCustom((p) => ({ ...p, [s.id]: parseFloat(e.target.value) || precioCalculado }))
                     }
                     className={`w-20 text-xs border rounded px-2 py-1 text-right focus:outline-none focus:ring-1 focus:ring-[#c9242b] ${
-                      isTecnicoRate ? "border-[#c9242b]/50 bg-[#c9242b]/5 text-[#c9242b] font-bold" : "border-[#d9d9d9]"
+                      isTecnicoRate ? "border-[var(--ts-red)]/50 bg-[var(--ts-red)]/5 text-[var(--ts-red)] font-bold" : "border-[var(--ts-border)]"
                     }`}
                     title="Precio unitario"
                   />
-                  <span className="text-[10px] text-[#6e6e6e]">USD</span>
+                  <span className="text-[10px] text-[var(--ts-text-muted)]">USD</span>
 
                   {/* Cantidad */}
                   <input
@@ -152,7 +155,7 @@ export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
                     onChange={(e) =>
                       setCantidades((c) => ({ ...c, [s.id]: parseInt(e.target.value) || 1 }))
                     }
-                    className="w-14 text-xs border border-[#d9d9d9] rounded px-2 py-1 text-center focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
+                    className="w-14 text-xs border border-[var(--ts-border)] rounded px-2 py-1 text-center focus:outline-none focus:ring-1 focus:ring-[#c9242b]"
                     title="Cantidad"
                   />
 
@@ -160,7 +163,7 @@ export default function ServiciosPicker({ onAdd, clienteTipo }: Props) {
                   <button
                     onClick={() => addServicio(s)}
                     title="Agregar a cotización"
-                    className="flex-shrink-0 bg-[#c9242b] hover:bg-red-700 text-white rounded p-1.5 transition-colors"
+                    className="flex-shrink-0 bg-[var(--ts-red)] hover:bg-red-700 text-[var(--ts-text-primary)] rounded p-1.5 transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                   </button>

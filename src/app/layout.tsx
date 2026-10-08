@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import Providers from "./providers";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,26 +20,19 @@ export const metadata: Metadata = {
   openGraph: {
     title: "TecnoSmart VZL | Seguridad & Tecnología",
     description: "Equipos de seguridad, redes e internet satelital en Venezuela. Instalación y servicio técnico profesional.",
-    url: "https://tecnosmartvzl.com", // Puedes ajustarlo luego
+    url: "https://tecnosmartvzl.com",
     siteName: "TecnoSmart VZL",
     type: "website",
     locale: "es_VE",
   },
-  robots: {
-    index: true,
-    follow: true,
-  }
+  robots: { index: true, follow: true }
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${inter.variable} scroll-smooth`}>
-      <body className="font-sans bg-white text-brand-black antialiased">
-        {children}
+    <html lang="es" className={`${inter.variable} scroll-smooth`} suppressHydrationWarning>
+      <body className="font-sans antialiased">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

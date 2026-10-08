@@ -14,16 +14,69 @@
   --font-family-sans: "Inter", "Roboto", "Montserrat", ui-sans-serif, system-ui, sans-serif;
 }
 
+/* ── CSS Variables para Dark/Light Mode ───────────────────── */
+:root {
+  /* Superficies */
+  --ts-bg:             #f0f2f5;
+  --ts-surface:        #ffffff;
+  --ts-surface-2:      #f5f7fa;
+  --ts-surface-raised: #111827;  /* para banners de page header */
+  --ts-border:         #e2e6ea;
+  --ts-border-2:       #edf0f2;
+
+  /* Texto */
+  --ts-text-primary:   #111111;
+  --ts-text-secondary: #6e6e6e;
+  --ts-text-muted:     #a0a0a0;
+  --ts-text-on-dark:   #ffffff;
+
+  /* Acciones */
+  --ts-red:         #c9242b;
+  --ts-red-hover:   #b01f25;
+  --ts-red-subtle:  rgba(201, 36, 43, 0.08);
+
+  /* Radio de esquinas (estilo Rial) */
+  --ts-radius:      16px;
+  --ts-radius-sm:   10px;
+  --ts-radius-lg:   24px;
+
+  /* Sombras */
+  --ts-shadow:      0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  --ts-shadow-lg:   0 8px 32px rgba(0,0,0,0.10);
+}
+
+.dark {
+  --ts-bg:             #0a0a0a;
+  --ts-surface:        #151515;
+  --ts-surface-2:      #1e1e1e;
+  --ts-surface-raised: #0d0d0d;  /* en dark, banners son casi negros */
+  --ts-border:         #2a2a2a;
+  --ts-border-2:       #222222;
+
+  --ts-text-primary:   #f2f2f2;
+  --ts-text-secondary: #a0a0a0;
+  --ts-text-muted:     #606060;
+  --ts-text-on-dark:   #f2f2f2;
+
+  --ts-red:         #e03535;
+  --ts-red-hover:   #c9242b;
+  --ts-red-subtle:  rgba(224, 53, 53, 0.15);
+
+  --ts-shadow:      0 1px 4px rgba(0,0,0,0.4), 0 4px 16px rgba(0,0,0,0.25);
+  --ts-shadow-lg:   0 8px 32px rgba(0,0,0,0.5);
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
   }
   body {
-    color: #111111;
-    background: #ffffff;
+    color: var(--ts-text-primary);
+    background: var(--ts-bg);
     font-family: var(--font-family-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 }
 
@@ -31,4 +84,13 @@
   .text-balance {
     text-wrap: balance;
   }
+
+  /* Clases de utilidad para el sistema de temas */
+  .ts-surface    { background: var(--ts-surface); border: 1px solid var(--ts-border); }
+  .ts-surface-2  { background: var(--ts-surface-2); }
+  .ts-text       { color: var(--ts-text-primary); }
+  .ts-text-muted { color: var(--ts-text-secondary); }
+  .ts-border     { border-color: var(--ts-border); }
+  .ts-radius     { border-radius: var(--ts-radius); }
+  .ts-shadow     { box-shadow: var(--ts-shadow); }
 }

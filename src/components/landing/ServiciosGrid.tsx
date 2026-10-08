@@ -35,18 +35,18 @@ const servicios = [
 
 export default function ServiciosGrid() {
   return (
-    <section id="servicios" className="py-24 bg-white">
+    <section id="servicios" className="py-24 bg-[var(--ts-surface)]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
         {/* Encabezado */}
         <div className="text-center mb-16">
-          <span className="text-[#c9242b] text-xs font-bold uppercase tracking-widest">
+          <span className="text-[var(--ts-red)] text-xs font-bold uppercase tracking-widest">
             Lo que hacemos
           </span>
-          <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold text-[#111111]">
+          <h2 className="mt-3 text-3xl sm:text-4xl font-extrabold text-[var(--ts-text-primary)]">
             Soluciones Tecnológicas a tu Medida
           </h2>
-          <p className="mt-4 text-[#6e6e6e] max-w-2xl mx-auto text-base">
+          <p className="mt-4 text-[var(--ts-text-muted)] max-w-2xl mx-auto text-base">
             Desde la instalación hasta el mantenimiento, con garantía certificada
             y soporte técnico continuo.
           </p>
@@ -57,7 +57,7 @@ export default function ServiciosGrid() {
           {servicios.map((s) => (
             <div
               key={s.titulo}
-              className="group bg-white rounded-2xl border border-[#e5e5e5] overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
+              className="group bg-[var(--ts-surface)] rounded-2xl border border-[var(--ts-border)] overflow-hidden hover:shadow-lg hover:-translate-y-1 transition-all duration-300"
             >
               {/* Foto */}
               <div className="relative h-48 overflow-hidden">
@@ -69,22 +69,22 @@ export default function ServiciosGrid() {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 {/* Barra roja superior */}
-                <div className="absolute top-0 left-0 right-0 h-1 bg-[#c9242b]" />
+                <div className="absolute top-0 left-0 right-0 h-1 bg-[var(--ts-red)]" />
                 {/* Título sobre foto */}
-                <h3 className="absolute bottom-4 left-5 text-white font-bold text-lg leading-tight">
+                <h3 className="absolute bottom-4 left-5 text-[var(--ts-text-primary)] font-bold text-lg leading-tight">
                   {s.titulo}
                 </h3>
               </div>
 
               {/* Contenido */}
               <div className="p-6">
-                <p className="text-[#6e6e6e] text-sm leading-relaxed mb-4">
+                <p className="text-[var(--ts-text-muted)] text-sm leading-relaxed mb-4">
                   {s.descripcion}
                 </p>
                 <ul className="space-y-2">
                   {s.items.map((item) => (
-                    <li key={item} className="flex items-center gap-2 text-sm text-[#111111]">
-                      <CheckCircle2 className="w-4 h-4 text-[#c9242b] flex-shrink-0" />
+                    <li key={item} className="flex items-center gap-2 text-sm text-[var(--ts-text-primary)]">
+                      <CheckCircle2 className="w-4 h-4 text-[var(--ts-red)] flex-shrink-0" />
                       {item}
                     </li>
                   ))}
@@ -95,15 +95,15 @@ export default function ServiciosGrid() {
         </div>
 
         {/* ── STRIP DE MARCAS ── */}
-        <div className="mt-20 pt-12 border-t border-[#e5e5e5]">
-          <p className="text-center text-xs font-bold uppercase tracking-widest text-[#6e6e6e] mb-8">
+        <div className="mt-20 pt-12 border-t border-[var(--ts-border)]">
+          <p className="text-center text-xs font-bold uppercase tracking-widest text-[var(--ts-text-muted)] mb-8">
             Trabajamos con las mejores marcas
           </p>
           <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
             {ALL_BRANDS.map(({ name, Logo }) => (
               <div
                 key={name}
-                className="flex items-center justify-center text-[#999] hover:text-[#111111] transition-colors duration-200"
+                className="flex items-center justify-center text-[#999] hover:text-[var(--ts-text-primary)] transition-colors duration-200"
                 title={name}
               >
                 <Logo className="h-6 w-auto" />

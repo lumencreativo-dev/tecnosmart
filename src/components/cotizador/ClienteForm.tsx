@@ -24,11 +24,11 @@ const CAMPOS = [
 
 export default function ClienteForm({ cliente, onChange }: Props) {
   return (
-    <div className="bg-white rounded-xl border border-[#d9d9d9] overflow-hidden">
+    <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] overflow-hidden">
       {/* Header */}
-      <div className="bg-[#111111] px-5 py-3 flex items-center gap-2">
-        <User className="w-4 h-4 text-[#c9242b]" />
-        <span className="text-white text-sm font-bold uppercase tracking-wide">
+      <div className="bg-[var(--ts-surface-raised)] px-5 py-3 flex items-center gap-2">
+        <User className="w-4 h-4 text-[var(--ts-red)]" />
+        <span className="text-[var(--ts-text-primary)] text-sm font-bold uppercase tracking-wide">
           Datos del Cliente
         </span>
       </div>
@@ -36,7 +36,7 @@ export default function ClienteForm({ cliente, onChange }: Props) {
       <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
         {CAMPOS.map(({ label, key, type, placeholder }) => (
           <div key={key} className={key === "direccion" ? "sm:col-span-2" : ""}>
-            <label className="block text-xs font-semibold text-[#6e6e6e] uppercase tracking-wide mb-1">
+            <label className="block text-xs font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
               {label}
             </label>
             <input
@@ -44,7 +44,7 @@ export default function ClienteForm({ cliente, onChange }: Props) {
               placeholder={placeholder}
               value={(cliente[key] as string) ?? ""}
               onChange={(e) => onChange({ ...cliente, [key]: e.target.value })}
-              className="w-full border border-[#d9d9d9] rounded-lg px-3 py-2.5 text-sm text-[#111111] placeholder-[#6e6e6e] focus:outline-none focus:ring-2 focus:ring-[#c9242b]/40 focus:border-[#c9242b] transition"
+              className="w-full border border-[var(--ts-border)] rounded-lg px-3 py-2.5 text-sm text-[var(--ts-text-primary)] placeholder-[#6e6e6e] focus:outline-none focus:ring-2 focus:ring-[#c9242b]/40 focus:border-[var(--ts-red)] transition"
             />
           </div>
         ))}

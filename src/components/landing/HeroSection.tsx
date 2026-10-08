@@ -35,15 +35,15 @@ export default function HeroSection() {
       {/* Contenido */}
       <div className="relative z-10 max-w-5xl mx-auto px-6 text-center">
         {/* Badge */}
-        <span className="inline-flex items-center gap-2 bg-[#c9242b]/20 border border-[#c9242b]/50 text-[#c9242b] text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full mb-8">
+        <span className="inline-flex items-center gap-2 bg-[var(--ts-red)]/20 border border-[var(--ts-red)]/50 text-[var(--ts-red)] text-xs font-bold uppercase tracking-widest px-4 py-2 rounded-full mb-8">
           <ShieldCheck className="w-3.5 h-3.5" />
           Seguridad Electrónica · Tinaquillo, Venezuela
         </span>
 
         {/* Título */}
-        <h1 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-white leading-[1.05] mb-4 tracking-tight">
+        <h1 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold text-[var(--ts-text-primary)] leading-[1.05] mb-4 tracking-tight">
           Seguridad Electrónica &{" "}
-          <span className="text-[#c9242b]">Automatización</span>{" "}
+          <span className="text-[var(--ts-red)]">Automatización</span>{" "}
           Inteligente
         </h1>
 
@@ -52,7 +52,7 @@ export default function HeroSection() {
           "Tu seguridad, es nuestra prioridad."
         </p>
 
-        <p className="text-sm sm:text-base text-[#a0a0a0] max-w-2xl mx-auto mb-10 leading-relaxed">
+        <p className="text-sm sm:text-base text-[var(--ts-text-muted)] max-w-2xl mx-auto mb-10 leading-relaxed">
           Videovigilancia · Domótica · Redes · Control de Acceso · Starlink.<br />
           Soluciones para empresas, comercios y hogares.
         </p>
@@ -63,14 +63,14 @@ export default function HeroSection() {
             href={`https://wa.me/${wa}?text=Hola%20TecnoSmart%2C%20quiero%20una%20cotizaci%C3%B3n`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-[#c9242b] hover:bg-red-700 text-white font-bold text-base px-8 py-4 rounded-lg shadow-xl shadow-red-900/40 transition-all hover:scale-105"
+            className="inline-flex items-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-[var(--ts-text-primary)] font-bold text-base px-8 py-4 rounded-lg shadow-xl shadow-red-900/40 transition-all hover:scale-105"
           >
             Solicitar Cotización
             <ArrowRight className="w-5 h-5" />
           </a>
           <a
             href="#servicios"
-            className="inline-flex items-center gap-2 border border-white/25 hover:border-[#c9242b] text-white/80 hover:text-white font-semibold text-base px-8 py-4 rounded-lg transition-all"
+            className="inline-flex items-center gap-2 border border-white/25 hover:border-[var(--ts-red)] text-white/80 hover:text-[var(--ts-text-primary)] font-semibold text-base px-8 py-4 rounded-lg transition-all"
           >
             Ver Servicios
           </a>
@@ -84,15 +84,15 @@ export default function HeroSection() {
             { val: "24/7", label: "Soporte técnico" },
           ].map((s) => (
             <div key={s.label} className="text-center">
-              <div className="text-3xl font-extrabold text-[#c9242b]">{s.val}</div>
-              <div className="text-xs text-[#6e6e6e] mt-1 uppercase tracking-wider">{s.label}</div>
+              <div className="text-3xl font-extrabold text-[var(--ts-red)]">{s.val}</div>
+              <div className="text-xs text-[var(--ts-text-muted)] mt-1 uppercase tracking-wider">{s.label}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-[#6e6e6e] text-xs">
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-[var(--ts-text-muted)] text-xs">
         <div className="w-px h-10 bg-gradient-to-b from-[#6e6e6e] to-transparent" />
       </div>
     </section>
