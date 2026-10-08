@@ -380,7 +380,7 @@ export default function ImportarPage() {
           <div className="overflow-x-auto rounded-xl border border-[var(--ts-border)]">
             <table className="w-full text-xs">
               <thead>
-                <tr className="bg-[var(--ts-surface-raised)] text-white">
+                <tr className="bg-[var(--ts-surface-raised)] text-[var(--ts-text-primary)]">
                   <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">SKU / Modelo</th>
                   <th className="text-left px-3 py-2 font-semibold">Nombre del Producto</th>
                   <th className="text-left px-3 py-2 font-semibold whitespace-nowrap">Marca</th>

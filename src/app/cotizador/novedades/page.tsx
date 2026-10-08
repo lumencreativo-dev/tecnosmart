@@ -192,7 +192,7 @@ export default function NovedadesPage() {
                     <div className="flex items-center gap-2 mb-0.5">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                         vi === 0
-                          ? "bg-[var(--ts-red)] text-white"
+                          ? "bg-[var(--ts-red)] text-[var(--ts-text-primary)]"
                           : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)]"
                       }`}>
                         v{v.version}
