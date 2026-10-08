@@ -111,7 +111,7 @@ export default function FacturadorWizard() {
   const [facturaGenerada, setFacturaGenerada] = useState<string | null>(null);
   const [tasaBcv, setTasaBcv]             = useState<number>(0);
   const [cargandoTasa, setCargandoTasa]   = useState(false);
-  const [metodoPago, setMetodoPago]       = useState<"bs_transferencia" | "usd_efectivo" | "zelle">("bs_transferencia");
+  const [metodoPago, setMetodoPago]       = useState<"bs_transferencia" | "usd_efectivo" | "zelle" | "binance">("bs_transferencia");
 
   // ── BCV ──
   const fetchBCVRate = async () => {
@@ -205,10 +205,11 @@ export default function FacturadorWizard() {
   const totalDirecto = lineasDirectas.reduce((s, l) => s + l.subtotal, 0);
 
   const [aplicaIva, setAplicaIva]       = useState(true);
+  const [aplicaIgtfManual, setAplicaIgtfManual] = useState(true);
 
   // ── Cálculos fiscales comunes ──
   const subtotalUsd  = modo === "desde_cotizacion" ? (cotizacion?.total || 0) : totalDirecto;
-  const aplicaIgtf   = metodoPago === "usd_efectivo" || metodoPago === "zelle";
+  const aplicaIgtf   = aplicaIgtfManual && (metodoPago === "usd_efectivo" || metodoPago === "zelle" || metodoPago === "binance");
   const subtotalBs   = subtotalUsd * tasaBcv;
   const ivaBs        = aplicaIva ? subtotalBs * 0.16 : 0;
   const igtfBs       = aplicaIgtf ? subtotalBs * 0.03 : 0;
@@ -457,14 +458,15 @@ export default function FacturadorWizard() {
             <option value="bs_transferencia">Transferencia / Pago Móvil (Bolívares)</option>
             <option value="usd_efectivo">Efectivo (Divisas)</option>
             <option value="zelle">Zelle / Transferencia Internacional</option>
+            <option value="binance">Binance (USDT)</option>
           </select>
           <p className="text-[10px] text-[var(--ts-text-muted)] mt-1">
-            {aplicaIgtf ? "Aplica recargo del 3% por IGTF." : "No aplica IGTF (Pago en Bs)."}
+            {aplicaIgtf ? "Aplica recargo del 3% por IGTF." : "No aplica IGTF."}
           </p>
         </div>
 
-        {/* Toggle IVA */}
-        <div className="md:col-span-2 mt-2">
+        {/* Toggles IVA e IGTF */}
+        <div className="md:col-span-2 mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
           <label className="flex items-center gap-2 cursor-pointer w-fit group">
             <div className="relative">
               <input 
@@ -483,6 +485,27 @@ export default function FacturadorWizard() {
               <p className="text-[10px] text-[var(--ts-text-muted)]">Por defecto activado. Desmárcalo si la factura no lleva IVA.</p>
             </div>
           </label>
+
+          {metodoPago !== "bs_transferencia" && (
+            <label className="flex items-center gap-2 cursor-pointer w-fit group">
+              <div className="relative">
+                <input 
+                  type="checkbox" 
+                  className="sr-only" 
+                  checked={aplicaIgtfManual}
+                  onChange={(e) => setAplicaIgtfManual(e.target.checked)}
+                />
+                <div className={`block w-10 h-6 rounded-full transition-colors ${aplicaIgtfManual ? "bg-[var(--ts-red)]" : "bg-[var(--ts-border)]"}`}></div>
+                <div className={`absolute left-1 top-1 bg-[var(--ts-surface)] w-4 h-4 rounded-full transition-transform ${aplicaIgtfManual ? "translate-x-4" : ""}`}></div>
+              </div>
+              <div>
+                <span className="text-sm font-bold text-[var(--ts-text-primary)] transition-colors group-hover:text-[var(--ts-red)]">
+                  Incluir IGTF (3%)
+                </span>
+                <p className="text-[10px] text-[var(--ts-text-muted)]">Por defecto activado en pagos en divisas. Desmárcalo para no aplicarlo.</p>
+              </div>
+            </label>
+          )}
         </div>
       </div>
 
