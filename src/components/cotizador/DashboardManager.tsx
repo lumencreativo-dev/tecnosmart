@@ -97,35 +97,40 @@ export default function DashboardManager() {
     const validezMs = parseInt(diasValidez || "15") * 24 * 60 * 60 * 1000;
     const ahora = Date.now();
 
-    let ingresoReal = 0;
+    let ingresoRealUsd = 0;
+    let ingresoRealBs = 0;
     let ingresoProyectado = 0;
     let aprobadasNoFacturadas = 0;
 
+    // Ingreso Real se basa en FACTURAS (incluye desde cotización y directas)
+    facturas.forEach(f => {
+      ingresoRealUsd += Number(f.subtotal_usd || 0);
+      ingresoRealBs += Number(f.total_bs || 0);
+    });
+
+    // Ingreso Proyectado se basa en COTIZACIONES
     cotizaciones.forEach(c => {
       const d = new Date(c.created_at).getTime();
       const monto = Number(c.total || 0);
       const isVigente = (ahora - d) <= validezMs;
 
-      if (c.estado === "facturada") {
-        ingresoReal += monto;
-      } else if (c.estado === "aprobada") {
+      if (c.estado === "aprobada") {
         aprobadasNoFacturadas += monto;
         if (isVigente) ingresoProyectado += monto;
-      } else if (c.estado !== "rechazada" && isVigente) {
+      } else if (c.estado !== "rechazada" && c.estado !== "facturada" && isVigente) {
         ingresoProyectado += monto;
       }
     });
 
-    return { ingresoReal, ingresoProyectado, aprobadasNoFacturadas };
-  }, [cotizaciones, diasValidez]);
+    return { ingresoRealUsd, ingresoRealBs, ingresoProyectado, aprobadasNoFacturadas };
+  }, [facturas, cotizaciones, diasValidez]);
 
   // ── TICKET PROMEDIO ──
   const ticketPromedio = useMemo(() => {
-    const facturadas = cotizaciones.filter(c => c.estado === "facturada");
-    if (!facturadas.length) return 0;
-    const total = facturadas.reduce((s, c) => s + Number(c.total || 0), 0);
-    return total / facturadas.length;
-  }, [cotizaciones]);
+    if (!facturas.length) return 0;
+    const totalUsd = facturas.reduce((s, f) => s + Number(f.subtotal_usd || 0), 0);
+    return totalUsd / facturas.length;
+  }, [facturas]);
 
   // ── PRODUCTO MÁS VENDIDO ──
   const productoTopData = useMemo(() => {
@@ -194,7 +199,7 @@ export default function DashboardManager() {
       });
     }
 
-    // Llenar datos
+    // Llenar datos de cotizaciones (Pendientes y Aprobadas)
     cotizaciones.forEach(c => {
       const d = new Date(c.created_at);
       const mKey = `${d.getFullYear()}-${d.getMonth()}`;
@@ -202,16 +207,28 @@ export default function DashboardManager() {
       
       if (slot) {
         const monto = Number(c.total || 0);
-        if (c.estado === "facturada" || c.estado === "aprobada") {
+        // Si está facturada se maneja en el loop de facturas
+        if (c.estado === "aprobada") {
           slot.Aprobado += monto;
-        } else if (c.estado !== "rechazada") {
+        } else if (c.estado !== "rechazada" && c.estado !== "facturada") {
           slot.Pendiente += monto;
         }
       }
     });
 
+    // Llenar datos de facturas (Ingreso cerrado)
+    facturas.forEach(f => {
+      const d = new Date(f.created_at);
+      const mKey = `${d.getFullYear()}-${d.getMonth()}`;
+      const slot = result.find(r => r.mesKey === mKey);
+      
+      if (slot) {
+        slot.Aprobado += Number(f.subtotal_usd || 0);
+      }
+    });
+
     return result;
-  }, [cotizaciones]);
+  }, [cotizaciones, facturas]);
 
   if (loading) {
     return (
@@ -248,9 +265,14 @@ export default function DashboardManager() {
               <span className="text-xs font-bold uppercase tracking-wider">Ingreso Cerrado</span>
             </div>
             <p className="text-4xl font-black ts-text tracking-tighter">
-              {formatUSD(stats.ingresoReal)}
+              {formatUSD(stats.ingresoRealUsd)}
             </p>
-            <p className="text-xs ts-text-muted mt-2">
+            {stats.ingresoRealBs > 0 && (
+              <p className="text-sm font-bold text-[var(--ts-text-muted)] mt-1 bg-[var(--ts-surface-2)] inline-block px-2.5 py-1 rounded-md">
+                Bs. {stats.ingresoRealBs.toLocaleString("es-VE", { minimumFractionDigits: 2 })}
+              </p>
+            )}
+            <p className="text-xs ts-text-muted mt-3">
               <span className="text-emerald-500 font-bold">✓ Facturado</span> exitosamente
             </p>
           </div>

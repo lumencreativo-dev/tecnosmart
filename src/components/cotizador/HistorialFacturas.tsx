@@ -165,9 +165,10 @@ export default function HistorialFacturas() {
   };
 
   // ── Totales ───────────────────────────────────────────────
-  const totalActivas = facturas
-    .filter(f => f.estado !== "anulada")
-    .reduce((s, f) => s + Number(f.cotizaciones?.total || 0), 0);
+  const facturasActivas = facturas.filter(f => f.estado !== "anulada");
+  
+  const totalUsd = facturasActivas.reduce((s, f) => s + Number(f.subtotal_usd || f.cotizaciones?.total || 0), 0);
+  const totalBs = facturasActivas.reduce((s, f) => s + Number(f.total_bs || 0), 0);
 
   return (
     <div className="space-y-5">
@@ -175,12 +176,17 @@ export default function HistorialFacturas() {
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-4 text-center">
-          <p className="text-2xl font-extrabold text-[var(--ts-red)]">{facturas.filter(f => f.estado !== "anulada").length}</p>
+          <p className="text-2xl font-extrabold text-[var(--ts-red)]">{facturasActivas.length}</p>
           <p className="text-xs text-[var(--ts-text-muted)] font-medium mt-0.5">Activas</p>
         </div>
         <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-4 text-center">
-          <p className="text-2xl font-extrabold text-[var(--ts-text-primary)]">{formatUSD(totalActivas)}</p>
-          <p className="text-xs text-[var(--ts-text-muted)] font-medium mt-0.5">Total Facturado</p>
+          <p className="text-2xl font-extrabold text-[var(--ts-text-primary)]">{formatUSD(totalUsd)}</p>
+          <p className="text-xs text-[var(--ts-text-muted)] font-medium mt-0.5">Total Facturado (USD)</p>
+          {totalBs > 0 && (
+             <p className="text-[10px] font-bold text-[var(--ts-text-muted)] mt-1 bg-[var(--ts-surface-2)] inline-block px-2 py-0.5 rounded-full">
+               Bs. {totalBs.toLocaleString("es-VE", { minimumFractionDigits: 2 })}
+             </p>
+          )}
         </div>
         <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-4 text-center col-span-2 sm:col-span-1">
           <p className="text-2xl font-extrabold text-red-600">{facturas.filter(f => f.estado === "anulada").length}</p>
@@ -244,7 +250,7 @@ export default function HistorialFacturas() {
                       </p>
                     </td>
                     <td className="px-5 py-3 text-sm font-bold text-[var(--ts-text-primary)] text-right">
-                      {formatUSD(Number(f.cotizaciones?.total || 0))}
+                      {formatUSD(Number(f.subtotal_usd || f.cotizaciones?.total || 0))}
                     </td>
                     <td className="px-5 py-3 text-center">
                       <EstadoBadge estado={f.estado || "activa"} />
