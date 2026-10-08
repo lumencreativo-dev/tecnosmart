@@ -27,6 +27,7 @@ interface LineaVenta {
   cantidad: number;
   precio_unitario: number;
   subtotal: number;
+  tipo_item?: string;
 }
 
 // ── Buscador inline de productos ──────────────────
@@ -99,6 +100,11 @@ export default function FacturadorWizard() {
   const [lineasDirectas, setLineasDirectas]     = useState<LineaVenta[]>([]);
   const [clienteDirecto, setClienteDirecto]     = useState<Cliente | null>(null);
 
+  // ── Estado: Concepto Libre ──
+  const [conceptoDesc, setConceptoDesc] = useState("");
+  const [conceptoCant, setConceptoCant] = useState(1);
+  const [conceptoPrecio, setConceptoPrecio] = useState(0);
+
   // ── Estado compartido ──
   const [error, setError]                 = useState<string | null>(null);
   const [generando, setGenerando]         = useState(false);
@@ -163,8 +169,26 @@ export default function FacturadorWizard() {
         cantidad:       1,
         precio_unitario: p.precio_venta,
         subtotal:       p.precio_venta,
+        tipo_item:      "producto",
       }]);
     }
+  };
+
+  const agregarConceptoLibre = () => {
+    if (!conceptoDesc.trim() || conceptoPrecio <= 0) return;
+    setLineasDirectas(prev => [...prev, {
+      id:             tempId(),
+      producto_id:    "",
+      codigo_sku:     "LIBRE",
+      descripcion:    conceptoDesc.trim(),
+      cantidad:       conceptoCant,
+      precio_unitario: conceptoPrecio,
+      subtotal:       conceptoCant * conceptoPrecio,
+      tipo_item:      "servicio", // Para que no descuente stock
+    }]);
+    setConceptoDesc("");
+    setConceptoCant(1);
+    setConceptoPrecio(0);
   };
 
   const cambiarCantidad = (id: string, delta: number) => {
@@ -226,7 +250,7 @@ export default function FacturadorWizard() {
       const { data: numFactura, error: rpcErr } = await supabase.rpc("next_factura_number");
       if (rpcErr) throw new Error("Error al generar número de factura: " + rpcErr.message);
 
-      const { error: insErr } = await supabase.from("facturas").insert([{
+      const { data: factData, error: insErr } = await supabase.from("facturas").insert([{
         cotizacion_id: cotizacion.id,
         numero_factura: numFactura,
         tasa_bcv:       tasaBcv,
@@ -238,11 +262,27 @@ export default function FacturadorWizard() {
         iva_bs:         ivaBs,
         igtf_bs:        igtfBs,
         total_bs:       totalBs,
-      }]);
+      }]).select().single();
 
       if (insErr) {
         if (insErr.code === "23505") throw new Error("Esta cotización ya fue facturada.");
         throw new Error("Error al guardar factura: " + insErr.message);
+      }
+
+      // ✅ Guardar los detalles en factura_detalles
+      const detallesCot = cotizacion.cotizacion_detalles ?? [];
+      if (factData && detallesCot.length > 0) {
+        const detallesToInsert = detallesCot.map((d: any, idx: number) => ({
+          factura_id:      factData.id,
+          descripcion:     d.descripcion,
+          cantidad:        d.cantidad,
+          precio_unitario: d.precio_unitario,
+          subtotal:        d.subtotal,
+          tipo_item:       d.tipo_item || "producto",
+          producto_id:     d.producto_id || d.item_id || null,
+          orden:           idx
+        }));
+        await supabase.from("factura_detalles").insert(detallesToInsert);
       }
 
       // Marcar cotización como facturada
@@ -289,7 +329,7 @@ export default function FacturadorWizard() {
       const nombreCliente = clienteDirecto?.empresa || clienteDirecto?.contacto || "Cliente General";
       const rifCliente    = clienteDirecto?.rif_cedula || "";
 
-      const { error: insErr } = await supabase.from("facturas").insert([{
+      const { data: factData, error: insErr } = await supabase.from("facturas").insert([{
         cotizacion_id:  null,
         numero_factura: numFactura,
         tasa_bcv:       tasaBcv,
@@ -304,9 +344,24 @@ export default function FacturadorWizard() {
         cliente_nombre: nombreCliente,
         cliente_rif:    rifCliente,
         notas:          "Venta directa sin cotización previa",
-      }]);
+      }]).select().single();
 
       if (insErr) throw new Error("Error al guardar factura: " + insErr.message);
+
+      // ✅ Guardar los detalles en factura_detalles para las estadísticas
+      if (factData && lineasDirectas.length > 0) {
+        const detallesToInsert = lineasDirectas.map((l, idx) => ({
+          factura_id:      factData.id,
+          descripcion:     l.descripcion,
+          cantidad:        l.cantidad,
+          precio_unitario: l.precio_unitario,
+          subtotal:        l.subtotal,
+          tipo_item:       l.tipo_item || "producto",
+          producto_id:     l.producto_id || null,
+          orden:           idx
+        }));
+        await supabase.from("factura_detalles").insert(detallesToInsert);
+      }
 
       // ✅ Descontar stock
       await descontarStock(lineasDirectas);
@@ -630,11 +685,58 @@ export default function FacturadorWizard() {
           </div>
 
           {/* ── Buscador de productos ── */}
-          <div className="bg-[var(--ts-surface)] p-5 rounded-xl border border-[var(--ts-border)] shadow-sm">
-            <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide mb-3">
-              Agregar Productos
-            </h2>
-            <BuscadorInline onAdd={agregarProductoDirecto} />
+          <div className="bg-[var(--ts-surface)] p-5 rounded-xl border border-[var(--ts-border)] shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide mb-3">
+                Agregar Productos del Stock
+              </h2>
+              <BuscadorInline onAdd={agregarProductoDirecto} />
+            </div>
+
+            <div className="pl-0 md:pl-6 md:border-l border-[var(--ts-border)]">
+              <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide mb-3">
+                Concepto Libre
+              </h2>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="Descripción del concepto..."
+                  value={conceptoDesc}
+                  onChange={(e) => setConceptoDesc(e.target.value)}
+                  className="w-full text-sm px-3 py-2 border border-[var(--ts-border)] rounded-lg focus:outline-none focus:border-[var(--ts-red)] bg-transparent"
+                />
+                <div className="flex gap-2">
+                  <div className="w-20">
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Cant."
+                      value={conceptoCant || ""}
+                      onChange={(e) => setConceptoCant(Number(e.target.value))}
+                      className="w-full text-sm px-3 py-2 border border-[var(--ts-border)] rounded-lg focus:outline-none focus:border-[var(--ts-red)] bg-transparent"
+                    />
+                  </div>
+                  <div className="flex-1 relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--ts-text-muted)]">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Precio Unitario"
+                      value={conceptoPrecio || ""}
+                      onChange={(e) => setConceptoPrecio(Number(e.target.value))}
+                      className="w-full pl-6 pr-3 py-2 text-sm border border-[var(--ts-border)] rounded-lg focus:outline-none focus:border-[var(--ts-red)] bg-transparent"
+                    />
+                  </div>
+                  <button
+                    onClick={agregarConceptoLibre}
+                    disabled={!conceptoDesc.trim() || conceptoPrecio <= 0}
+                    className="bg-[#111] hover:bg-black text-[var(--ts-text-primary)] px-4 py-2 rounded-lg font-bold text-sm disabled:opacity-50 transition-colors"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Lista de items */}

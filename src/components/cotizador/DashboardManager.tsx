@@ -20,7 +20,7 @@ export default function DashboardManager() {
   const [clientes, setClientes] = useState<any[]>([]);
   const [facturas, setFacturas] = useState<any[]>([]);
   const [config, setConfig] = useState<any>({});
-  const [tasaBcv, setTasaBcv] = useState<{ dolar: number; eur: number; fecha: string } | null>(null);
+  const [tasas, setTasas] = useState<any>(null);
 
   // Form config state
   const [descTecnico, setDescTecnico] = useState("15");
@@ -60,15 +60,13 @@ export default function DashboardManager() {
       .eq("estado", "activa");
     if (facData) setFacturas(facData);
 
-    // Fetch BCV
+    // Fetch Todas las Tasas desde API
     try {
-      const res = await fetch("https://ve.dolarapi.com/v1/dolares/oficial");
-      const d = await res.json();
-      const resE = await fetch("https://ve.dolarapi.com/v1/euros/oficial");
-      const e = await resE.json();
-      setTasaBcv({ dolar: d.promedio, eur: e.promedio, fecha: d.fechaActualizacion });
+      const res = await fetch("/api/tasas");
+      const data = await res.json();
+      setTasas(data);
     } catch (error) {
-      console.error("BCV Fetch Error", error);
+      console.error("Tasas Fetch Error", error);
     }
 
     setLoading(false);
@@ -294,37 +292,77 @@ export default function DashboardManager() {
           </div>
         </div>
 
-        {/* BCV Widget */}
-        <div className="ts-surface-2 ts-radius border ts-border p-5 col-span-1 md:col-span-4 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 ts-text-muted">
-                <Globe className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider">Tasa BCV Oficial</span>
+        {/* Tasas de Referencia Widget */}
+        <div className="bg-[#1a1a1a] rounded-[20px] border border-white/5 p-5 col-span-1 md:col-span-4 flex flex-col relative overflow-hidden">
+          {/* Fondo sutil estilo ondas */}
+          <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 100% 0%, rgba(200,160,50,0.15) 0%, transparent 50%)' }} />
+          
+          <div className="flex items-center justify-between mb-5 relative z-10">
+            <div className="flex items-center gap-2 text-gray-300">
+              <Globe className="w-5 h-5" />
+              <span className="text-sm font-bold">Tasas de referencia</span>
+            </div>
+            <div className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1.5 uppercase tracking-wide">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              En vivo
+            </div>
+          </div>
+
+          {tasas ? (
+            <div className="space-y-3 relative z-10">
+              {/* Oficial */}
+              <div className="bg-[#242424] rounded-xl p-3.5 flex items-center justify-between border border-white/5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-7 rounded bg-[#333] flex items-center justify-center text-[10px] font-black text-amber-400">BCV</div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-100 leading-tight">BCV oficial</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">Vigente de hoy</p>
+                  </div>
+                </div>
+                <p className="text-base font-bold text-gray-100">Bs. {tasas.bcv.promedio.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+
+              {/* Euro */}
+              <div className="bg-[#242424] rounded-xl p-3.5 flex items-center justify-between border border-white/5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-7 rounded bg-[#333] flex items-center justify-center text-[10px] font-black text-blue-300">EUR</div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-100 leading-tight">Euro oficial</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">Vigente de hoy</p>
+                  </div>
+                </div>
+                <p className="text-base font-bold text-gray-100">Bs. {tasas.euro.promedio.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+
+              {/* Paralelo */}
+              <div className="bg-[#242424] rounded-xl p-3.5 flex items-center justify-between border border-white/5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-7 rounded bg-[#333] flex items-center justify-center text-[10px] font-black text-gray-300">PAR</div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-100 leading-tight">Paralelo</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{new Date(tasas.paralelo.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>
+                <p className="text-base font-bold text-gray-100">Bs. {tasas.paralelo.promedio.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+
+              {/* Binance P2P */}
+              <div className="bg-[#242424] rounded-xl p-3.5 flex items-center justify-between border border-white/5 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-7 rounded bg-[#333] flex items-center justify-center text-[10px] font-black text-amber-500">BN</div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-100 leading-tight">Binance P2P</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{new Date(tasas.binance.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                </div>
+                <p className="text-base font-bold text-gray-100">Bs. {tasas.binance.promedio.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
-            {tasaBcv ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold ts-text flex items-center gap-2">
-                    🇺🇸 USD
-                  </span>
-                  <span className="text-lg font-black ts-text">Bs {tasaBcv.dolar.toFixed(2)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold ts-text flex items-center gap-2">
-                    🇪🇺 EUR
-                  </span>
-                  <span className="text-lg font-black ts-text">Bs {tasaBcv.eur.toFixed(2)}</span>
-                </div>
-                <p className="text-[10px] ts-text-muted pt-2 border-t ts-border">
-                  Actualizado: {new Date(tasaBcv.fecha).toLocaleString()}
-                </p>
-              </div>
-            ) : (
-              <p className="text-xs ts-text-muted animate-pulse">Obteniendo tasa...</p>
-            )}
-          </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-xs text-gray-500 animate-pulse">Obteniendo tasas en vivo...</p>
+            </div>
+          )}
         </div>
 
       </div>

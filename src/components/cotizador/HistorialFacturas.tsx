@@ -73,12 +73,12 @@ export default function HistorialFacturas() {
     setLoading(false);
   };
 
-  const cargarDetalles = async (cotizacionId: string) => {
+  const cargarDetalles = async (facturaId: string) => {
     setLoadingDetalles(true);
     const { data } = await supabase
-      .from("cotizacion_detalles")
+      .from("factura_detalles")
       .select("*")
-      .eq("cotizacion_id", cotizacionId)
+      .eq("factura_id", facturaId)
       .order("orden");
     if (data) setDetalles(data);
     setLoadingDetalles(false);
@@ -89,7 +89,7 @@ export default function HistorialFacturas() {
   const abrirDetalle = (f: Factura) => {
     setSelected(f);
     setDetalles([]);
-    if (f.cotizaciones?.id) cargarDetalles(f.cotizaciones.id);
+    cargarDetalles(f.id);
   };
 
   // ── Filtrado ──────────────────────────────────────────────
@@ -333,7 +333,7 @@ export default function HistorialFacturas() {
                 {loadingDetalles ? (
                   <div className="py-4 text-center text-xs text-[var(--ts-text-muted)]">Cargando líneas...</div>
                 ) : detalles.length === 0 ? (
-                  <p className="text-xs text-[var(--ts-text-muted)] italic">Factura directa (sin cotización vinculada).</p>
+                  <p className="text-xs text-[var(--ts-text-muted)] italic">No hay detalles registrados para esta factura.</p>
                 ) : (
                   <div className="border border-[var(--ts-border)] rounded-lg overflow-hidden">
                     <table className="w-full border-collapse text-xs">
