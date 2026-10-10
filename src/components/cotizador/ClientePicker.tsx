@@ -227,6 +227,19 @@ export default function ClientePicker({ onSelect, clienteSeleccionado }: Props) 
               </div>
             </div>
 
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="checkbox"
+                id="acepta_promociones_picker"
+                checked={form.acepta_promociones || false}
+                onChange={(e) => setForm(f => ({ ...f, acepta_promociones: e.target.checked }))}
+                className="w-4 h-4 text-[var(--ts-red)] focus:ring-[var(--ts-red)] border-[var(--ts-border)] rounded"
+              />
+              <label htmlFor="acepta_promociones_picker" className="text-sm text-[var(--ts-text-primary)] cursor-pointer">
+                El cliente acepta recibir promociones e informaciones
+              </label>
+            </div>
+
             <button
               onClick={guardarNuevoCliente}
               disabled={guardando || (!form.empresa && !form.contacto)}

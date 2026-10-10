@@ -44,6 +44,7 @@ export interface Cliente {
   direccion?: string;
   tipo?: "cliente_normal" | "tecnico";  // Tipo para precios diferenciados
   notas?: string;
+  acepta_promociones?: boolean;
 }
 
 export type TipoItem = "producto" | "servicio";

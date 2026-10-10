@@ -40,6 +40,7 @@ export default function ClientesManager() {
   const [form, setForm]                 = useState<any>({});
   const [saving, setSaving]             = useState(false);
   const [filtroRango, setFiltroRango]   = useState<string>("Todos");
+  const [filtroPromo, setFiltroPromo]   = useState<string>("Todos");
 
   const cargarDatos = async () => {
     setLoading(true);
@@ -93,6 +94,11 @@ export default function ClientesManager() {
       list = list.filter(c => getRango(c.totalGastado).label === filtroRango);
     }
 
+    if (filtroPromo !== "Todos") {
+      const val = filtroPromo === "Si";
+      list = list.filter(c => !!c.acepta_promociones === val);
+    }
+
     list.sort((a, b) => {
       if (sortBy === "total")        return b.totalGastado - a.totalGastado;
       if (sortBy === "cotizaciones") return b.cotizacionesTotal - a.cotizacionesTotal;
@@ -102,7 +108,7 @@ export default function ClientesManager() {
     });
 
     return list;
-  }, [clientes, cotByCliente, query, sortBy, filtroRango]);
+  }, [clientes, cotByCliente, query, sortBy, filtroRango, filtroPromo]);
 
   const clienteSeleccionado = clientes.find(c => c.id === selectedId);
   const metricsSeleccionado = selectedId ? getMetrics(selectedId) : null;
@@ -125,6 +131,7 @@ export default function ClientesManager() {
       direccion:  form.direccion,
       tipo:       form.tipo,
       notas:      form.notas,
+      acepta_promociones: form.acepta_promociones,
     }).eq("id", selectedId!);
     if (!error) {
       setClientes(prev => prev.map(c => c.id === selectedId ? { ...c, ...form } : c));
@@ -202,6 +209,20 @@ export default function ClientesManager() {
           >
             <option value="Todos">Todos los rangos</option>
             {RANGOS.map(r => <option key={r.label} value={r.label}>{r.emoji} {r.label}</option>)}
+          </select>
+        </div>
+
+        {/* Filtro Promociones */}
+        <div className="flex items-center gap-2 shrink-0">
+          <Mail className="w-4 h-4 text-[var(--ts-text-muted)]" />
+          <select
+            value={filtroPromo}
+            onChange={e => setFiltroPromo(e.target.value)}
+            className="border border-[var(--ts-border)] rounded-lg px-3 py-2 text-xs font-semibold focus:outline-none focus:border-[var(--ts-red)] bg-[var(--ts-surface)]"
+          >
+            <option value="Todos">Promo: Todos</option>
+            <option value="Si">Promo: Aceptada</option>
+            <option value="No">Promo: Rechazada</option>
           </select>
         </div>
 
@@ -445,6 +466,24 @@ export default function ClientesManager() {
                     ) : (
                       <p className="text-sm text-[var(--ts-text-primary)]">{clienteSeleccionado.notas || <span className="text-[#c0c0c0]">Sin notas</span>}</p>
                     )}
+                  </div>
+
+                  {/* Promociones */}
+                  <div className="flex items-center gap-2 mt-2">
+                    {editMode ? (
+                      <input
+                        type="checkbox"
+                        id="acepta_promociones_edit"
+                        checked={form.acepta_promociones || false}
+                        onChange={(e) => setForm({ ...form, acepta_promociones: e.target.checked })}
+                        className="w-4 h-4 text-[var(--ts-red)] focus:ring-[var(--ts-red)] border-[var(--ts-border)] rounded"
+                      />
+                    ) : (
+                      <div className={`w-3 h-3 rounded-full ${clienteSeleccionado.acepta_promociones ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                    )}
+                    <label htmlFor="acepta_promociones_edit" className="text-[10px] font-semibold text-[var(--ts-text-muted)] cursor-pointer">
+                      Acepta recibir promociones e informaciones
+                    </label>
                   </div>
                 </div>
               </div>

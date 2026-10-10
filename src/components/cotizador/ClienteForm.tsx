@@ -48,6 +48,19 @@ export default function ClienteForm({ cliente, onChange }: Props) {
             />
           </div>
         ))}
+        
+        <div className="sm:col-span-2 flex items-center gap-2 mt-2">
+          <input
+            type="checkbox"
+            id="acepta_promociones"
+            checked={(cliente as any).acepta_promociones || false}
+            onChange={(e) => onChange({ ...cliente, acepta_promociones: e.target.checked } as any)}
+            className="w-4 h-4 text-[var(--ts-red)] focus:ring-[var(--ts-red)] border-[var(--ts-border)] rounded"
+          />
+          <label htmlFor="acepta_promociones" className="text-sm text-[var(--ts-text-primary)] cursor-pointer">
+            El cliente acepta recibir promociones e informaciones
+          </label>
+        </div>
       </div>
     </div>
   );

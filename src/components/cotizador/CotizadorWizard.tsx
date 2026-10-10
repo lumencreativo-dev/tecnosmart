@@ -119,6 +119,7 @@ export default function CotizadorWizard() {
             telefono: cliente.telefono,
             direccion: cliente.direccion,
             tipo: cliente.tipo ?? "cliente_normal",
+            acepta_promociones: cliente.acepta_promociones ?? false,
           }])
           .select("id")
           .single();
