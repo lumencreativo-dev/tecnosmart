@@ -153,6 +153,23 @@ export default function SuscripcionesManager() {
     }
   };
 
+  const handleDeleteSuscripcion = async () => {
+    if (!editId) return;
+    if (!confirm("¿Estás seguro de que deseas eliminar esta suscripción por completo? Esto también eliminará su historial de pagos.")) return;
+    
+    try {
+      const { error } = await supabase.from("suscripciones").delete().eq("id", editId);
+      if (error) throw error;
+      
+      fetchData();
+      setShowModal(false);
+      alert("Suscripción eliminada.");
+    } catch (e: any) {
+      console.error(e);
+      alert("Error al eliminar la suscripción: " + e.message);
+    }
+  };
+
   const getStatusColor = (estado: string) => {
     switch (estado) {
       case 'Activo': return 'text-emerald-500 bg-emerald-500/10';
@@ -540,7 +557,14 @@ export default function SuscripcionesManager() {
                     </div>
                   </div>
 
-                  <div className="pt-2 flex justify-end">
+                  <div className="pt-2 flex justify-between">
+                    <div>
+                      {editId && (
+                        <button onClick={handleDeleteSuscripcion} className="text-xs font-bold text-[var(--ts-red)] hover:text-red-700 px-4 py-2.5 rounded-xl transition-all">
+                          Eliminar Suscripción
+                        </button>
+                      )}
+                    </div>
                     <button onClick={handleSaveSuscripcion} className="bg-[var(--ts-red)] hover:bg-red-700 text-white text-xs font-bold px-6 py-2.5 rounded-xl transition-all shadow-sm">
                       {editId ? 'Guardar Cambios' : 'Crear Suscripción'}
                     </button>

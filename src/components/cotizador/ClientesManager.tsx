@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Search, ArrowUpDown, X, Save, Phone, Mail,
   MapPin, FileText, TrendingUp, Calendar, Edit2,
-  ChevronDown, Star, Users
+  ChevronDown, Star, Users, RefreshCw
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -32,6 +32,7 @@ type SortKey = "nombre" | "total" | "cotizaciones" | "reciente";
 export default function ClientesManager() {
   const [clientes, setClientes]         = useState<Cliente[]>([]);
   const [cotByCliente, setCotByCliente] = useState<Record<string, Cotizacion[]>>({});
+  const [susByCliente, setSusByCliente] = useState<Record<string, any[]>>({});
   const [loading, setLoading]           = useState(true);
   const [query, setQuery]               = useState("");
   const [sortBy, setSortBy]             = useState<SortKey>("total");
@@ -50,6 +51,9 @@ export default function ClientesManager() {
       .select("id, cliente_id, numero_cotizacion, total, estado, created_at")
       .or("eliminada.is.null,eliminada.eq.false")
       .order("created_at", { ascending: false });
+    const { data: susData } = await supabase
+      .from("suscripciones")
+      .select("*, servicios_recurrentes(nombre)");
 
     if (cliData) setClientes(cliData);
     if (cotData) {
@@ -59,6 +63,14 @@ export default function ClientesManager() {
         grouped[c.cliente_id].push(c);
       });
       setCotByCliente(grouped);
+    }
+    if (susData) {
+      const groupedSus: Record<string, any[]> = {};
+      susData.forEach(s => {
+        if (!groupedSus[s.cliente_id]) groupedSus[s.cliente_id] = [];
+        groupedSus[s.cliente_id].push(s);
+      });
+      setSusByCliente(groupedSus);
     }
     setLoading(false);
   };
@@ -486,6 +498,31 @@ export default function ClientesManager() {
                     </label>
                   </div>
                 </div>
+              </div>
+
+              {/* ── Suscripciones Activas ── */}
+              <div>
+                <h3 className="text-xs font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5" /> Suscripciones ({susByCliente[selectedId]?.length || 0})
+                </h3>
+                {(!susByCliente[selectedId] || susByCliente[selectedId].length === 0) ? (
+                  <p className="text-xs text-[var(--ts-text-muted)] italic">Sin suscripciones registradas.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {susByCliente[selectedId].map(sus => (
+                      <div key={sus.id} className="flex justify-between items-center p-3 rounded-lg border border-[var(--ts-border)] bg-[var(--ts-surface-2)]/50 hover:border-[var(--ts-red)] transition-colors">
+                        <div>
+                          <p className="text-sm font-bold text-[var(--ts-text-primary)]">{sus.servicios_recurrentes?.nombre}</p>
+                          <p className="text-[10px] text-[var(--ts-text-muted)] font-medium">Próximo pago: {new Date(sus.proximo_pago).toLocaleDateString()}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-black text-[var(--ts-text-primary)]">${sus.monto.toFixed(2)}</p>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${sus.estado === 'Activo' ? 'bg-emerald-500/10 text-emerald-500' : sus.estado === 'Suspendido' ? 'bg-amber-500/10 text-amber-500' : 'bg-[var(--ts-red)]/10 text-[var(--ts-red)]'}`}>{sus.estado}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* ── Historial de Cotizaciones ── */}
