@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FileCheck, History } from "lucide-react";
 import FacturadorWizard from "@/components/cotizador/FacturadorWizard";
+import { Suspense } from "react";
 
 export default function FacturacionPage() {
   return (
@@ -15,13 +16,13 @@ export default function FacturacionPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-[var(--ts-text-primary)] tracking-tight">Módulo de Facturación</h1>
-                <p className="text-[var(--ts-text-muted)] text-xs">Convierte cotizaciones aprobadas en facturas SENIAT.</p>
+                <p className="text-[var(--ts-text-muted)] text-xs">Convierte cotizaciones aprobadas o servicios en facturas SENIAT.</p>
               </div>
             </div>
             {/* Acceso rápido al historial */}
             <Link
               href="/cotizador/historial-facturas"
-              className="flex items-center gap-2 bg-[var(--ts-surface)]/10 hover:bg-[var(--ts-surface)]/20 text-[var(--ts-text-primary)] text-xs font-bold px-4 py-2 rounded-lg transition-colors border border-white/10"
+              className="flex items-center gap-2 bg-[var(--ts-surface)]/10 hover:bg-[var(--ts-surface)]/20 text-[var(--ts-text-primary)] text-xs font-bold px-4 py-2 rounded-lg transition-colors border border-[var(--ts-border)]"
             >
               <History className="w-4 h-4" />
               Ver Historial
@@ -32,7 +33,9 @@ export default function FacturacionPage() {
 
       {/* ── Contenedor principal ── */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-        <FacturadorWizard />
+        <Suspense fallback={<div className="p-8 text-center text-[var(--ts-text-muted)]">Cargando Facturador...</div>}>
+          <FacturadorWizard />
+        </Suspense>
       </div>
     </div>
   );

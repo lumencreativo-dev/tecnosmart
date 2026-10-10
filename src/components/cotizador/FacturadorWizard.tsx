@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Search, FileText, CheckCircle2, AlertCircle,
   RefreshCw, ShoppingCart, Plus, Minus, Trash2,
@@ -89,7 +90,10 @@ function BuscadorInline({ onAdd }: { onAdd: (p: Producto) => void }) {
 
 // ── Componente principal ──────────────────────────
 export default function FacturadorWizard() {
-  const [modo, setModo] = useState<Modo>("desde_cotizacion");
+  const searchParams = useSearchParams();
+  const initialModo = (searchParams.get("modo") as Modo) || "desde_cotizacion";
+
+  const [modo, setModo] = useState<Modo>(initialModo);
 
   // ── Estado: Desde Cotización ──
   const [query, setQuery]           = useState("");
@@ -129,6 +133,40 @@ export default function FacturadorWizard() {
       fetchBCVRate();
     }
   }, [modo]);
+
+  useEffect(() => {
+    if (initialModo === "venta_directa" && searchParams.get("cliente_id")) {
+      const cId = searchParams.get("cliente_id");
+      const cNombre = searchParams.get("cliente_nombre");
+      const cRif = searchParams.get("cliente_rif");
+      const cTelf = searchParams.get("cliente_telefono");
+      const sNombre = searchParams.get("servicio");
+      const sMonto = searchParams.get("monto");
+
+      if (cId) {
+        setClienteDirecto({
+          id: cId,
+          empresa: cNombre || "",
+          contacto: cNombre || "",
+          rif_cedula: cRif || "",
+          telefono: cTelf || "",
+          tipo: "cliente_normal"
+        });
+      }
+
+      if (sNombre && sMonto && lineasDirectas.length === 0) {
+        setLineasDirectas([{
+          id: "svc-" + Date.now(),
+          producto_id: "",
+          codigo_sku: "SVC",
+          descripcion: sNombre,
+          cantidad: 1,
+          precio_unitario: Number(sMonto),
+          subtotal: Number(sMonto)
+        }]);
+      }
+    }
+  }, [searchParams]);
 
   // ── Buscar cotización ──
   const buscarCotizacion = async (e: React.FormEvent) => {

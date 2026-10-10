@@ -19,6 +19,7 @@ export default function DashboardManager() {
   const [cotizaciones, setCotizaciones] = useState<any[]>([]);
   const [clientes, setClientes] = useState<any[]>([]);
   const [facturas, setFacturas] = useState<any[]>([]);
+  const [suscripciones, setSuscripciones] = useState<any[]>([]);
   const [config, setConfig] = useState<any>({});
   const [tasas, setTasas] = useState<any>(null);
 
@@ -59,6 +60,14 @@ export default function DashboardManager() {
       .select("*, factura_detalles(*), cotizaciones(clientes(empresa, contacto))")
       .eq("estado", "activa");
     if (facData) setFacturas(facData);
+
+    // Obtener suscripciones activas
+    const { data: susData, error: susErr } = await supabase
+      .from("suscripciones")
+      .select("*, clientes(empresa, contacto, telefono), servicios_recurrentes(nombre)")
+      .eq("estado", "Activo");
+    if (susErr) console.error("Error fetching suscripciones:", susErr);
+    if (susData) setSuscripciones(susData);
 
     // Fetch Todas las Tasas desde API
     try {
@@ -178,6 +187,44 @@ export default function DashboardManager() {
     return seguimientos;
   }, [cotizaciones]);
 
+  // ── SUSCRIPCIONES (MRR y Próximos Pagos) ──
+  const { mrr, pagosProximos } = useMemo(() => {
+    let mrrTotal = 0;
+    const ahora = new Date();
+    const prox7Dias = new Date();
+    prox7Dias.setDate(ahora.getDate() + 7);
+
+    const pendientes: any[] = [];
+
+    suscripciones.forEach(s => {
+      // Calcular MRR (Monthly Recurring Revenue)
+      const monto = Number(s.monto || 0);
+      switch(s.ciclo_facturacion) {
+        case "Mensual": mrrTotal += monto; break;
+        case "Bimestral": mrrTotal += monto / 2; break;
+        case "Trimestral": mrrTotal += monto / 3; break;
+        case "Semestral": mrrTotal += monto / 6; break;
+        case "Anual": mrrTotal += monto / 12; break;
+        default: mrrTotal += monto;
+      }
+
+      // Filtrar próximos pagos o vencidos
+      const fechaPago = new Date(s.proximo_pago);
+      if (fechaPago <= prox7Dias) {
+        pendientes.push({
+          ...s,
+          vencido: fechaPago < ahora,
+          diasFaltantes: Math.ceil((fechaPago.getTime() - ahora.getTime()) / (1000 * 3600 * 24))
+        });
+      }
+    });
+
+    // Ordenar de más urgentes a menos
+    pendientes.sort((a, b) => new Date(a.proximo_pago).getTime() - new Date(b.proximo_pago).getTime());
+
+    return { mrr: mrrTotal, pagosProximos: pendientes };
+  }, [suscripciones]);
+
   // ── GRÁFICA: Cotizaciones por mes (Últimos 6 meses) ──
   const chartData = useMemo(() => {
     if (!cotizaciones.length) return [];
@@ -252,17 +299,17 @@ export default function DashboardManager() {
       </div>
 
       {/* ── SECCIÓN 1: WIDGETS Y MÉTRICAS PRINCIPALES ── */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-5">
         
         {/* Balance USD */}
-        <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-4 flex flex-col justify-between overflow-hidden relative group">
+        <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between overflow-hidden relative group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--ts-red-subtle)] rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110" />
           <div>
             <div className="flex items-center gap-2 ts-text-muted mb-4">
               <DollarSign className="w-4 h-4" />
               <span className="text-xs font-bold uppercase tracking-wider">Ingreso Cerrado</span>
             </div>
-            <p className="text-4xl font-black ts-text tracking-tighter">
+            <p className="text-3xl font-black ts-text tracking-tighter">
               {formatUSD(stats.ingresoRealUsd)}
             </p>
             {stats.ingresoRealBs > 0 && (
@@ -270,14 +317,11 @@ export default function DashboardManager() {
                 Bs. {stats.ingresoRealBs.toLocaleString("es-VE", { minimumFractionDigits: 2 })}
               </p>
             )}
-            <p className="text-xs ts-text-muted mt-3">
-              <span className="text-emerald-500 font-bold">✓ Facturado</span> exitosamente
-            </p>
           </div>
         </div>
 
         {/* Proyectado USD */}
-        <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-4 flex flex-col justify-between">
+        <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 ts-text-muted mb-4">
               <TrendingUp className="w-4 h-4" />
@@ -292,8 +336,24 @@ export default function DashboardManager() {
           </div>
         </div>
 
+        {/* Ingreso Recurrente MRR */}
+        <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2 ts-text-muted mb-4">
+              <Activity className="w-4 h-4 text-emerald-500" />
+              <span className="text-xs font-bold uppercase tracking-wider">MRR Mensual</span>
+            </div>
+            <p className="text-3xl font-black text-emerald-500 tracking-tight">
+              {formatUSD(mrr)}
+            </p>
+            <p className="text-xs ts-text-muted mt-2">
+              Suscripciones activas
+            </p>
+          </div>
+        </div>
+
         {/* Tasas de Referencia Widget */}
-        <div className="bg-[#1a1a1a] rounded-[20px] border border-white/5 p-5 col-span-1 md:col-span-4 flex flex-col relative overflow-hidden">
+        <div className="bg-[#1a1a1a] rounded-[20px] border border-white/5 p-5 col-span-1 sm:col-span-2 md:col-span-3 flex flex-col relative overflow-hidden">
           {/* Fondo sutil estilo ondas */}
           <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 100% 0%, rgba(200,160,50,0.15) 0%, transparent 50%)' }} />
           
@@ -493,6 +553,62 @@ export default function DashboardManager() {
                 ))
               )}
             </div>
+          </div>
+
+          {/* Próximos Pagos Suscripciones */}
+          <div className="ts-surface ts-radius p-5 flex-1 flex flex-col">
+            <h2 className="text-sm font-bold ts-text mb-4 uppercase tracking-wider flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-emerald-500" /> Próximos Pagos
+            </h2>
+            
+            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+              {pagosProximos.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-50">
+                  <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
+                  <p className="text-xs ts-text">No hay pagos recurrentes cercanos.</p>
+                </div>
+              ) : (
+                pagosProximos.map(p => (
+                  <div key={p.id} className={`p-3 ts-surface-2 ts-radius border ts-border border-l-4 flex flex-col gap-2 ${p.vencido ? 'border-l-red-500' : 'border-l-emerald-500'}`}>
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className={`text-xs font-bold mb-0.5 ${p.vencido ? 'text-red-500' : 'text-emerald-500'}`}>
+                          {p.vencido ? `¡Vencido! (${p.diasFaltantes * -1} días)` : (p.diasFaltantes === 0 ? 'Vence hoy' : `Faltan ${p.diasFaltantes} días`)}
+                        </p>
+                        <p className="text-[11px] font-semibold ts-text">{p.clientes?.empresa || p.clientes?.contacto}</p>
+                        <p className="text-[10px] ts-text-muted">{p.servicios_recurrentes?.nombre}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-black ts-text">${p.monto.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    {p.clientes?.telefono && (() => {
+                      const clienteNombre = p.clientes?.contacto || p.clientes?.empresa;
+                      let mensaje = p.servicios_recurrentes?.mensaje_whatsapp 
+                        ? p.servicios_recurrentes.mensaje_whatsapp
+                            .replace(/{cliente}/g, clienteNombre)
+                            .replace(/{monto}/g, `$${p.monto.toFixed(2)}`)
+                            .replace(/{servicio}/g, p.servicios_recurrentes?.nombre || "")
+                        : `Hola ${clienteNombre}, te escribimos de TecnoSmart para recordarte el pago de tu servicio de ${p.servicios_recurrentes?.nombre} por $${p.monto.toFixed(2)}. ${p.vencido ? 'Recordatorio de pago vencido.' : ''}`;
+                      return (
+                        <a 
+                          href={`https://wa.me/${p.clientes.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-[#25D366]/10 text-[#128C7E] px-2 py-1 rounded-md w-fit hover:bg-[#25D366]/20 transition-colors"
+                      >
+                        <Phone className="w-3 h-3" /> Cobrar vía WhatsApp
+                      </a>
+                      );
+                    })()}
+                  </div>
+                ))
+              )}
+            </div>
+            
+            <Link href="/cotizador/suscripciones" className="mt-4 text-center text-xs font-bold text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors block">
+              Ver todas las suscripciones &rarr;
+            </Link>
           </div>
         </div>
 

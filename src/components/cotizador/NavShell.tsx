@@ -9,7 +9,7 @@ import {
   LayoutDashboard, FileEdit, Receipt, History,
   Kanban, Users, Package, UploadCloud,
   Sparkles, Globe, Plus, LayoutGrid,
-  Settings, LogOut, ChevronDown, Sun, Moon, Monitor
+  Settings, LogOut, ChevronDown, Sun, Moon, Monitor, Repeat
 } from "lucide-react";
 
 // ── Grupos de navegación Desktop ──────────────────────────────
@@ -33,6 +33,7 @@ const NAV_GROUPS = [
     links: [
       { href: "/cotizador/crm",      icon: Kanban, label: "CRM"      },
       { href: "/cotizador/clientes", icon: Users,  label: "Clientes" },
+      { href: "/cotizador/suscripciones", icon: Repeat, label: "Suscripciones" },
     ],
   },
   {

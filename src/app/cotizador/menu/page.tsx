@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   FileEdit, Receipt, History, Kanban, Users,
   Package, UploadCloud, Sparkles, Settings,
-  LogOut, ChevronRight, BarChart2, LayoutDashboard
+  LogOut, ChevronRight, BarChart2, LayoutDashboard, Repeat
 } from "lucide-react";
 
 // ── Secciones del Menú (estilo Rial) ─────────────────────────
@@ -24,6 +24,7 @@ const SECCIONES = [
     titulo: "Gestión",
     items: [
       { href: "/cotizador/clientes",  icon: Users,       label: "Clientes",   desc: "Directorio VIP"   },
+      { href: "/cotizador/suscripciones", icon: Repeat, label: "Suscribir", desc: "Suscripciones y cobros" },
       { href: "/cotizador/inventario",icon: Package,     label: "Inventario", desc: "Stock y productos" },
       { href: "/cotizador/importar",  icon: UploadCloud, label: "Importar",   desc: "Carga masiva CSV" },
       { href: "/cotizador/dashboard", icon: BarChart2,   label: "Dashboard",  desc: "Métricas"         },
