@@ -53,6 +53,22 @@ export default function ClientePicker({ onSelect, clienteSeleccionado }: Props) 
       onSelect(data as Cliente);
       setModo("buscar");
       setQuery("");
+      
+      // Llamar a nuestra API para enviar el correo si el cliente tiene email
+      if (form.email) {
+        try {
+          await fetch('/api/send-welcome', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              email: form.email, 
+              nombre: form.contacto || form.empresa 
+            }),
+          });
+        } catch (err) {
+          console.error("Error enviando correo de bienvenida:", err);
+        }
+      }
     } else {
       alert("Error al guardar cliente: " + error?.message);
     }
