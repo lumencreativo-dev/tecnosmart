@@ -19,6 +19,65 @@ interface Version {
 
 const CHANGELOG: Version[] = [
   {
+    version: "2.3",
+    fecha: "11 Oct 2026",
+    titulo: "Blindaje de Seguridad Integral & Dashboards por Rol",
+    entradas: [
+      { tipo: "importante", texto: "Control Maestro de Widgets: el Administrador configura qué tarjetas y métricas puede ver cada rol desde el editor de facultades en '/equipo'." },
+      { tipo: "nueva", texto: "Panel 'Personalizar Widgets' en el Dashboard: filtrado dinámicamente según los permisos autorizados por el Administrador para cada rol." },
+      { tipo: "nueva", texto: "Vista de Dashboard exclusiva para Técnicos: misiones operativas en campo, cuadrilla activa y acceso rápido al catálogo de repuestos sin datos financieros." },
+      { tipo: "nueva", texto: "Componente guardián ProtectedView: bloqueo estricto por URL contra trampas en la barra de direcciones para todas las rutas del portal." },
+      { tipo: "fix", texto: "Blindaje en Inventario: roles sin 'inventario.gestionar' (como Técnicos) tienen bloqueada la creación, edición y borrado de productos." },
+      { tipo: "fix", texto: "Costos de compra en Inventario ocultos con candado de seguridad para roles sin el permiso 'inventario.costos'." },
+      { tipo: "mejora", texto: "Eliminación segura de roles personalizados con comprobación de empleados asignados y protección contra auto-eliminación de cuentas de Administrador." },
+    ],
+  },
+  {
+    version: "2.2",
+    fecha: "11 Oct 2026",
+    titulo: "Perfiles de Usuario & Autenticación Dual",
+    entradas: [
+      { tipo: "nueva", texto: "Módulo 'Mi Perfil' (/perfil): avatar personalizado, cargo, teléfono, cédula de identidad y rol asignado en la empresa." },
+      { tipo: "nueva", texto: "Inicio de sesión dual: los empleados pueden autenticarse tanto con su correo electrónico como con su nombre de usuario (@username)." },
+      { tipo: "nueva", texto: "Generador de enlaces de recuperación de contraseña y reseteo administrativo de claves desde la ficha del miembro." },
+      { tipo: "mejora", texto: "Modal de inspección y rendimiento para Super Admins: métricas individuales de facturación y cotizaciones generadas por cada empleado." },
+    ],
+  },
+  {
+    version: "2.1",
+    fecha: "10 Oct 2026",
+    titulo: "Gestión de Personal & Roles Estilo Discord",
+    entradas: [
+      { tipo: "nueva", texto: "Módulo 'Mi Equipo & Roles' (/equipo): lista de personal registrado, estados de cuenta y roles con código de color." },
+      { tipo: "nueva", texto: "Editor granular de permisos estilo Discord: toggles maestros por grupo y activación/desactivación facultad por facultad." },
+      { tipo: "nueva", texto: "Invitaciones por Enlace Mágico: generación de enlaces únicos de bienvenida que expiran tras el registro del empleado." },
+      { tipo: "nueva", texto: "Roles predeterminados del sistema: Admin (Gerencia), Administrador (Finanzas), Vendedor Comercial, Líder de Proyectos y Técnico Instalador." },
+      { tipo: "mejora", texto: "Suspensión y activación inmediata de accesos de empleados con un solo clic." },
+    ],
+  },
+  {
+    version: "2.0",
+    fecha: "09 Oct 2026",
+    titulo: "Arquitectura ERP, Modo Oscuro Global & Tasas en Vivo",
+    entradas: [
+      { tipo: "nueva", texto: "Diseño visual estilo ERP moderno: Sidebar fija con isotipo, secciones colapsables y agrupaciones comerciales y operativas." },
+      { tipo: "nueva", texto: "Soporte completo de Modo Claro / Modo Oscuro / Automático con persistencia fluida en todas las páginas y modales." },
+      { tipo: "nueva", texto: "Monitor de Tasas de Cambio en Vivo: cotizaciones actualizadas del BCV, Euro oficial, Dólar Paralelo y Binance P2P." },
+      { tipo: "nueva", texto: "Placeholders informativos de próximos módulos ERP: Órdenes de Trabajo, Cuadrillas, Materiales, Agenda y Cuentas Bancarias." },
+    ],
+  },
+  {
+    version: "1.9",
+    fecha: "08 Oct 2026",
+    titulo: "Suscripciones Recurrentes & Control de Pagos",
+    entradas: [
+      { tipo: "nueva", texto: "Módulo de Suscripciones (/suscripciones): gestión de planes recurrentes, Starlink, licencias y mantenimientos." },
+      { tipo: "nueva", texto: "Cálculo en tiempo real de Ingresos Recurrentes Mensuales (MRR) proyectados en el Dashboard." },
+      { tipo: "nueva", texto: "Alertas de cobro por WhatsApp con plantillas personalizadas y recordatorio de pagos vencidos." },
+      { tipo: "nueva", texto: "Almacenamiento seguro de credenciales y datos de acceso de servicios para clientes." },
+    ],
+  },
+  {
     version: "1.8",
     fecha: "07 Oct 2026",
     titulo: "Navegación Rediseñada — Active Links y Menú Mobile",
