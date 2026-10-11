@@ -287,7 +287,7 @@ export default function SuscripcionesManager() {
       monto: sMonto
     });
 
-    router.push(`/cotizador/facturacion?${params.toString()}`);
+    router.push(`/facturacion?${params.toString()}`);
   };
 
   return (

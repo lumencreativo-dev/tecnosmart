@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// app/cotizador/novedades/page.tsx — Changelog TecnoSmart Portal
+// app/novedades/page.tsx — Changelog TecnoSmart Portal
 // ─────────────────────────────────────────────────────────────
 import { Sparkles, Wrench, Bug, Zap } from "lucide-react";
 

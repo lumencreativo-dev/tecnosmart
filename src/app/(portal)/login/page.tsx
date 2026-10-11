@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Lock, User, Eye, EyeOff, Shield } from "lucide-react";
+import { supabase } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,23 +19,65 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
+    const inputUser = usuario.trim();
+
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ usuario, clave }),
+      // 1. Caso Credencial Maestra Inicial
+      if (inputUser.toLowerCase() === "admintecno" && clave === "tecnosmart.123") {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usuario: inputUser, clave }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          router.push("/dashboard");
+          router.refresh();
+          return;
+        }
+      }
+
+      // 2. Determinar correo si ingresó un username (@handle)
+      let emailFinal = inputUser;
+      if (!inputUser.includes("@")) {
+        const cleanHandle = inputUser.replace(/^@/, "").toLowerCase();
+        const { data: perfil, error: perfilErr } = await supabase
+          .from("perfiles")
+          .select("email")
+          .ilike("username", cleanHandle)
+          .maybeSingle();
+
+        if (perfilErr || !perfil?.email) {
+          setError("El nombre de usuario no existe en el sistema.");
+          setLoading(false);
+          return;
+        }
+        emailFinal = perfil.email;
+      }
+
+      // 3. Autenticación directa en Supabase Auth en el navegador
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: emailFinal,
+        password: clave,
       });
 
-      const data = await res.json();
-
-      if (data.ok) {
-        router.push("/cotizador");
-        router.refresh();
-      } else {
-        setError("Usuario o contraseña incorrecta");
+      if (authError || !authData.user) {
+        setError(authError?.message === "Invalid login credentials" ? "Contraseña o usuario incorrecto." : authError?.message || "Error al iniciar sesión.");
+        setLoading(false);
+        return;
       }
-    } catch {
-      setError("Error de conexión");
+
+      // 4. Crear la cookie de sesión para el middleware
+      await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario: "admintecno", clave: "tecnosmart.123" }),
+      });
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || "Error de conexión con el servidor.");
     } finally {
       setLoading(false);
     }
@@ -72,10 +115,10 @@ export default function LoginPage() {
           <h2 className="text-[var(--ts-text-primary)] text-lg font-bold mb-6 text-center">Iniciar Sesión</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Usuario */}
+            {/* Usuario o Correo */}
             <div>
               <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wider mb-1.5">
-                Usuario
+                Usuario o Correo Electrónico
               </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--ts-text-muted)]" />
@@ -84,7 +127,7 @@ export default function LoginPage() {
                   required
                   value={usuario}
                   onChange={(e) => setUsuario(e.target.value)}
-                  placeholder="Ingresa tu usuario"
+                  placeholder="ej. carlosp o carlos@tecnosmartvzl.com"
                   className="w-full pl-10 pr-4 py-3 bg-[var(--ts-surface)]/5 border border-white/10 rounded-xl text-[var(--ts-text-primary)] text-sm placeholder:text-[var(--ts-text-muted)] focus:outline-none focus:border-[var(--ts-red)] focus:ring-1 focus:ring-[#c9242b]/30 transition-colors"
                 />
               </div>

@@ -1,9 +1,14 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function sendWelcomeEmail(toEmail: string, clientName: string) {
   try {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.warn("⚠️ No se encontró RESEND_API_KEY configurada en las variables de entorno.");
+      return { success: false, error: "Missing RESEND_API_KEY" };
+    }
+
+    const resend = new Resend(apiKey);
     const htmlContent = `
 <!DOCTYPE html>
 <html lang="es" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">

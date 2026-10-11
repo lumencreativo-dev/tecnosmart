@@ -1,13 +1,19 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Search, Plus, Edit2, Package, Save, X, Filter, ChevronDown, Trash2, AlertTriangle } from "lucide-react";
+import { Search, Plus, Edit2, Package, Save, X, Filter, ChevronDown, Trash2, AlertTriangle, Eye, Lock } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD } from "@/lib/utils";
+import { useUsuario } from "@/hooks/useUsuario";
+import { tienePermiso } from "@/lib/permissions";
 
 type Producto = any;
 
 export default function InventarioManager() {
+  const { usuario } = useUsuario();
+  const permisosUsuario: string[] = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
+  const puedeGestionarStock = tienePermiso(permisosUsuario, "inventario.gestionar");
+  const puedeVerCostos = tienePermiso(permisosUsuario, "inventario.costos");
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
@@ -106,6 +112,10 @@ export default function InventarioManager() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!puedeGestionarStock) {
+      setSaveError("No tienes facultades para modificar o crear productos en el inventario.");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
 
@@ -143,7 +153,7 @@ export default function InventarioManager() {
   };
 
   const eliminarProducto = async () => {
-    if (!confirmDelete) return;
+    if (!confirmDelete || !puedeGestionarStock) return;
     setDeleting(true);
     const { error } = await supabase
       .from("productos")
@@ -188,13 +198,15 @@ export default function InventarioManager() {
             />
           </div>
           
-          <button
-            onClick={() => openModal()}
-            className="flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-[var(--ts-text-primary)] px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm"
-          >
-            <Plus className="w-4 h-4" />
-            Nuevo Producto
-          </button>
+          {puedeGestionarStock && (
+            <button
+              onClick={() => openModal()}
+              className="flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-[var(--ts-text-primary)] px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Nuevo Producto
+            </button>
+          )}
         </div>
 
         {/* Filtros */}
@@ -270,7 +282,15 @@ export default function InventarioManager() {
                 </tr>
               ) : (
                 productosFiltrados.map((p) => (
-                  <tr key={p.id} className="hover:bg-[var(--ts-surface-2)] transition-colors group cursor-pointer" onClick={() => openModal(p)}>
+                  <tr
+                    key={p.id}
+                    className={`hover:bg-[var(--ts-surface-2)] transition-colors group ${
+                      puedeGestionarStock ? "cursor-pointer" : "cursor-default"
+                    }`}
+                    onClick={() => {
+                      if (puedeGestionarStock) openModal(p);
+                    }}
+                  >
                     <td className="px-5 py-3 text-xs font-mono text-[var(--ts-text-muted)] whitespace-nowrap">
                       {p.codigo_sku}
                     </td>
@@ -298,22 +318,28 @@ export default function InventarioManager() {
                       </span>
                     </td>
                     <td className="px-5 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openModal(p); }}
-                          className="text-[#d9d9d9] group-hover:text-[var(--ts-red)] transition-colors p-1"
-                          title="Editar"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setConfirmDelete(p); }}
-                          className="text-[#d9d9d9] hover:text-red-600 transition-colors p-1"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                      {puedeGestionarStock ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openModal(p); }}
+                            className="text-[#d9d9d9] group-hover:text-[var(--ts-red)] transition-colors p-1"
+                            title="Editar producto"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setConfirmDelete(p); }}
+                            className="text-[#d9d9d9] hover:text-red-600 transition-colors p-1"
+                            title="Eliminar producto"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-[var(--ts-text-muted)] opacity-50 flex items-center justify-center gap-1">
+                          <Lock className="w-3 h-3" />
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -453,15 +479,24 @@ export default function InventarioManager() {
                       className="w-full pl-7 pr-3 py-2 border border-[var(--ts-border)] rounded-lg text-sm font-bold text-[var(--ts-red)] focus:outline-none focus:border-[var(--ts-red)]" />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">Costo (Precio de compra)</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--ts-text-muted)]">$</span>
-                    <input type="number" step="0.01" min="0" value={form.precio_costo}
-                      onChange={(e) => setForm({ ...form, precio_costo: parseFloat(e.target.value) || 0 })}
-                      className="w-full pl-7 pr-3 py-2 border border-[var(--ts-border)] rounded-lg text-sm font-bold text-amber-700 focus:outline-none focus:border-[var(--ts-red)]" />
+                {puedeVerCostos ? (
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">Costo (Precio de compra)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[var(--ts-text-muted)]">$</span>
+                      <input type="number" step="0.01" min="0" value={form.precio_costo}
+                        onChange={(e) => setForm({ ...form, precio_costo: parseFloat(e.target.value) || 0 })}
+                        className="w-full pl-7 pr-3 py-2 border border-[var(--ts-border)] rounded-lg text-sm font-bold text-amber-700 focus:outline-none focus:border-[var(--ts-red)]" />
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex flex-col justify-end">
+                    <p className="text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">Costo Confidencial</p>
+                    <div className="px-3 py-2 border border-[var(--ts-border)] bg-[var(--ts-surface-2)] rounded-lg text-xs text-[var(--ts-text-muted)] font-mono">
+                      🔒 Restringido a Gerencia
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

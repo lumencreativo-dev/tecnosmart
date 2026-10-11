@@ -3,16 +3,74 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   TrendingUp, DollarSign, Users, Save, Calendar, CheckCircle,
-  Clock, AlertTriangle, ArrowRight, Settings, Phone, Activity, Globe, Package
+  Clock, AlertTriangle, ArrowRight, Settings, Phone, Activity, Globe, Package,
+  Wrench, HardHat, CheckSquare, Eye, Sliders, ShieldCheck
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
+import { useUsuario } from "@/hooks/useUsuario";
+import { tienePermiso } from "@/lib/permissions";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
 import Link from "next/link";
 
 export default function DashboardManager() {
+  const { usuario } = useUsuario();
+  const permisosUsuario: string[] = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
+
+  const esAdmin = usuario?.rol_id === "admin" || (usuario?.roles?.permisos || []).includes("*");
+
+  // Facultades de visualización específicas de Dashboard (con fallback inteligente por compatibilidad)
+  const puedeVerFinanzas = esAdmin || tienePermiso(permisosUsuario, "dashboard.finanzas") || tienePermiso(permisosUsuario, "finanzas.dashboard");
+  const puedeVerMRR = esAdmin || tienePermiso(permisosUsuario, "dashboard.mrr") || tienePermiso(permisosUsuario, "finanzas.cajas");
+  const puedeVerTasas = esAdmin || tienePermiso(permisosUsuario, "dashboard.tasas") || tienePermiso(permisosUsuario, "ventas.cotizar") || tienePermiso(permisosUsuario, "proyectos.ver_propias");
+  const puedeVerTicket = esAdmin || tienePermiso(permisosUsuario, "dashboard.ticket_promedio") || tienePermiso(permisosUsuario, "finanzas.dashboard");
+  const puedeVerProductosTop = esAdmin || tienePermiso(permisosUsuario, "dashboard.productos_top") || tienePermiso(permisosUsuario, "ventas.ver_global") || tienePermiso(permisosUsuario, "ventas.cotizar");
+  const puedeVerClientesTop = esAdmin || tienePermiso(permisosUsuario, "dashboard.clientes_frecuentes") || tienePermiso(permisosUsuario, "ventas.clientes") || tienePermiso(permisosUsuario, "ventas.crm");
+  const puedeVerGrafica = esAdmin || tienePermiso(permisosUsuario, "dashboard.grafica_ventas") || tienePermiso(permisosUsuario, "finanzas.dashboard");
+  const puedeVerSeguimientos = esAdmin || tienePermiso(permisosUsuario, "dashboard.seguimientos") || tienePermiso(permisosUsuario, "ventas.cotizar") || tienePermiso(permisosUsuario, "ventas.crm");
+  const puedeVerProximosPagos = esAdmin || tienePermiso(permisosUsuario, "dashboard.proximos_pagos") || tienePermiso(permisosUsuario, "inventario.suscripciones");
+  const puedeVerOperaciones = esAdmin || tienePermiso(permisosUsuario, "dashboard.operaciones_campo") || tienePermiso(permisosUsuario, "proyectos.ver_propias") || usuario?.rol_id === "tecnico";
+  const puedeConfigurar = esAdmin || tienePermiso(permisosUsuario, "administracion.configuracion");
+  const esTecnico = usuario?.rol_id === "tecnico" || (!puedeVerFinanzas && !tienePermiso(permisosUsuario, "ventas.facturar"));
+
+  // Filtros o widgets activos personalizables (guardados en localStorage)
+  const [widgetsVisibles, setWidgetsVisibles] = useState<Record<string, boolean>>({
+    ingresoCerrado: true,
+    proyectado: true,
+    mrr: true,
+    tasas: true,
+    ticketPromedio: true,
+    productosTop: true,
+    clientesFrecuentes: true,
+    grafica: true,
+    seguimiento: true,
+    proximosPagos: true,
+    misionesTecnicas: true,
+  });
+  const [panelPersonalizarOpen, setPanelPersonalizarOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ts_dashboard_widgets");
+      if (saved) {
+        setWidgetsVisibles((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const toggleWidget = (key: string) => {
+    setWidgetsVisibles((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem("ts_dashboard_widgets", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
   const [loading, setLoading] = useState(true);
 
   // Data state
@@ -286,74 +344,198 @@ export default function DashboardManager() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto py-6">
 
-      {/* ── HEADER ── */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
-        <div>
-          <h1 className="text-2xl font-black ts-text tracking-tight flex items-center gap-2">
-            <Activity className="w-6 h-6 text-[var(--ts-red)]" /> Resumen Financiero
-          </h1>
-          <p className="text-sm ts-text-muted mt-1">
-            Métricas de ingresos, seguimiento a clientes y actividad general.
-          </p>
+      {/* ── HEADER PERSONALIZADO & PERSONALIZABLE ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 ts-surface ts-radius border ts-border">
+        <div className="flex items-center gap-3.5">
+          <div
+            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white text-base font-black shrink-0 shadow-sm"
+            style={{ backgroundColor: usuario?.roles?.color || "var(--ts-red)" }}
+          >
+            {usuario?.avatar_url ? (
+              <img src={usuario.avatar_url} alt={usuario.nombre} className="w-full h-full object-cover rounded-2xl" />
+            ) : (
+              <span>{usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : "TS"}</span>
+            )}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-black ts-text tracking-tight">
+                ¡Hola, {usuario?.nombre || "Colaborador"}!
+              </h1>
+              <span
+                className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-md"
+                style={{
+                  backgroundColor: `${usuario?.roles?.color || "var(--ts-red)"}20`,
+                  color: usuario?.roles?.color || "var(--ts-red)",
+                }}
+              >
+                {usuario?.roles?.nombre || "Personal TecnoSmart"}
+              </span>
+            </div>
+            <p className="text-xs ts-text-muted mt-0.5">
+              {esTecnico
+                ? "Panel operativo de servicios técnicos, cuadrillas y consulta de stock."
+                : "Métricas de ventas, facturación fiscal y rendimiento empresarial."}
+            </p>
+          </div>
+        </div>
+
+        {/* Botón Personalizar Dashboard */}
+        <div className="relative">
+          <button
+            onClick={() => setPanelPersonalizarOpen(!panelPersonalizarOpen)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl border ts-border ts-surface hover:bg-[var(--ts-surface-2)] ts-text text-xs font-bold transition-all shadow-xs"
+          >
+            <Sliders className="w-4 h-4 text-[var(--ts-red)]" />
+            <span>Personalizar Widgets</span>
+          </button>
+
+          {/* Menú Dropdown de Widgets Activos / Inactivos */}
+          {panelPersonalizarOpen && (
+            <div className="absolute right-0 top-full mt-2 w-72 ts-surface border ts-border rounded-2xl p-4 shadow-2xl z-40 space-y-3">
+              <div className="flex items-center justify-between border-b ts-border pb-2">
+                <span className="text-xs font-black uppercase tracking-wider ts-text">Configurar Vista</span>
+                <span className="text-[10px] ts-text-muted">Widgets autorizados</span>
+              </div>
+              <div className="space-y-1 max-h-64 overflow-y-auto scrollbar-thin">
+                {[
+                  { key: "misionesTecnicas", label: "Misiones Técnicas & Operaciones", permitido: puedeVerOperaciones },
+                  { key: "ingresoCerrado", label: "Ingreso Cerrado ($/Bs)", permitido: puedeVerFinanzas },
+                  { key: "proyectado", label: "Ingreso Proyectado", permitido: puedeVerFinanzas },
+                  { key: "mrr", label: "MRR Recurrente", permitido: puedeVerMRR },
+                  { key: "tasas", label: "Tasas de Referencia BCV/Paralelo", permitido: puedeVerTasas },
+                  { key: "ticketPromedio", label: "Ticket Promedio", permitido: puedeVerTicket },
+                  { key: "productosTop", label: "Productos Más Vendidos", permitido: puedeVerProductosTop },
+                  { key: "clientesFrecuentes", label: "Clientes Frecuentes", permitido: puedeVerClientesTop },
+                  { key: "grafica", label: "Gráfica de Rendimiento", permitido: puedeVerGrafica },
+                  { key: "seguimiento", label: "Alertas de Seguimiento", permitido: puedeVerSeguimientos },
+                  { key: "proximosPagos", label: "Próximos Pagos de Suscripciones", permitido: puedeVerProximosPagos },
+                ]
+                  .filter((w) => w.permitido)
+                  .map((w) => (
+                    <label
+                      key={w.key}
+                      className="flex items-center justify-between text-xs cursor-pointer p-1.5 hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
+                    >
+                      <span className="ts-text font-medium">{w.label}</span>
+                      <input
+                        type="checkbox"
+                        checked={widgetsVisibles[w.key] ?? true}
+                        onChange={() => toggleWidget(w.key)}
+                        className="accent-[var(--ts-red)] cursor-pointer"
+                      />
+                    </label>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* ── SECCIÓN OPERATIVA TÉCNICOS: WIDGET OPERATIVO ── */}
+      {puedeVerOperaciones && widgetsVisibles.misionesTecnicas && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="ts-surface ts-radius p-5 border ts-border flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+              <Wrench className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider">Misiones Técnicas</p>
+              <p className="text-xl font-black ts-text">Órdenes en Campo</p>
+              <p className="text-xs text-amber-600 font-semibold mt-0.5">Instalaciones de CCTV & Redes</p>
+            </div>
+          </div>
+
+          <div className="ts-surface ts-radius p-5 border ts-border flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+              <HardHat className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider">Cuadrilla Asignada</p>
+              <p className="text-xl font-black ts-text">Equipo Activo</p>
+              <p className="text-xs text-blue-500 font-semibold mt-0.5">Listo para despacho técnico</p>
+            </div>
+          </div>
+
+          <div className="ts-surface ts-radius p-5 border ts-border flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+              <Package className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider">Catálogo Técnico</p>
+              <Link href="/inventario" className="text-xl font-black ts-text hover:text-[var(--ts-red)] transition-colors flex items-center gap-1.5">
+                <span>Consultar Stock</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <p className="text-xs text-emerald-500 font-semibold mt-0.5">Precios y disponibilidad</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── SECCIÓN 1: WIDGETS Y MÉTRICAS PRINCIPALES ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-5">
         
-        {/* Balance USD */}
-        <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between overflow-hidden relative group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--ts-red-subtle)] rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110" />
-          <div>
-            <div className="flex items-center gap-2 ts-text-muted mb-4">
-              <DollarSign className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-wider">Ingreso Cerrado</span>
-            </div>
-            <p className="text-3xl font-black ts-text tracking-tighter">
-              {formatUSD(stats.ingresoRealUsd)}
-            </p>
-            {stats.ingresoRealBs > 0 && (
-              <p className="text-sm font-bold text-[var(--ts-text-muted)] mt-1 bg-[var(--ts-surface-2)] inline-block px-2.5 py-1 rounded-md">
-                Bs. {stats.ingresoRealBs.toLocaleString("es-VE", { minimumFractionDigits: 2 })}
+        {/* Balance USD (Solo para roles con finanzas.dashboard) */}
+        {puedeVerFinanzas && widgetsVisibles.ingresoCerrado && (
+          <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between overflow-hidden relative group">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--ts-red-subtle)] rounded-bl-full -mr-10 -mt-10 transition-transform group-hover:scale-110" />
+            <div>
+              <div className="flex items-center gap-2 ts-text-muted mb-4">
+                <DollarSign className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Ingreso Cerrado</span>
+              </div>
+              <p className="text-3xl font-black ts-text tracking-tighter">
+                {formatUSD(stats.ingresoRealUsd)}
               </p>
-            )}
-          </div>
-        </div>
-
-        {/* Proyectado USD */}
-        <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 ts-text-muted mb-4">
-              <TrendingUp className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-wider">Ingreso Proyectado</span>
+              {stats.ingresoRealBs > 0 && (
+                <p className="text-sm font-bold text-[var(--ts-text-muted)] mt-1 bg-[var(--ts-surface-2)] inline-block px-2.5 py-1 rounded-md">
+                  Bs. {stats.ingresoRealBs.toLocaleString("es-VE", { minimumFractionDigits: 2 })}
+                </p>
+              )}
             </div>
-            <p className="text-3xl font-black ts-text tracking-tight">
-              {formatUSD(stats.ingresoProyectado)}
-            </p>
-            <p className="text-xs ts-text-muted mt-2">
-              Cotizaciones vigentes <span className="font-bold">({diasValidez} días)</span>
-            </p>
           </div>
-        </div>
+        )}
 
-        {/* Ingreso Recurrente MRR */}
-        <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-2 ts-text-muted mb-4">
-              <Activity className="w-4 h-4 text-emerald-500" />
-              <span className="text-xs font-bold uppercase tracking-wider">MRR Mensual</span>
+        {/* Proyectado USD (Solo para roles con finanzas.dashboard) */}
+        {puedeVerFinanzas && widgetsVisibles.proyectado && (
+          <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 ts-text-muted mb-4">
+                <TrendingUp className="w-4 h-4" />
+                <span className="text-xs font-bold uppercase tracking-wider">Ingreso Proyectado</span>
+              </div>
+              <p className="text-3xl font-black ts-text tracking-tight">
+                {formatUSD(stats.ingresoProyectado)}
+              </p>
+              <p className="text-xs ts-text-muted mt-2">
+                Cotizaciones vigentes <span className="font-bold">({diasValidez} días)</span>
+              </p>
             </div>
-            <p className="text-3xl font-black text-emerald-500 tracking-tight">
-              {formatUSD(mrr)}
-            </p>
-            <p className="text-xs ts-text-muted mt-2">
-              Suscripciones activas
-            </p>
           </div>
-        </div>
+        )}
+
+        {/* Ingreso Recurrente MRR (Solo con permiso de finanzas.cajas) */}
+        {puedeVerMRR && widgetsVisibles.mrr && (
+          <div className="ts-surface ts-radius p-5 col-span-1 md:col-span-3 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 ts-text-muted mb-4">
+                <Activity className="w-4 h-4 text-emerald-500" />
+                <span className="text-xs font-bold uppercase tracking-wider">MRR Mensual</span>
+              </div>
+              <p className="text-3xl font-black text-emerald-500 tracking-tight">
+                {formatUSD(mrr)}
+              </p>
+              <p className="text-xs ts-text-muted mt-2">
+                Suscripciones activas
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Tasas de Referencia Widget */}
-        <div className="bg-[#1a1a1a] rounded-[20px] border border-white/5 p-5 col-span-1 sm:col-span-2 md:col-span-3 flex flex-col relative overflow-hidden">
+        {widgetsVisibles.tasas && (
+          <div className="bg-[#1a1a1a] rounded-[20px] border border-white/5 p-5 col-span-1 sm:col-span-2 md:col-span-3 flex flex-col relative overflow-hidden">
           {/* Fondo sutil estilo ondas */}
           <div className="absolute top-0 right-0 w-full h-full opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 100% 0%, rgba(200,160,50,0.15) 0%, transparent 50%)' }} />
           
@@ -424,249 +606,278 @@ export default function DashboardManager() {
             </div>
           )}
         </div>
+      )}
 
       </div>
 
       {/* ── SECCIÓN 1.5: MÉTRICAS ADICIONALES ── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {((puedeVerTicket && widgetsVisibles.ticketPromedio) ||
+        (puedeVerProductosTop && widgetsVisibles.productosTop) ||
+        (puedeVerClientesTop && widgetsVisibles.clientesFrecuentes)) && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
-        {/* Ticket Promedio */}
-        <div className="ts-surface ts-radius p-5 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-violet-500/10 flex items-center justify-center shrink-0">
-            <TrendingUp className="w-5 h-5 text-violet-400" />
-          </div>
-          <div>
-            <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-1">Ticket Promedio</p>
-            <p className="text-2xl font-black ts-text">{formatUSD(ticketPromedio)}</p>
-            <p className="text-[10px] ts-text-muted mt-1">Por factura emitida</p>
-          </div>
-        </div>
-
-        {/* Producto Más Vendido */}
-        <div className="ts-surface ts-radius p-5">
-          <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
-            <Package className="w-3.5 h-3.5" /> Productos Top
-          </p>
-          {productoTopData.length === 0 ? (
-            <p className="text-xs ts-text-muted">Sin datos aún.</p>
-          ) : (
-            <div className="space-y-2">
-              {productoTopData.map((p, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className={`text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                    i === 0 ? "bg-amber-400/20 text-amber-500" : "bg-[var(--ts-border)] ts-text-muted"
-                  }`}>{i + 1}</span>
-                  <span className="text-xs ts-text flex-1 truncate font-medium">{p.descripcion}</span>
-                  <span className="text-xs font-bold ts-text-muted shrink-0">{p.cantidad} uds.</span>
-                </div>
-              ))}
+          {/* Ticket Promedio */}
+          {puedeVerTicket && widgetsVisibles.ticketPromedio && (
+            <div className="ts-surface ts-radius p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-violet-500/10 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-5 h-5 text-violet-400" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-1">Ticket Promedio</p>
+                <p className="text-2xl font-black ts-text">{formatUSD(ticketPromedio)}</p>
+                <p className="text-[10px] ts-text-muted mt-1">Por factura emitida</p>
+              </div>
             </div>
           )}
-        </div>
 
-        {/* Cliente Más Frecuente */}
-        <div className="ts-surface ts-radius p-5">
-          <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
-            <Users className="w-3.5 h-3.5" /> Clientes Frecuentes
-          </p>
-          {clienteTopData.length === 0 ? (
-            <p className="text-xs ts-text-muted">Sin datos aún.</p>
-          ) : (
-            <div className="space-y-2">
-              {clienteTopData.map((c, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className={`text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
-                    i === 0 ? "bg-amber-400/20 text-amber-500" : "bg-[var(--ts-border)] ts-text-muted"
-                  }`}>{i + 1}</span>
-                  <span className="text-xs ts-text flex-1 truncate font-medium">{c.nombre}</span>
-                  <span className="text-xs font-bold ts-text-muted shrink-0">{c.facturas} fac.</span>
+          {/* Producto Más Vendido */}
+          {puedeVerProductosTop && widgetsVisibles.productosTop && (
+            <div className="ts-surface ts-radius p-5">
+              <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Package className="w-3.5 h-3.5" /> Productos Top
+              </p>
+              {productoTopData.length === 0 ? (
+                <p className="text-xs ts-text-muted">Sin datos aún.</p>
+              ) : (
+                <div className="space-y-2">
+                  {productoTopData.map((p, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className={`text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                        i === 0 ? "bg-amber-400/20 text-amber-500" : "bg-[var(--ts-border)] ts-text-muted"
+                      }`}>{i + 1}</span>
+                      <span className="text-xs ts-text flex-1 truncate font-medium">{p.descripcion}</span>
+                      <span className="text-xs font-bold ts-text-muted shrink-0">{p.cantidad} uds.</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           )}
-        </div>
 
-      </div>
+          {/* Cliente Más Frecuente */}
+          {puedeVerClientesTop && widgetsVisibles.clientesFrecuentes && (
+            <div className="ts-surface ts-radius p-5">
+              <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Users className="w-3.5 h-3.5" /> Clientes Frecuentes
+              </p>
+              {clienteTopData.length === 0 ? (
+                <p className="text-xs ts-text-muted">Sin datos aún.</p>
+              ) : (
+                <div className="space-y-2">
+                  {clienteTopData.map((c, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className={`text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${
+                        i === 0 ? "bg-amber-400/20 text-amber-500" : "bg-[var(--ts-border)] ts-text-muted"
+                      }`}>{i + 1}</span>
+                      <span className="text-xs ts-text flex-1 truncate font-medium">{c.nombre}</span>
+                      <span className="text-xs font-bold ts-text-muted shrink-0">{c.facturas} fac.</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      )}
 
       {/* ── SECCIÓN 2: GRÁFICA Y ALERTAS ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        
-        {/* Gráfica de Rendimiento */}
-        <div className="ts-surface ts-radius p-5 lg:col-span-2">
-          <h2 className="text-sm font-bold ts-text mb-6 uppercase tracking-wider">Flujo de Cotizaciones (Últ. 6 meses)</h2>
-          <div className="h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--ts-border)" />
-                <XAxis dataKey="nombre" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--ts-text-secondary)' }} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--ts-text-secondary)' }} tickFormatter={(val) => `$${val/1000}k`} />
-                <Tooltip 
-                  cursor={{ fill: 'var(--ts-border)', opacity: 0.4 }}
-                  contentStyle={{ backgroundColor: 'var(--ts-surface)', borderColor: 'var(--ts-border)', borderRadius: '12px', fontSize: '12px', color: 'var(--ts-text-primary)' }}
-                  formatter={(val: any) => [formatUSD(Number(val)), ""]}
-                />
-                <Bar dataKey="Aprobado" stackId="a" fill="var(--ts-red)" radius={[0, 0, 4, 4]} />
-                <Bar dataKey="Pendiente" stackId="a" fill="var(--ts-border)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex gap-4 mt-4 justify-center">
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-[var(--ts-red)]" /><span className="text-xs ts-text-muted">Aprobado/Facturado</span></div>
-            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-[var(--ts-border)]" /><span className="text-xs ts-text-muted">Pendiente</span></div>
-          </div>
-        </div>
-
-        {/* Panel de Tareas y Alertas */}
-        <div className="flex flex-col gap-5">
+      {((puedeVerGrafica && widgetsVisibles.grafica) ||
+        (puedeVerSeguimientos && widgetsVisibles.seguimiento) ||
+        (puedeVerProximosPagos && widgetsVisibles.proximosPagos)) && (
+        <div className={`grid grid-cols-1 ${
+          puedeVerGrafica && widgetsVisibles.grafica && ((puedeVerSeguimientos && widgetsVisibles.seguimiento) || (puedeVerProximosPagos && widgetsVisibles.proximosPagos))
+            ? "lg:grid-cols-3"
+            : "lg:grid-cols-1"
+        } gap-5`}>
           
-          {/* Recordatorios */}
-          <div className="ts-surface ts-radius p-5 flex-1 flex flex-col">
-            <h2 className="text-sm font-bold ts-text mb-4 uppercase tracking-wider flex items-center gap-2">
-              <Clock className="w-4 h-4 text-amber-500" /> Seguimientos Hoy
-            </h2>
-            
-            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
-              {recordatorios.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-50">
-                  <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
-                  <p className="text-xs ts-text">Todo al día, no hay recordatorios pendientes.</p>
-                </div>
-              ) : (
-                recordatorios.map(r => (
-                  <div key={r.id} className="p-3 ts-surface-2 ts-radius border ts-border border-l-4 border-l-amber-500 flex flex-col gap-2">
-                    <div>
-                      <p className="text-xs font-bold text-amber-600 mb-0.5">{r.mensaje}</p>
-                      <p className="text-[11px] font-semibold ts-text">{r.clientes?.empresa || r.clientes?.contacto || 'Cliente'}</p>
-                      <p className="text-[10px] ts-text-muted">Cotización: {r.numero_cotizacion}</p>
-                    </div>
-                    {r.clientes?.telefono && (
-                      <a 
-                        href={`https://wa.me/${r.clientes.telefono.replace(/\D/g, '')}?text=Hola, te escribimos de TecnoSmart referente a tu cotización ${r.numero_cotizacion}.`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-[#25D366]/10 text-[#128C7E] px-2 py-1 rounded-md w-fit hover:bg-[#25D366]/20 transition-colors"
-                      >
-                        <Phone className="w-3 h-3" /> Contactar vía WhatsApp
-                      </a>
+          {/* Gráfica de Rendimiento (Solo finanzas) */}
+          {puedeVerGrafica && widgetsVisibles.grafica && (
+            <div className={`ts-surface ts-radius p-5 ${(puedeVerSeguimientos && widgetsVisibles.seguimiento) || (puedeVerProximosPagos && widgetsVisibles.proximosPagos) ? "lg:col-span-2" : "lg:col-span-3"}`}>
+              <h2 className="text-sm font-bold ts-text mb-6 uppercase tracking-wider">Flujo de Cotizaciones (Últ. 6 meses)</h2>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--ts-border)" />
+                    <XAxis dataKey="nombre" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--ts-text-secondary)' }} dy={10} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--ts-text-secondary)' }} tickFormatter={(val) => `$${val/1000}k`} />
+                    <Tooltip 
+                      cursor={{ fill: 'var(--ts-border)', opacity: 0.4 }}
+                      contentStyle={{ backgroundColor: 'var(--ts-surface)', borderColor: 'var(--ts-border)', borderRadius: '12px', fontSize: '12px', color: 'var(--ts-text-primary)' }}
+                      formatter={(val: any) => [formatUSD(Number(val)), ""]}
+                    />
+                    <Bar dataKey="Aprobado" stackId="a" fill="var(--ts-red)" radius={[0, 0, 4, 4]} />
+                    <Bar dataKey="Pendiente" stackId="a" fill="var(--ts-border)" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex gap-4 mt-4 justify-center">
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-[var(--ts-red)]" /><span className="text-xs ts-text-muted">Aprobado/Facturado</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-[var(--ts-border)]" /><span className="text-xs ts-text-muted">Pendiente</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* Panel de Tareas y Alertas */}
+          {((puedeVerSeguimientos && widgetsVisibles.seguimiento) || (puedeVerProximosPagos && widgetsVisibles.proximosPagos)) && (
+            <div className={`flex flex-col gap-5 ${puedeVerGrafica && widgetsVisibles.grafica ? "" : "lg:col-span-1"}`}>
+              
+              {/* Recordatorios */}
+              {puedeVerSeguimientos && widgetsVisibles.seguimiento && (
+                <div className="ts-surface ts-radius p-5 flex-1 flex flex-col">
+                  <h2 className="text-sm font-bold ts-text mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-500" /> Seguimientos Hoy
+                  </h2>
+                  
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+                    {recordatorios.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-50">
+                        <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
+                        <p className="text-xs ts-text">Todo al día, no hay recordatorios pendientes.</p>
+                      </div>
+                    ) : (
+                      recordatorios.map(r => (
+                        <div key={r.id} className="p-3 ts-surface-2 ts-radius border ts-border border-l-4 border-l-amber-500 flex flex-col gap-2">
+                          <div>
+                            <p className="text-xs font-bold text-amber-600 mb-0.5">{r.mensaje}</p>
+                            <p className="text-[11px] font-semibold ts-text">{r.clientes?.empresa || r.clientes?.contacto || 'Cliente'}</p>
+                            <p className="text-[10px] ts-text-muted">Cotización: {r.numero_cotizacion}</p>
+                          </div>
+                          {r.clientes?.telefono && (
+                            <a 
+                              href={`https://wa.me/${r.clientes.telefono.replace(/\D/g, '')}?text=Hola, te escribimos de TecnoSmart referente a tu cotización ${r.numero_cotizacion}.`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-[#25D366]/10 text-[#128C7E] px-2 py-1 rounded-md w-fit hover:bg-[#25D366]/20 transition-colors"
+                            >
+                              <Phone className="w-3 h-3" /> Contactar vía WhatsApp
+                            </a>
+                          )}
+                        </div>
+                      ))
                     )}
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Próximos Pagos Suscripciones */}
-          <div className="ts-surface ts-radius p-5 flex-1 flex flex-col">
-            <h2 className="text-sm font-bold ts-text mb-4 uppercase tracking-wider flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-emerald-500" /> Próximos Pagos
-            </h2>
-            
-            <div className="flex-1 overflow-y-auto pr-2 space-y-3">
-              {pagosProximos.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-50">
-                  <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
-                  <p className="text-xs ts-text">No hay pagos recurrentes cercanos.</p>
                 </div>
-              ) : (
-                pagosProximos.map(p => (
-                  <div key={p.id} className={`p-3 ts-surface-2 ts-radius border ts-border border-l-4 flex flex-col gap-2 ${p.vencido ? 'border-l-red-500' : 'border-l-emerald-500'}`}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <p className={`text-xs font-bold mb-0.5 ${p.vencido ? 'text-red-500' : 'text-emerald-500'}`}>
-                          {p.vencido ? `¡Vencido! (${p.diasFaltantes * -1} días)` : (p.diasFaltantes === 0 ? 'Vence hoy' : `Faltan ${p.diasFaltantes} días`)}
-                        </p>
-                        <p className="text-[11px] font-semibold ts-text">{p.clientes?.empresa || p.clientes?.contacto}</p>
-                        <p className="text-[10px] ts-text-muted">{p.servicios_recurrentes?.nombre}</p>
+              )}
+
+              {/* Próximos Pagos Suscripciones */}
+              {puedeVerProximosPagos && widgetsVisibles.proximosPagos && (
+                <div className="ts-surface ts-radius p-5 flex-1 flex flex-col">
+                  <h2 className="text-sm font-bold ts-text mb-4 uppercase tracking-wider flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-emerald-500" /> Próximos Pagos
+                  </h2>
+                  
+                  <div className="flex-1 overflow-y-auto pr-2 space-y-3">
+                    {pagosProximos.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-center py-10 opacity-50">
+                        <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
+                        <p className="text-xs ts-text">No hay pagos recurrentes cercanos.</p>
                       </div>
-                      <div className="text-right">
-                        <span className="text-xs font-black ts-text">${p.monto.toFixed(2)}</span>
-                      </div>
-                    </div>
-                    {p.clientes?.telefono && (() => {
-                      const clienteNombre = p.clientes?.contacto || p.clientes?.empresa;
-                      let mensaje = p.servicios_recurrentes?.mensaje_whatsapp 
-                        ? p.servicios_recurrentes.mensaje_whatsapp
-                            .replace(/{cliente}/g, clienteNombre)
-                            .replace(/{monto}/g, `$${p.monto.toFixed(2)}`)
-                            .replace(/{servicio}/g, p.servicios_recurrentes?.nombre || "")
-                        : `Hola ${clienteNombre}, te escribimos de TecnoSmart para recordarte el pago de tu servicio de ${p.servicios_recurrentes?.nombre} por $${p.monto.toFixed(2)}. ${p.vencido ? 'Recordatorio de pago vencido.' : ''}`;
-                      return (
-                        <a 
-                          href={`https://wa.me/${p.clientes.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-[#25D366]/10 text-[#128C7E] px-2 py-1 rounded-md w-fit hover:bg-[#25D366]/20 transition-colors"
-                      >
-                        <Phone className="w-3 h-3" /> Cobrar vía WhatsApp
-                      </a>
-                      );
-                    })()}
+                    ) : (
+                      pagosProximos.map(p => (
+                        <div key={p.id} className={`p-3 ts-surface-2 ts-radius border ts-border border-l-4 flex flex-col gap-2 ${p.vencido ? 'border-l-red-500' : 'border-l-emerald-500'}`}>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className={`text-xs font-bold mb-0.5 ${p.vencido ? 'text-red-500' : 'text-emerald-500'}`}>
+                                {p.vencido ? `¡Vencido! (${p.diasFaltantes * -1} días)` : (p.diasFaltantes === 0 ? 'Vence hoy' : `Faltan ${p.diasFaltantes} días`)}
+                              </p>
+                              <p className="text-[11px] font-semibold ts-text">{p.clientes?.empresa || p.clientes?.contacto}</p>
+                              <p className="text-[10px] ts-text-muted">{p.servicios_recurrentes?.nombre}</p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-black ts-text">${p.monto.toFixed(2)}</span>
+                            </div>
+                          </div>
+                          {p.clientes?.telefono && (() => {
+                            const clienteNombre = p.clientes?.contacto || p.clientes?.empresa;
+                            let mensaje = p.servicios_recurrentes?.mensaje_whatsapp 
+                              ? p.servicios_recurrentes.mensaje_whatsapp
+                                  .replace(/{cliente}/g, clienteNombre)
+                                  .replace(/{monto}/g, `$${p.monto.toFixed(2)}`)
+                                  .replace(/{servicio}/g, p.servicios_recurrentes?.nombre || "")
+                              : `Hola ${clienteNombre}, te escribimos de TecnoSmart para recordarte el pago de tu servicio de ${p.servicios_recurrentes?.nombre} por $${p.monto.toFixed(2)}. ${p.vencido ? 'Recordatorio de pago vencido.' : ''}`;
+                            return (
+                              <a 
+                                href={`https://wa.me/${p.clientes.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`}
+                                target="_blank"
+                                rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 text-[10px] font-bold bg-[#25D366]/10 text-[#128C7E] px-2 py-1 rounded-md w-fit hover:bg-[#25D366]/20 transition-colors"
+                            >
+                              <Phone className="w-3 h-3" /> Cobrar vía WhatsApp
+                            </a>
+                            );
+                          })()}
+                        </div>
+                      ))
+                    )}
                   </div>
-                ))
+                  
+                  <Link href="/suscripciones" className="mt-4 text-center text-xs font-bold text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors block">
+                    Ver todas las suscripciones &rarr;
+                  </Link>
+                </div>
               )}
             </div>
-            
-            <Link href="/cotizador/suscripciones" className="mt-4 text-center text-xs font-bold text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors block">
-              Ver todas las suscripciones &rarr;
-            </Link>
-          </div>
-        </div>
-
-      </div>
-
-      {/* ── SECCIÓN 3: CONFIGURACIÓN GLOBAL ── */}
-      <div className="ts-surface ts-radius p-5 md:p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <Settings className="w-5 h-5 text-[var(--ts-red)]" />
-          <h2 className="text-base font-bold ts-text uppercase tracking-wider">Configuración Global</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Descuento Técnico */}
-          <div>
-            <label className="block text-xs font-bold ts-text-muted mb-1.5">Descuento a Técnicos (%)</label>
-            <input
-              type="number"
-              value={descTecnico}
-              onChange={e => setDescTecnico(e.target.value)}
-              className="w-full px-4 py-2.5 bg-[var(--ts-surface-2)] border ts-border rounded-xl text-sm focus:outline-none focus:border-[var(--ts-red)] transition-colors"
-            />
-            <p className="text-[10px] ts-text-muted mt-2">
-              Aplica automático a servicios y artículos al seleccionar cliente "Técnico".
-            </p>
-          </div>
-
-          {/* Días Validez */}
-          <div>
-            <label className="block text-xs font-bold ts-text-muted mb-1.5">Días de Validez (Cotización)</label>
-            <input
-              type="number"
-              value={diasValidez}
-              onChange={e => setDiasValidez(e.target.value)}
-              className="w-full px-4 py-2.5 bg-[var(--ts-surface-2)] border ts-border rounded-xl text-sm focus:outline-none focus:border-[var(--ts-red)] transition-colors"
-            />
-            <p className="text-[10px] ts-text-muted mt-2">
-              Luego de estos días, deja de sumar a Ingresos Proyectados por considerarse vencida.
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-6 flex items-center gap-4">
-          <button
-            onClick={handleSaveConfig}
-            disabled={savingConfig}
-            className="flex items-center gap-2 bg-[var(--ts-text-primary)] hover:opacity-80 text-[var(--ts-bg)] text-xs font-bold px-6 py-2.5 rounded-xl transition-all"
-          >
-            <Save className="w-4 h-4" />
-            {savingConfig ? "Guardando..." : "Guardar Cambios"}
-          </button>
-          {configSuccess && (
-            <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
-              <CheckCircle className="w-4 h-4" /> ¡Guardado!
-            </span>
           )}
+
         </div>
-      </div>
+      )}
+
+      {/* ── SECCIÓN 3: CONFIGURACIÓN GLOBAL (SOLO ADMINISTRACIÓN) ── */}
+      {puedeConfigurar && (
+        <div className="ts-surface ts-radius p-5 md:p-6 border ts-border">
+          <div className="flex items-center gap-2 mb-6">
+            <Settings className="w-5 h-5 text-[var(--ts-red)]" />
+            <h2 className="text-base font-bold ts-text uppercase tracking-wider">Configuración Global</h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Descuento Técnico */}
+            <div>
+              <label className="block text-xs font-bold ts-text-muted mb-1.5">Descuento a Técnicos (%)</label>
+              <input
+                type="number"
+                value={descTecnico}
+                onChange={e => setDescTecnico(e.target.value)}
+                className="w-full px-4 py-2.5 bg-[var(--ts-surface-2)] border ts-border rounded-xl text-sm focus:outline-none focus:border-[var(--ts-red)] transition-colors"
+              />
+              <p className="text-[10px] ts-text-muted mt-2">
+                Aplica automático a servicios y artículos al seleccionar cliente "Técnico".
+              </p>
+            </div>
+
+            {/* Días Validez */}
+            <div>
+              <label className="block text-xs font-bold ts-text-muted mb-1.5">Días de Validez (Cotización)</label>
+              <input
+                type="number"
+                value={diasValidez}
+                onChange={e => setDiasValidez(e.target.value)}
+                className="w-full px-4 py-2.5 bg-[var(--ts-surface-2)] border ts-border rounded-xl text-sm focus:outline-none focus:border-[var(--ts-red)] transition-colors"
+              />
+              <p className="text-[10px] ts-text-muted mt-2">
+                Luego de estos días, deja de sumar a Ingresos Proyectados por considerarse vencida.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-center gap-4">
+            <button
+              onClick={handleSaveConfig}
+              disabled={savingConfig}
+              className="flex items-center gap-2 bg-[var(--ts-text-primary)] hover:opacity-80 text-[var(--ts-bg)] text-xs font-bold px-6 py-2.5 rounded-xl transition-all"
+            >
+              <Save className="w-4 h-4" />
+              {savingConfig ? "Guardando..." : "Guardar Cambios"}
+            </button>
+            {configSuccess && (
+              <span className="text-xs font-bold text-emerald-500 flex items-center gap-1">
+                <CheckCircle className="w-4 h-4" /> ¡Guardado!
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );

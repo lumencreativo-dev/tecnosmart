@@ -101,7 +101,7 @@ export default function Footer() {
           </span>
           {/* Acceso discreto al cotizador — NO indexado */}
           <Link
-            href="/cotizador"
+            href="/dashboard"
             className="hover:text-[var(--ts-red)] transition-colors"
           >
             Acceso Interno

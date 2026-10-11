@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Upload, CheckCircle, AlertCircle, Loader2, Trash2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import ProtectedView from "@/components/cotizador/ProtectedView";
 
 interface ProductoExtraido {
   codigo_sku: string;
@@ -262,7 +263,8 @@ export default function ImportarPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
+    <ProtectedView permiso="inventario.importar" modulo="Carga Masiva de Catálogo">
+      <div className="max-w-6xl mx-auto px-6 py-10 space-y-8">
       <div>
         <h1 className="text-2xl font-extrabold text-[var(--ts-text-primary)]">
           Importar Catálogo PDF
@@ -521,6 +523,7 @@ export default function ImportarPage() {
           </p>
         </div>
       )}
-    </div>
+      </div>
+    </ProtectedView>
   );
 }
