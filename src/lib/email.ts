@@ -75,8 +75,8 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
           <!-- HEADER / LOGO -->
           <tr>
             <td align="center" class="px-mobile" style="padding:36px 40px 24px 40px; background-color:#ffffff;">
-              <a href="https://www.tecnosmart.com" target="_blank" style="text-decoration:none;">
-                <img src="https://via.placeholder.com/180x50/ffffff/c9242b?text=TecnoSmart" width="180" height="50" alt="TecnoSmart" style="display:block; width:180px; max-width:100%; height:auto; border:0; margin:0 auto; font-family:Arial,sans-serif; font-size:22px; font-weight:bold; color:#c9242b;">
+              <a href="https://tecnosmart.vercel.app/" target="_blank" style="text-decoration:none;">
+                <img src="https://tecnosmart.vercel.app/logo-color.png" width="180" alt="TecnoSmart Vzl" style="display:block; width:180px; max-width:100%; height:auto; border:0; margin:0 auto; font-family:Arial,sans-serif; font-size:22px; font-weight:bold; color:#c9242b;">
               </a>
             </td>
           </tr>
@@ -103,7 +103,7 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
           <tr>
             <td align="center" class="px-mobile" style="padding:8px 40px 0 40px;">
               <p style="margin:0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:16px; line-height:24px; font-weight:600; color:#6e6e6e;">
-                Tu cuenta fue creada exitosamente
+                ¡Gracias por confiar en nosotros!
               </p>
             </td>
           </tr>
@@ -115,10 +115,19 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
                 Hola <strong>${clientName}</strong>,
               </p>
               <p style="margin:0 0 16px 0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:16px; line-height:26px; color:#111111;">
-                ¡Gracias por registrarte en <strong>TecnoSmart</strong>! Tu cuenta ha sido creada con éxito y estamos muy felices de tenerte con nosotros.
+                Te damos la bienvenida y te agradecemos por formar parte de la familia <strong>TecnoSmart</strong>. Hemos registrado exitosamente tus datos en nuestro sistema.
               </p>
+              <p style="margin:0 0 16px 0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:16px; line-height:26px; color:#6e6e6e;">
+                Recuerda que estamos a tu entera disposición para todo lo que necesites relacionado con la tecnología:
+              </p>
+              <ul style="margin:0 0 16px 0; padding-left: 20px; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:15px; line-height:24px; color:#111111;">
+                <li>Asesorías tecnológicas</li>
+                <li>Servicios de streaming</li>
+                <li>Instalaciones de cámaras de seguridad</li>
+                <li>Automatizaciones</li>
+              </ul>
               <p style="margin:0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:16px; line-height:26px; color:#6e6e6e;">
-                Ya puedes iniciar sesión y empezar a explorar todo lo que preparamos para ti. Si necesitas ayuda en cualquier momento, nuestro equipo estará encantado de acompañarte.
+                Nuestro compromiso es brindarte soluciones eficientes y de la más alta calidad.
               </p>
             </td>
           </tr>
@@ -127,17 +136,17 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
           <tr>
             <td align="center" class="px-mobile" style="padding:32px 40px 16px 40px;">
               <!--[if mso]>
-              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="https://www.tecnosmart.com/login" style="height:54px; v-text-anchor:middle; width:240px;" arcsize="50%" stroke="f" fillcolor="#c9242b">
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="https://wa.me/584122789273" style="height:54px; v-text-anchor:middle; width:240px;" arcsize="50%" stroke="f" fillcolor="#c9242b">
                 <w:anchorlock/>
-                <center style="color:#ffffff; font-family:Arial,sans-serif; font-size:16px; font-weight:bold;">Ir a mi cuenta</center>
+                <center style="color:#ffffff; font-family:Arial,sans-serif; font-size:16px; font-weight:bold;">Contáctanos por WhatsApp</center>
               </v:roundrect>
               <![endif]-->
               <!--[if !mso]><!-- -->
               <table role="presentation" class="btn-full" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                 <tr>
                   <td align="center" bgcolor="#c9242b" style="border-radius:50px; background-color:#c9242b;">
-                    <a href="https://www.tecnosmart.com/login" target="_blank" class="btn-link" style="display:inline-block; padding:16px 44px; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:16px; line-height:22px; font-weight:700; color:#ffffff; text-decoration:none; border-radius:50px; background-color:#c9242b; border:1px solid #c9242b;">
-                      Ir a mi cuenta
+                    <a href="https://wa.me/584122789273" target="_blank" class="btn-link" style="display:inline-block; padding:16px 32px; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:16px; line-height:22px; font-weight:700; color:#ffffff; text-decoration:none; border-radius:50px; background-color:#c9242b; border:1px solid #c9242b;">
+                      Contáctanos por WhatsApp
                     </a>
                   </td>
                 </tr>
@@ -146,15 +155,18 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
             </td>
           </tr>
 
+          <!-- NOTA TEMPORAL: Bloque de texto de apoyo bajo el botón oculto -->
           <!-- Texto de apoyo bajo el botón -->
+          <!--
           <tr>
             <td align="center" class="px-mobile" style="padding:0 40px 40px 40px;">
               <p style="margin:0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:13px; line-height:20px; color:#6e6e6e;">
                 Si el botón no funciona, copia y pega este enlace en tu navegador:<br>
-                <a href="https://www.tecnosmart.com/login" target="_blank" style="color:#05235b; text-decoration:underline; word-break:break-all;">https://www.tecnosmart.com/login</a>
+                <a href="https://tecnosmart.vercel.app/" target="_blank" style="color:#05235b; text-decoration:underline; word-break:break-all;">https://tecnosmart.vercel.app/</a>
               </p>
             </td>
           </tr>
+          -->
 
           <!-- Línea divisoria -->
           <tr>
@@ -173,7 +185,7 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
               </p>
               <p style="margin:0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:14px; line-height:22px; color:#6e6e6e;">
                 Escríbenos a
-                <a href="mailto:soporte@tecnosmart.com" style="color:#c9242b; font-weight:600; text-decoration:none;">soporte@tecnosmart.com</a>
+                <a href="mailto:tecnosmartvzla@gmail.com" style="color:#c9242b; font-weight:600; text-decoration:none;">tecnosmartvzla@gmail.com</a>
                 y te responderemos lo antes posible.
               </p>
             </td>
@@ -188,7 +200,7 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
                 <tr>
                   <td align="center" style="padding-bottom:20px;">
                     <span style="font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:22px; line-height:28px; font-weight:800; color:#ffffff; letter-spacing:-0.3px;">
-                      Tecno<span style="color:#ffffff; opacity:0.85;">Smart</span>
+                      Tecno<span style="color:#ffffff; opacity:0.85;">Smart Vzl</span>
                     </span>
                   </td>
                 </tr>
@@ -199,13 +211,10 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                       <tr>
                         <td style="padding:0 6px;">
-                          <a href="https://www.facebook.com/tecnosmart" target="_blank" style="display:inline-block; padding:8px 14px; border:1px solid #ffffff; border-radius:50px; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:12px; line-height:16px; font-weight:600; color:#ffffff; text-decoration:none;">Facebook</a>
+                          <a href="https://www.facebook.com/tecnosmartvzla" target="_blank" style="display:inline-block; padding:8px 14px; border:1px solid #ffffff; border-radius:50px; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:12px; line-height:16px; font-weight:600; color:#ffffff; text-decoration:none;">Facebook</a>
                         </td>
                         <td style="padding:0 6px;">
-                          <a href="https://www.instagram.com/tecnosmart" target="_blank" style="display:inline-block; padding:8px 14px; border:1px solid #ffffff; border-radius:50px; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:12px; line-height:16px; font-weight:600; color:#ffffff; text-decoration:none;">Instagram</a>
-                        </td>
-                        <td style="padding:0 6px;">
-                          <a href="https://www.linkedin.com/company/tecnosmart" target="_blank" style="display:inline-block; padding:8px 14px; border:1px solid #ffffff; border-radius:50px; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:12px; line-height:16px; font-weight:600; color:#ffffff; text-decoration:none;">LinkedIn</a>
+                          <a href="https://www.instagram.com/tecnosmartvzla" target="_blank" style="display:inline-block; padding:8px 14px; border:1px solid #ffffff; border-radius:50px; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:12px; line-height:16px; font-weight:600; color:#ffffff; text-decoration:none;">Instagram</a>
                         </td>
                       </tr>
                     </table>
@@ -225,12 +234,13 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
                 <tr>
                   <td align="center" style="padding-bottom:16px;">
                     <p style="margin:0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:13px; line-height:22px; color:#d9d9d9;">
-                      <a href="mailto:soporte@tecnosmart.com" style="color:#ffffff; text-decoration:none;">soporte@tecnosmart.com</a>
+                      <a href="mailto:tecnosmartvzla@gmail.com" style="color:#ffffff; text-decoration:none;">tecnosmartvzla@gmail.com</a>
                       &nbsp;&nbsp;|&nbsp;&nbsp;
-                      <a href="tel:+580000000000" style="color:#ffffff; text-decoration:none;">+58 000 000 0000</a>
+                      <a href="tel:+584122789273" style="color:#ffffff; text-decoration:none;">0412-2789273</a>
                     </p>
                     <p style="margin:6px 0 0 0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:13px; line-height:20px; color:#d9d9d9;">
-                      Av. Principal, Edificio TecnoSmart, Ciudad, País
+                      RIF: J-50701960-8<br>
+                      Av. Bolívar C/C c. Páez, Edif. Sta. Eduviges II, local-02, Tinaquillo, Edo. Cojedes.
                     </p>
                   </td>
                 </tr>
@@ -239,10 +249,10 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
                 <tr>
                   <td align="center">
                     <p style="margin:0 0 10px 0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:12px; line-height:18px; color:#d9d9d9;">
-                      &copy; 2026 TecnoSmart. Todos los derechos reservados.
+                      &copy; 2026 TecnoSmart Vzl. Todos los derechos reservados.
                     </p>
                     <p style="margin:0; font-family:'Inter','Roboto','Montserrat',Arial,sans-serif; font-size:12px; line-height:18px; color:#d9d9d9;">
-                      Recibiste este correo porque te registraste en TecnoSmart.
+                      Recibiste este correo porque te registraste en nuestra base de datos.
                     </p>
                   </td>
                 </tr>
@@ -268,7 +278,7 @@ export async function sendWelcomeEmail(toEmail: string, clientName: string) {
     const data = await resend.emails.send({
       from: 'TecnoSmart <onboarding@resend.dev>', // Por ahora usas el de dev de resend, luego lo cambias por el tuyo verificado (ej: hola@tecnosmart.com)
       to: [toEmail],
-      subject: '¡Bienvenido a TecnoSmart!',
+      subject: '¡Bienvenido a TecnoSmart Vzl!',
       html: htmlContent,
     });
 
