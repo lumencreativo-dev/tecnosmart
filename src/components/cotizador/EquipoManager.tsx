@@ -67,6 +67,8 @@ export default function EquipoManager() {
   const [generandoInvitacion, setGenerandoInvitacion] = useState(false);
   const [invitacionGenerada, setInvitacionGenerada] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
+  const [copiadoId, setCopiadoId] = useState<string | null>(null);
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
 
   // Modal para Nuevo Rol
   const [modalNuevoRol, setModalNuevoRol] = useState(false);
@@ -129,14 +131,29 @@ export default function EquipoManager() {
   // ── ACCIÓN: GENERAR ENLACE MÁGICO DE INVITACIÓN ───────────
   const handleCrearInvitacion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!invitarEmail.trim()) return;
+    const emailLimpio = invitarEmail.toLowerCase().trim();
+    if (!emailLimpio) return;
+
+    // 1. Validar si ya es un miembro activo del equipo
+    const yaEsMiembro = perfiles.some((p) => p.email.toLowerCase() === emailLimpio);
+    if (yaEsMiembro) {
+      alert(`El correo "${emailLimpio}" ya pertenece a un empleado activo registrado en el equipo.`);
+      return;
+    }
+
+    // 2. Validar si ya tiene una invitación pendiente de aceptación
+    const invitacionExistente = invitaciones.find((inv) => inv.email.toLowerCase() === emailLimpio && !inv.usada);
+    if (invitacionExistente) {
+      alert(`Ya existe una invitación pendiente activa para "${emailLimpio}".\n\nNo se permiten invitaciones duplicadas. Puedes copiar el enlace existente o cancelarlo en la lista inferior.`);
+      return;
+    }
 
     setGenerandoInvitacion(true);
     const token = Math.random().toString(36).substring(2) + Date.now().toString(36) + Math.random().toString(36).substring(2);
 
     const { error } = await supabase.from("invitaciones").insert([
       {
-        email: invitarEmail.toLowerCase().trim(),
+        email: emailLimpio,
         rol_id: invitarRolId,
         token: token,
         usada: false,
@@ -155,10 +172,31 @@ export default function EquipoManager() {
     }
   };
 
-  const copiarEnlace = (url: string) => {
+  const copiarEnlace = (url: string, id?: string) => {
     navigator.clipboard.writeText(url);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2500);
+    if (id) {
+      setCopiadoId(id);
+      setTimeout(() => setCopiadoId(null), 2500);
+    } else {
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2500);
+    }
+  };
+
+  // ── ACCIÓN: CANCELAR / ANULAR INVITACIÓN PENDIENTE ─────────
+  const handleCancelarInvitacion = async (inv: Invitacion) => {
+    const confirmar = window.confirm(`¿Estás seguro de cancelar y anular la invitación para "${inv.email}"?\n\nEl enlace generado quedará invalidado inmediatamente.`);
+    if (!confirmar) return;
+
+    setCancelandoId(inv.id);
+    const { error } = await supabase.from("invitaciones").delete().eq("id", inv.id);
+    setCancelandoId(null);
+
+    if (!error) {
+      cargarDatos();
+    } else {
+      alert("Error al cancelar la invitación: " + error.message);
+    }
   };
 
   // ── ACCIÓN: INSPECCIONAR MIEMBRO Y SUS MÉTRICAS (SUPER ADMIN) ──
@@ -654,25 +692,89 @@ export default function EquipoManager() {
           {/* Invitaciones Pendientes */}
           {invitaciones.length > 0 && (
             <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl p-5 shadow-xs">
-              <h4 className="text-xs font-bold text-[var(--ts-text-muted)] uppercase tracking-wider mb-3">
-                Enlaces de Invitación Pendientes por Aceptar ({invitaciones.length})
-              </h4>
-              <div className="space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3.5">
+                <h4 className="text-xs font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">
+                  Enlaces de Invitación Pendientes por Aceptar ({invitaciones.length})
+                </h4>
+                <span className="text-[10px] text-[var(--ts-text-muted)]">
+                  Copia el enlace para reenviarlo o cancela la invitación para anularla
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
                 {invitaciones.map((inv) => {
                   const url = typeof window !== "undefined" ? `${window.location.origin}/registro?token=${inv.token}` : "";
+                  const rolInfo = roles.find((r) => r.id === inv.rol_id);
+                  const estaCopiado = copiadoId === inv.id;
+                  const estaCancelando = cancelandoId === inv.id;
+
                   return (
-                    <div key={inv.id} className="flex items-center justify-between p-3 bg-[var(--ts-surface-2)] rounded-xl border border-[var(--ts-border)] text-xs">
-                      <div>
-                        <p className="font-bold text-[var(--ts-text-primary)]">{inv.email}</p>
-                        <p className="text-[10px] text-[var(--ts-text-muted)]">Rol asignado: <span className="font-semibold">{inv.roles?.nombre || inv.rol_id}</span></p>
+                    <div
+                      key={inv.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[var(--ts-surface-2)] rounded-xl border border-[var(--ts-border)] text-xs"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-black shrink-0 shadow-xs"
+                          style={{ backgroundColor: rolInfo?.color || "var(--ts-red)" }}
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-[var(--ts-text-primary)]">{inv.email}</p>
+                          <div className="flex items-center gap-2 text-[10px] text-[var(--ts-text-muted)] mt-0.5">
+                            <span>
+                              Rol: <span className="font-semibold text-[var(--ts-text-primary)]">{inv.roles?.nombre || inv.rol_id}</span>
+                            </span>
+                            {inv.created_at && (
+                              <>
+                                <span>•</span>
+                                <span>Generada: {new Date(inv.created_at).toLocaleDateString()}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <button
-                        onClick={() => copiarEnlace(url)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ts-surface)] hover:bg-[var(--ts-border)] text-[var(--ts-text-primary)] rounded-lg font-bold border border-[var(--ts-border)] transition-all"
-                      >
-                        <Copy className="w-3.5 h-3.5 text-[var(--ts-red)]" />
-                        <span>Copiar Enlace</span>
-                      </button>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        {/* Botón Copiar / Reenviar */}
+                        <button
+                          onClick={() => copiarEnlace(url, inv.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all active:scale-95 ${
+                            estaCopiado
+                              ? "bg-emerald-500/15 text-emerald-600 border-emerald-500/30"
+                              : "bg-[var(--ts-surface)] hover:bg-[var(--ts-border)] text-[var(--ts-text-primary)] border-[var(--ts-border)]"
+                          }`}
+                          title="Copiar enlace para reenviarlo al empleado"
+                        >
+                          {estaCopiado ? (
+                            <>
+                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              <span>¡Copiado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3.5 h-3.5 text-[var(--ts-red)]" />
+                              <span>Copiar Enlace</span>
+                            </>
+                          )}
+                        </button>
+
+                        {/* Botón Cancelar Invitación */}
+                        <button
+                          onClick={() => handleCancelarInvitacion(inv)}
+                          disabled={estaCancelando}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-500 hover:bg-red-500/10 border border-red-500/20 transition-all active:scale-95 disabled:opacity-50"
+                          title="Cancelar y anular definitivamente esta invitación"
+                        >
+                          {estaCancelando ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5" />
+                          )}
+                          <span>{estaCancelando ? "Anulando..." : "Cancelar"}</span>
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
