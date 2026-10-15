@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { FileDown, RotateCcw, CheckCircle2, Package } from "lucide-react";
+import { FileDown, RotateCcw, CheckCircle2, Package, PenLine, Plus } from "lucide-react";
 
 import type { Cliente, LineaDetalle, ResumenCotizacion } from "@/lib/types";
 import { generarNumeroCot, tempId } from "@/lib/utils";
@@ -27,6 +27,11 @@ export default function CotizadorWizard() {
   const [guardado, setGuardado]  = useState(false);
   const [cotizacionId, setCotizacionId] = useState<string | null>(null);
   const [descuentoTecnico, setDescuentoTecnico] = useState(15); // porcentaje
+
+  // ── Estado: Concepto Libre ──
+  const [conceptoDesc, setConceptoDesc] = useState("");
+  const [conceptoCant, setConceptoCant] = useState(1);
+  const [conceptoPrecio, setConceptoPrecio] = useState(0);
 
   // Obtener número correlativo y configuración global de Supabase al cargar
   useEffect(() => {
@@ -72,11 +77,29 @@ export default function CotizadorWizard() {
     setLineas((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
+  const agregarConceptoLibre = () => {
+    if (!conceptoDesc.trim() || conceptoPrecio <= 0) return;
+    addLinea({
+      id:             tempId(),
+      tipo_item:      "servicio",   // Para que no afecte inventario/stock
+      descripcion:    conceptoDesc.trim(),
+      cantidad:       conceptoCant,
+      precio_unitario: conceptoPrecio,
+      subtotal:       conceptoCant * conceptoPrecio,
+    });
+    setConceptoDesc("");
+    setConceptoCant(1);
+    setConceptoPrecio(0);
+  };
+
   const resetear = () => {
     setLineas([]);
     setDescuento(0);
     setNotas("");
     setCliente({ contacto: "" });
+    setConceptoDesc("");
+    setConceptoCant(1);
+    setConceptoPrecio(0);
   };
 
   // ── Cálculos ──────────────────────────────────────────────
@@ -234,6 +257,62 @@ export default function CotizadorWizard() {
           {/* Servicios y mano de obra */}
           <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-5 max-h-[600px] overflow-y-auto">
             <ServiciosPicker onAdd={addLinea} clienteTipo={cliente.tipo} descuentoTecnico={descuentoTecnico} />
+          </div>
+
+          {/* Concepto Libre */}
+          <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <PenLine className="w-4 h-4 text-[var(--ts-red)]" />
+              <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
+                Concepto Libre
+              </h2>
+            </div>
+            <p className="text-xs text-[var(--ts-text-muted)] mb-3">
+              Agrega ítems que no están en el inventario ni en servicios.
+            </p>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Descripción del concepto..."
+                value={conceptoDesc}
+                onChange={(e) => setConceptoDesc(e.target.value)}
+                className="w-full text-sm px-3 py-2.5 border border-[var(--ts-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#c9242b]/40 focus:border-[var(--ts-red)] bg-[var(--ts-surface)]"
+              />
+              <div className="flex gap-2">
+                <div className="w-20">
+                  <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] mb-1">Cant.</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={conceptoCant || ""}
+                    onChange={(e) => setConceptoCant(Number(e.target.value))}
+                    className="w-full text-sm px-3 py-2 border border-[var(--ts-border)] rounded-lg focus:outline-none focus:border-[var(--ts-red)] bg-transparent"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] mb-1">Precio (USD)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--ts-text-muted)]">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={conceptoPrecio || ""}
+                      onChange={(e) => setConceptoPrecio(Number(e.target.value))}
+                      className="w-full pl-6 pr-3 py-2 text-sm border border-[var(--ts-border)] rounded-lg focus:outline-none focus:border-[var(--ts-red)] bg-transparent"
+                    />
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={agregarConceptoLibre}
+                disabled={!conceptoDesc.trim() || conceptoPrecio <= 0}
+                className="w-full flex items-center justify-center gap-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-border)] border border-[var(--ts-border)] disabled:opacity-40 text-[var(--ts-text-primary)] font-semibold text-sm px-4 py-2.5 rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Añadir Concepto
+              </button>
+            </div>
           </div>
         </div>
 
