@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Search, Clock, LayoutGrid, List, Trash2,
-  RotateCcw, AlertTriangle, Phone, MoreVertical
+  RotateCcw, AlertTriangle, Phone, MoreVertical,
+  X, Download, FileText, MessageCircle
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -35,6 +36,12 @@ export default function CRMManager() {
   const [viewMode, setViewMode]           = useState<"kanban" | "list" | "papelera">("kanban");
   const [updatingId, setUpdatingId]       = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  // ── Drawer detalle ──
+  const [selected, setSelected]             = useState<CotizacionDB | null>(null);
+  const [detalles, setDetalles]             = useState<any[]>([]);
+  const [loadingDetalles, setLoadingDetalles] = useState(false);
+  const [regenerando, setRegenerando]       = useState(false);
 
   const cargarDatos = async () => {
     setLoading(true);
@@ -93,6 +100,66 @@ export default function CRMManager() {
     setConfirmDelete(null);
   };
 
+  // ── Drawer detalle: funciones ─────────────────────────────
+  const cargarDetalles = async (cotId: string) => {
+    setLoadingDetalles(true);
+    const { data } = await supabase
+      .from("cotizacion_detalles")
+      .select("*")
+      .eq("cotizacion_id", cotId)
+      .order("created_at");
+    if (data) setDetalles(data);
+    setLoadingDetalles(false);
+  };
+
+  const abrirDetalle = (cot: CotizacionDB) => {
+    setSelected(cot);
+    setDetalles([]);
+    cargarDetalles(cot.id);
+  };
+
+  const handleRedescargarCot = async (cot: CotizacionDB) => {
+    setRegenerando(true);
+    try {
+      const cliente = cot.clientes || {};
+      const lineas = detalles.map((d: any) => ({
+        id:             d.id,
+        tipo_item:      d.tipo_item || "producto",
+        item_id:        d.item_id || undefined,
+        descripcion:    d.descripcion,
+        cantidad:       d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal:       d.cantidad * d.precio_unitario,
+      }));
+
+      const subtotal = lineas.reduce((s: number, l: any) => s + l.subtotal, 0);
+      const descuento = Number(cot.descuento || 0);
+      const total = Math.max(0, subtotal - descuento);
+      const aplicaEsquemaPago = total > 500;
+
+      const { exportarCotizacionPDF } = await import("@/components/pdf/CotizacionPDF");
+      await exportarCotizacionPDF({
+        numeroCot: cot.numero_cotizacion,
+        fecha:     new Date(cot.fecha || cot.created_at),
+        cliente,
+        lineas,
+        resumen: {
+          subtotal,
+          descuento,
+          total,
+          anticipo:         aplicaEsquemaPago ? total * 0.7 : 0,
+          saldo:            aplicaEsquemaPago ? total * 0.3 : 0,
+          aplicaEsquemaPago,
+        },
+        notas: cot.notas || undefined,
+      });
+    } catch (e) {
+      console.error("Error al re-generar PDF de cotización:", e);
+      alert("No se pudo generar el PDF.");
+    }
+    setRegenerando(false);
+  };
+
   // ── Filtrado ──────────────────────────────────────────────
   const cotFiltradas = useMemo(() =>
     cotizaciones.filter(c => {
@@ -120,7 +187,10 @@ export default function CRMManager() {
 
   // ── Tarjeta reutilizable ──────────────────────────────────
   const TarjetaCot = ({ cot, showTrash = true }: { cot: CotizacionDB; showTrash?: boolean }) => (
-    <div className={`bg-[var(--ts-surface)] p-4 rounded-lg border border-[var(--ts-border)] shadow-sm hover:shadow-md transition-all relative group ${updatingId === cot.id ? "opacity-50" : ""}`}>
+    <div
+      onClick={() => abrirDetalle(cot)}
+      className={`bg-[var(--ts-surface)] p-4 rounded-lg border border-[var(--ts-border)] shadow-sm hover:shadow-md hover:border-[var(--ts-red)]/30 transition-all relative group cursor-pointer ${updatingId === cot.id ? "opacity-50" : ""}`}
+    >
       <div className="flex justify-between items-start mb-1">
         <span className="text-xs font-bold text-[var(--ts-red)]">{cot.numero_cotizacion}</span>
         <span className="text-[10px] text-[var(--ts-text-muted)] flex items-center gap-1">
@@ -140,6 +210,7 @@ export default function CRMManager() {
 
         <select
           value={cot.estado}
+          onClick={e => e.stopPropagation()}
           onChange={e => handleUpdateEstado(cot.id, e.target.value)}
           disabled={updatingId === cot.id}
           className={`appearance-none text-[10px] font-bold px-2.5 py-1 rounded-full cursor-pointer focus:outline-none ${ESTADOS_MAP[cot.estado]?.color || "bg-gray-100"}`}
@@ -153,7 +224,7 @@ export default function CRMManager() {
       {/* Botones de acción rápida */}
       {showTrash && (
         <button
-          onClick={() => handleMoverPapelera(cot.id)}
+          onClick={(e) => { e.stopPropagation(); handleMoverPapelera(cot.id); }}
           className="absolute -right-2 -top-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] hover:border-[var(--ts-red)] p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
           title="Mover a papelera"
         >
@@ -164,6 +235,7 @@ export default function CRMManager() {
         <a
           href={`https://wa.me/${cot.clientes.telefono.replace(/\D/g, "")}`}
           target="_blank" rel="noreferrer"
+          onClick={e => e.stopPropagation()}
           className="absolute -left-2 -top-2 bg-[#25D366] text-[var(--ts-text-primary)] p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
           title="WhatsApp"
         >
@@ -258,7 +330,7 @@ export default function CRMManager() {
                     {cotFiltradas.length === 0 ? (
                       <tr><td colSpan={6} className="py-10 text-center text-sm text-[var(--ts-text-muted)]">No hay cotizaciones.</td></tr>
                     ) : cotFiltradas.map(cot => (
-                      <tr key={cot.id} className="hover:bg-[var(--ts-surface-2)] group">
+                      <tr key={cot.id} onClick={() => abrirDetalle(cot)} className="hover:bg-[var(--ts-surface-2)] group cursor-pointer">
                         <td className="px-5 py-3 text-sm font-bold text-[var(--ts-red)]">{cot.numero_cotizacion}</td>
                         <td className="px-5 py-3 text-xs text-[var(--ts-text-muted)]">{formatFecha(cot.created_at)}</td>
                         <td className="px-5 py-3 text-sm font-medium text-[var(--ts-text-primary)]">
@@ -268,6 +340,7 @@ export default function CRMManager() {
                         <td className="px-5 py-3 text-center">
                           <select
                             value={cot.estado}
+                            onClick={e => e.stopPropagation()}
                             onChange={e => handleUpdateEstado(cot.id, e.target.value)}
                             disabled={updatingId === cot.id}
                             className={`appearance-none text-[10px] font-bold px-2.5 py-1 rounded-full cursor-pointer focus:outline-none ${ESTADOS_MAP[cot.estado]?.color || "bg-gray-100"}`}
@@ -279,7 +352,7 @@ export default function CRMManager() {
                         </td>
                         <td className="px-5 py-3 text-center">
                           <button
-                            onClick={() => handleMoverPapelera(cot.id)}
+                            onClick={(e) => { e.stopPropagation(); handleMoverPapelera(cot.id); }}
                             className="text-[#d9d9d9] group-hover:text-[var(--ts-red)] transition-colors p-1"
                             title="Mover a papelera"
                           >
@@ -343,9 +416,187 @@ export default function CRMManager() {
         </>
       )}
 
+      {/* ── DRAWER DETALLE COTIZACIÓN ── */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Overlay */}
+          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => setSelected(null)} />
+
+          {/* Panel */}
+          <div className="w-full max-w-lg bg-[var(--ts-surface)] h-full overflow-y-auto shadow-2xl flex flex-col">
+
+            {/* ── Header ── */}
+            <div className="px-6 py-5 border-b border-[var(--ts-border)] bg-[var(--ts-surface-2)]">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-xl font-extrabold text-[var(--ts-red)]">
+                      {selected.numero_cotizacion}
+                    </h2>
+                    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${ESTADOS_MAP[selected.estado]?.color || "bg-gray-100 text-gray-700"}`}>
+                      {ESTADOS_MAP[selected.estado]?.label || selected.estado}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--ts-text-muted)]">
+                    Creada: {formatFecha(selected.fecha || selected.created_at)}
+                  </p>
+                </div>
+                <button onClick={() => setSelected(null)}>
+                  <X className="w-5 h-5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors" />
+                </button>
+              </div>
+            </div>
+
+            {/* ── Cuerpo ── */}
+            <div className="flex-1 p-5 space-y-6 overflow-y-auto">
+
+              {/* Cliente */}
+              {selected.clientes && (
+                <div>
+                  <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
+                    Cliente
+                  </h3>
+                  <div className="bg-[var(--ts-surface-2)] rounded-lg p-3 border border-[var(--ts-border)] space-y-1">
+                    <p className="text-sm font-bold text-[var(--ts-text-primary)]">
+                      {selected.clientes.empresa || selected.clientes.contacto}
+                    </p>
+                    {selected.clientes.empresa && selected.clientes.contacto && (
+                      <p className="text-xs text-[var(--ts-text-muted)]">Contacto: {selected.clientes.contacto}</p>
+                    )}
+                    {selected.clientes.rif_cedula && (
+                      <p className="text-xs text-[var(--ts-text-muted)]">RIF/Cédula: {selected.clientes.rif_cedula}</p>
+                    )}
+                    {selected.clientes.telefono && (
+                      <p className="text-xs text-[var(--ts-text-muted)]">Tel: {selected.clientes.telefono}</p>
+                    )}
+                    {selected.clientes.direccion && (
+                      <p className="text-xs text-[var(--ts-text-muted)]">{selected.clientes.direccion}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Ítems / Líneas */}
+              <div>
+                <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
+                  Ítems Cotizados
+                </h3>
+                {loadingDetalles ? (
+                  <div className="py-4 text-center text-xs text-[var(--ts-text-muted)]">
+                    <div className="w-5 h-5 border-2 border-[var(--ts-red)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                    Cargando detalles...
+                  </div>
+                ) : detalles.length === 0 ? (
+                  <div className="flex items-center gap-2 py-4 text-center text-xs text-[var(--ts-text-muted)] border border-dashed border-[var(--ts-border)] rounded-lg justify-center">
+                    <FileText className="w-4 h-4" />
+                    No hay ítems registrados para esta cotización.
+                  </div>
+                ) : (
+                  <div className="border border-[var(--ts-border)] rounded-lg overflow-hidden">
+                    <table className="w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)] text-[9px] uppercase">
+                          <th className="px-3 py-2 text-left border-b border-[var(--ts-border)]">Descripción</th>
+                          <th className="px-3 py-2 text-center border-b border-[var(--ts-border)]">Cant.</th>
+                          <th className="px-3 py-2 text-right border-b border-[var(--ts-border)]">P.U.</th>
+                          <th className="px-3 py-2 text-right border-b border-[var(--ts-border)]">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--ts-border-2)]">
+                        {detalles.map((d: any) => (
+                          <tr key={d.id}>
+                            <td className="px-3 py-2.5 text-[var(--ts-text-primary)] leading-snug">{d.descripcion}</td>
+                            <td className="px-3 py-2.5 text-center text-[var(--ts-text-muted)]">{d.cantidad}</td>
+                            <td className="px-3 py-2.5 text-right text-[var(--ts-text-muted)]">{formatUSD(d.precio_unitario)}</td>
+                            <td className="px-3 py-2.5 text-right font-bold text-[var(--ts-text-primary)]">{formatUSD(d.cantidad * d.precio_unitario)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Resumen financiero */}
+              <div>
+                <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
+                  Resumen
+                </h3>
+                <div className="bg-[var(--ts-surface-2)] rounded-lg p-4 border border-[var(--ts-border)] space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[var(--ts-text-muted)]">Subtotal</span>
+                    <span className="font-semibold">{formatUSD(Number(selected.subtotal || 0))}</span>
+                  </div>
+                  {Number(selected.descuento) > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--ts-text-muted)]">Descuento</span>
+                      <span className="font-semibold text-emerald-600">− {formatUSD(Number(selected.descuento))}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm border-t border-[var(--ts-border)] pt-2">
+                    <span className="font-bold text-[var(--ts-text-primary)]">Total</span>
+                    <span className="font-extrabold text-[var(--ts-text-primary)] text-base">{formatUSD(Number(selected.total || 0))}</span>
+                  </div>
+                  {Number(selected.total) > 500 && (
+                    <>
+                      <div className="flex justify-between text-xs text-[var(--ts-text-muted)] pt-1">
+                        <span>Anticipo (70%)</span>
+                        <span className="font-semibold">{formatUSD(Number(selected.anticipo_monto || selected.total * 0.7))}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-[var(--ts-text-muted)]">
+                        <span>Saldo (30%)</span>
+                        <span className="font-semibold">{formatUSD(Number(selected.saldo_monto || selected.total * 0.3))}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Notas */}
+              {selected.notas && (
+                <div>
+                  <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
+                    Notas / Observaciones
+                  </h3>
+                  <p className="text-xs text-[var(--ts-text-muted)] bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-3 py-2.5 leading-relaxed">
+                    {selected.notas}
+                  </p>
+                </div>
+              )}
+
+            </div>
+
+            {/* ── Acciones del drawer ── */}
+            <div className="p-5 border-t border-[var(--ts-border)] space-y-2">
+              <button
+                onClick={() => handleRedescargarCot(selected)}
+                disabled={regenerando || loadingDetalles || detalles.length === 0}
+                className="w-full flex items-center justify-center gap-2 bg-[var(--ts-text-primary)] hover:bg-black disabled:opacity-40 text-[var(--ts-surface)] text-sm font-bold py-2.5 rounded-xl transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                {regenerando ? "Generando PDF..." : "Descargar PDF"}
+              </button>
+
+              {selected.clientes?.telefono && (
+                <a
+                  href={`https://wa.me/${selected.clientes.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola, adjunto la cotización ${selected.numero_cotizacion} de TecnoSmart VZL por un total de ${formatUSD(selected.total)}.`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20b858] text-white text-sm font-bold py-2.5 rounded-xl transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Enviar por WhatsApp
+                </a>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* ── Modal Confirmación Borrado Definitivo ── */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[var(--ts-surface)] rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center">
             <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-7 h-7 text-[var(--ts-red)]" />
