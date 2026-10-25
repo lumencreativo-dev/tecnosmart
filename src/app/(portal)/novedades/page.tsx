@@ -19,6 +19,22 @@ interface Version {
 
 const CHANGELOG: Version[] = [
   {
+    version: "2.4",
+    fecha: "25 Oct 2026",
+    titulo: "Dashboard Financiero de Suscripciones, Drawer CRM & Concepto Libre",
+    entradas: [
+      { tipo: "importante", texto: "Dashboard Financiero de Suscripciones: vista ejecutiva con cálculo en tiempo real de MRR Mensual normalizado, ARR Proyectado, Ganancia Neta Mensual y clasificación de cobranzas por urgencia (vencidas, 7 días y este mes)." },
+      { tipo: "nueva", texto: "Panel Lateral (Drawer) en CRM Pipeline: clic en cualquier cotización (Kanban o lista) despliega un panel lateral interactivo con líneas de productos/servicios, esquema 70/30, contacto directo por WhatsApp y re-descarga de PDF." },
+      { tipo: "nueva", texto: "Concepto Libre en Cotizaciones: posibilidad de añadir ítems libres con descripción, cantidad y precio personalizado en el Cotizador Wizard sin depender del catálogo o inventario." },
+      { tipo: "nueva", texto: "Gráficas Analíticas con Recharts: visualización del MRR por servicio (gráfico de barras) y distribución porcentual de ganancia neta entre socios (gráfico de dona)." },
+      { tipo: "nueva", texto: "Filtro Inteligente de Socios: barra superior con métricas proporcionales por socio, auto-seleccionando por defecto la vista del usuario logueado con indicador visual 'tú'." },
+      { tipo: "nueva", texto: "Gestión Dinámica de Socios: asignación de reparto de ingresos vinculada a los usuarios del sistema ('perfiles') con sus respectivos roles y soporte para socios externos personalizados." },
+      { tipo: "nueva", texto: "Panel Lateral (Drawer) de Suscripción: visualización de todas las suscripciones activas del cliente, desglose de costos y márgenes, bóveda segura de credenciales con copiado rápido e historial contable de pagos." },
+      { tipo: "mejora", texto: "Costo Base por Proveedor: seguimiento exacto de lo pagado al proveedor para calcular la ganancia líquida real de cada suscripción." },
+      { tipo: "mejora", texto: "Gestión Segura del Catálogo de Servicios: eliminación protegida de servicios recurrentes con comprobación de suscripciones activas asociadas." },
+    ],
+  },
+  {
     version: "2.3",
     fecha: "11 Oct 2026",
     titulo: "Blindaje de Seguridad Integral & Dashboards por Rol",
