@@ -19,6 +19,26 @@ interface Version {
 
 const CHANGELOG: Version[] = [
   {
+    version: "3.0",
+    fecha: "25 Oct 2026",
+    titulo: "Sprint 8 — Gestión de Proyectos, Operaciones & Documentación Técnica Integral",
+    entradas: [
+      { tipo: "importante", texto: "Módulo de Órdenes de Trabajo: creación, seguimiento y cierre de misiones técnicas en campo con máquina de estados (Pendiente → Programado → En Ejecución → Completado) y vista Kanban + lista con filtros avanzados." },
+      { tipo: "importante", texto: "Flujo Bimodal de Operaciones: Ruta A (con inspección previa → diagnóstico → propuesta → ejecución) y Ruta B (ejecución directa desde cotización), configurable por cada orden." },
+      { tipo: "nueva", texto: "Wizard de Informes Técnicos en 7 pasos: genera dos tipos de documentos — Informe de Inspección y Informe de Cierre Final — con auto-guardado de borrador cada 30 segundos en Supabase." },
+      { tipo: "nueva", texto: "Biblioteca de Cláusulas Predefinidas (bloques 'Lego'): 10 cláusulas técnicas seed para Redes, CCTV, Starlink, Eléctrico y General, buscables por categoría y etiqueta." },
+      { tipo: "nueva", texto: "Motor PDF de Alta Calidad (InformeTecnicoPDF): letterhead rojo TecnoSmart, patrón de puntos en margen lateral, secciones numeradas, tabla comparativa situación actual vs propuesta, análisis de riesgos con badges de nivel, fases de acción, cuadrícula de fotos, firma digital y footer institucional." },
+      { tipo: "nueva", texto: "Firma Digital en Canvas: captura táctil de la firma del cliente en móvil o escritorio con fondo blanco para PDF, línea de guía y subida automática a Supabase Storage." },
+      { tipo: "nueva", texto: "Asignación de Cuadrillas: selector de Técnico Líder (⭐) y ayudantes con confirmación visual. Cambio automático de estado de la orden a 'Programado' al asignar líder." },
+      { tipo: "nueva", texto: "Requisición de Materiales: control de despacho y retorno de materiales por orden, con flujo pendiente → despachado → retornado/consumido y ajuste automático del stock del catálogo." },
+      { tipo: "nueva", texto: "Calendario de Obras: vista mensual/semanal de todas las órdenes programadas con código de colores por estado, navegación por mes y panel lateral de detalle al clic." },
+      { tipo: "nueva", texto: "5 rutas nuevas protegidas: /ordenes, /cuadrillas, /materiales, /agenda y /actas — cada una con ProtectedView según permisos proyectos.*." },
+      { tipo: "mejora", texto: "NavShell actualizado: sección 'PROYECTOS & OPERACIONES' promocionada de placeholders a rutas reales y funcionales." },
+      { tipo: "mejora", texto: "Datos estructurados como JSON en Supabase (JSONB) para diagnósticos, riesgos, fotos y parámetros — arquitectura IA-Ready para integración futura de análisis inteligente." },
+      { tipo: "nueva", texto: "Esquema SQL completo Sprint 8: 4 tablas (ordenes_trabajo, informes_tecnicos, requisicion_materiales, clausulas_predefinidas), trigger de numeración correlativa OT-YYYY-NNN, RLS multi-rol e índices de rendimiento." },
+    ],
+  },
+  {
     version: "2.4",
     fecha: "25 Oct 2026",
     titulo: "Dashboard Financiero de Suscripciones, Drawer CRM & Concepto Libre",

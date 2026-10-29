@@ -69,68 +69,38 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
     ],
   },
   {
-    title: "PROYECTOS & OPERACIONES (PRÓX)",
+    title: "PROYECTOS & OPERACIONES · BETA",
     permisoGrupo: "proyectos",
     items: [
       {
-        href: "#placeholder-misiones",
+        href: "/ordenes",
         icon: Wrench,
         label: "Órdenes de Trabajo",
         permiso: "proyectos.ver_propias",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Órdenes de Trabajo & Instalaciones",
-          description: "La misión asignada al equipo técnico: fecha pautada con el cliente, dirección, alcance técnico (cámaras, Starlink, redes) y estado de avance.",
-          icon: Wrench,
-        },
       },
       {
-        href: "#placeholder-cuadrillas",
+        href: "/cuadrillas",
         icon: HardHat,
         label: "Cuadrillas & Técnicos",
         permiso: "proyectos.asignar_cuadrillas",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Asignación de Cuadrillas",
-          description: "Asignación del Técnico Líder responsable y Técnicos Ayudantes para cada obra o servicio en campo.",
-          icon: HardHat,
-        },
       },
       {
-        href: "#placeholder-materiales",
+        href: "/materiales",
         icon: Boxes,
         label: "Requisición de Materiales",
         permiso: "proyectos.materiales",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Requisición & Retorno de Materiales",
-          description: "Control de cables, conectores, tuberías y accesorios que salen del inventario para la obra, con registro de lo que sobró.",
-          icon: Boxes,
-        },
       },
       {
-        href: "#placeholder-agenda",
+        href: "/agenda",
         icon: Calendar,
         label: "Calendario de Obras",
         permiso: "proyectos.agenda",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Agenda de Operaciones & Obras",
-          description: "Vista de calendario semanal y mensual para coordinar fechas de instalación con clientes sin solapar cuadrillas.",
-          icon: Calendar,
-        },
       },
       {
-        href: "#placeholder-actas",
+        href: "/actas",
         icon: ClipboardCheck,
         label: "Actas de Entrega",
         permiso: "proyectos.actas",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Actas de Entrega & Firma Digital",
-          description: "Reporte fotográfico del trabajo concluido y firma digital del cliente en el teléfono certificando conformidad.",
-          icon: ClipboardCheck,
-        },
       },
     ],
   },
@@ -324,18 +294,26 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                           );
                         }
 
+                        const isBetaSection = section.permisoGrupo === "proyectos";
                         return (
                           <Link
                             key={itemIdx}
                             href={item.href}
-                            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                            className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                               active
                                 ? "bg-[var(--ts-red-subtle)] text-[var(--ts-red)] font-bold shadow-xs"
                                 : "text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)]"
                             }`}
                           >
-                            <Icon className={`w-4 h-4 ${active ? "text-[var(--ts-red)]" : "opacity-70"}`} />
-                            <span>{item.label}</span>
+                            <div className="flex items-center gap-2.5">
+                              <Icon className={`w-4 h-4 ${active ? "text-[var(--ts-red)]" : "opacity-70"}`} />
+                              <span>{item.label}</span>
+                            </div>
+                            {isBetaSection && (
+                              <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 tracking-widest shrink-0">
+                                BETA
+                              </span>
+                            )}
                           </Link>
                         );
                       })}

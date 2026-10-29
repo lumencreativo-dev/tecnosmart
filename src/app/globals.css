@@ -93,4 +93,29 @@
   .ts-border     { border-color: var(--ts-border); }
   .ts-radius     { border-radius: var(--ts-radius); }
   .ts-shadow     { box-shadow: var(--ts-shadow); }
+
+  /* Sprint 8: Clases de formulario reutilizables */
+  .field-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ts-text-secondary);
+    margin-bottom: 0.25rem;
+  }
+  .field-input {
+    width: 100%;
+    font-size: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--ts-border);
+    background: var(--ts-surface-2);
+    color: var(--ts-text-primary);
+    padding: 0.5rem 0.75rem;
+    outline: none;
+    transition: box-shadow 0.15s;
+  }
+  .field-input:focus {
+    box-shadow: 0 0 0 2px var(--ts-red);
+  }
 }
