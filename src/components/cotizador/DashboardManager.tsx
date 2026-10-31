@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   TrendingUp, DollarSign, Users, Save, Calendar, CheckCircle,
   Clock, AlertTriangle, ArrowRight, Settings, Phone, Activity, Globe, Package,
-  Wrench, HardHat, CheckSquare, Eye, Sliders, ShieldCheck
+  Wrench, HardHat, CheckSquare, Eye, Sliders, ShieldCheck, Sparkles
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -31,6 +31,7 @@ export default function DashboardManager() {
   const puedeVerGrafica = esAdmin || tienePermiso(permisosUsuario, "dashboard.grafica_ventas") || tienePermiso(permisosUsuario, "finanzas.dashboard");
   const puedeVerSeguimientos = esAdmin || tienePermiso(permisosUsuario, "dashboard.seguimientos") || tienePermiso(permisosUsuario, "ventas.cotizar") || tienePermiso(permisosUsuario, "ventas.crm");
   const puedeVerProximosPagos = esAdmin || tienePermiso(permisosUsuario, "dashboard.proximos_pagos") || tienePermiso(permisosUsuario, "inventario.suscripciones");
+  const puedeVerAltas = esAdmin || tienePermiso(permisosUsuario, "dashboard.mrr") || tienePermiso(permisosUsuario, "inventario.suscripciones") || tienePermiso(permisosUsuario, "finanzas.dashboard");
   const puedeVerOperaciones = esAdmin || tienePermiso(permisosUsuario, "dashboard.operaciones_campo") || tienePermiso(permisosUsuario, "proyectos.ver_propias") || usuario?.rol_id === "tecnico";
   const puedeConfigurar = esAdmin || tienePermiso(permisosUsuario, "administracion.configuracion");
   const esTecnico = usuario?.rol_id === "tecnico" || (!puedeVerFinanzas && !tienePermiso(permisosUsuario, "ventas.facturar"));
@@ -40,6 +41,7 @@ export default function DashboardManager() {
     ingresoCerrado: true,
     proyectado: true,
     mrr: true,
+    altasSuscripciones: true,
     tasas: true,
     ticketPromedio: true,
     productosTop: true,
@@ -245,16 +247,21 @@ export default function DashboardManager() {
     return seguimientos;
   }, [cotizaciones]);
 
-  // ── SUSCRIPCIONES (MRR y Próximos Pagos) ──
-  const { mrr, pagosProximos } = useMemo(() => {
+  // ── SUSCRIPCIONES (MRR, Próximos Pagos y Altas del Mes) ──
+  const { mrr, pagosProximos, altasMesActual } = useMemo(() => {
     let mrrTotal = 0;
     const ahora = new Date();
+    const mesActualNum = ahora.getMonth();
+    const anioActualNum = ahora.getFullYear();
+
     const prox7Dias = new Date();
     prox7Dias.setDate(ahora.getDate() + 7);
 
     const pendientes: any[] = [];
+    let conteoAltasMes = 0;
+    const breakdownAltas: Record<string, number> = {};
 
-    suscripciones.forEach(s => {
+    suscripciones.forEach((s) => {
       // Calcular MRR (Monthly Recurring Revenue)
       const monto = Number(s.monto || 0);
       switch(s.ciclo_facturacion) {
@@ -266,21 +273,41 @@ export default function DashboardManager() {
         default: mrrTotal += monto;
       }
 
-      // Filtrar próximos pagos o vencidos
-      const fechaPago = new Date(s.proximo_pago);
-      if (fechaPago <= prox7Dias) {
-        pendientes.push({
-          ...s,
-          vencido: fechaPago < ahora,
-          diasFaltantes: Math.ceil((fechaPago.getTime() - ahora.getTime()) / (1000 * 3600 * 24))
-        });
+      // Filtrar próximos pagos o vencidos (solo si tiene monto > 0 para cobranzas activas)
+      if (monto > 0 && s.proximo_pago) {
+        const fechaPago = new Date(s.proximo_pago);
+        if (fechaPago <= prox7Dias) {
+          pendientes.push({
+            ...s,
+            vencido: fechaPago < ahora,
+            diasFaltantes: Math.ceil((fechaPago.getTime() - ahora.getTime()) / (1000 * 3600 * 24))
+          });
+        }
+      }
+
+      // Nuevas Altas del mes en curso (usando fecha_inicio o created_at)
+      const fechaBaseStr = s.fecha_inicio || s.created_at;
+      if (fechaBaseStr) {
+        const d = new Date(fechaBaseStr);
+        if (!isNaN(d.getTime()) && d.getMonth() === mesActualNum && d.getFullYear() === anioActualNum) {
+          conteoAltasMes++;
+          const nomServicio = s.servicios_recurrentes?.nombre || "Otro";
+          breakdownAltas[nomServicio] = (breakdownAltas[nomServicio] || 0) + 1;
+        }
       }
     });
 
     // Ordenar de más urgentes a menos
     pendientes.sort((a, b) => new Date(a.proximo_pago).getTime() - new Date(b.proximo_pago).getTime());
 
-    return { mrr: mrrTotal, pagosProximos: pendientes };
+    return {
+      mrr: mrrTotal,
+      pagosProximos: pendientes,
+      altasMesActual: {
+        total: conteoAltasMes,
+        breakdown: breakdownAltas,
+      },
+    };
   }, [suscripciones]);
 
   // ── GRÁFICA: Cotizaciones por mes (Últimos 6 meses) ──
@@ -403,6 +430,7 @@ export default function DashboardManager() {
                   { key: "ingresoCerrado", label: "Ingreso Cerrado ($/Bs)", permitido: puedeVerFinanzas },
                   { key: "proyectado", label: "Ingreso Proyectado", permitido: puedeVerFinanzas },
                   { key: "mrr", label: "MRR Recurrente", permitido: puedeVerMRR },
+                  { key: "altasSuscripciones", label: "Nuevas Altas de Suscripciones (Mes)", permitido: puedeVerAltas },
                   { key: "tasas", label: "Tasas de Referencia BCV/Paralelo", permitido: puedeVerTasas },
                   { key: "ticketPromedio", label: "Ticket Promedio", permitido: puedeVerTicket },
                   { key: "productosTop", label: "Productos Más Vendidos", permitido: puedeVerProductosTop },
@@ -613,8 +641,9 @@ export default function DashboardManager() {
       {/* ── SECCIÓN 1.5: MÉTRICAS ADICIONALES ── */}
       {((puedeVerTicket && widgetsVisibles.ticketPromedio) ||
         (puedeVerProductosTop && widgetsVisibles.productosTop) ||
-        (puedeVerClientesTop && widgetsVisibles.clientesFrecuentes)) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        (puedeVerClientesTop && widgetsVisibles.clientesFrecuentes) ||
+        (puedeVerAltas && widgetsVisibles.altasSuscripciones)) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
 
           {/* Ticket Promedio */}
           {puedeVerTicket && widgetsVisibles.ticketPromedio && (
@@ -675,6 +704,46 @@ export default function DashboardManager() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Nuevas Altas de Suscripciones (Mes en curso) */}
+          {puedeVerAltas && widgetsVisibles.altasSuscripciones && (
+            <div className="ts-surface ts-radius p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] font-bold ts-text-muted uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-400" /> Nuevas Altas (Mes)
+                  </p>
+                  <Link
+                    href="/suscripciones"
+                    className="text-[10px] text-blue-400 hover:underline font-bold flex items-center gap-0.5"
+                  >
+                    Ver Bóveda →
+                  </Link>
+                </div>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-black ts-text">+{altasMesActual.total}</span>
+                  <span className="text-[11px] font-medium ts-text-muted">activaciones</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {Object.keys(altasMesActual.breakdown).length === 0 ? (
+                    <span className="text-[11px] ts-text-muted italic">Sin nuevas altas este mes</span>
+                  ) : (
+                    Object.entries(altasMesActual.breakdown).map(([servicio, cant]) => (
+                      <span
+                        key={servicio}
+                        className="px-2 py-0.5 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-md text-[10px] font-bold ts-text"
+                      >
+                        {servicio}: <strong className="text-blue-400">{cant}</strong>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+              <p className="text-[10px] ts-text-muted mt-3">
+                Mes en curso ({new Date().toLocaleString("es-ES", { month: "long" })})
+              </p>
             </div>
           )}
 

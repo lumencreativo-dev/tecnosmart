@@ -19,6 +19,20 @@ interface Version {
 
 const CHANGELOG: Version[] = [
   {
+    version: "3.1",
+    fecha: "31 Oct 2026",
+    titulo: "Bóveda de Cuentas Starlink/Servicios, Modalidad Acompañamiento VIP & Cohortes de Activación",
+    entradas: [
+      { tipo: "importante", texto: "Vista Bóveda de Cuentas (Estilo Hoja de Cálculo): tabla operacional de credenciales inspirada en Excel con visualización directa de identificador USR-001, cliente, correos, contraseñas enmascaradas con revelado y copiado en 1 clic, serial de antena/KIT y fecha de inicio." },
+      { tipo: "importante", texto: "Separación de Modalidades (Cobro TecnoSmart vs. Solo Acompañamiento VIP): los clientes que pagan directamente al proveedor con su propia tarjeta internacional se registran con $0.00 sin distorsionar el MRR, las ganancias ni generar deudas vencidas falsas en cobranzas." },
+      { tipo: "nueva", texto: "Filtro Dinámico de Servicios en Tiempo Real: selector interactivo de píldoras con conteos vivos que detecta automáticamente cualquier nuevo servicio creado en el catálogo (Starlink, Spotify, Netflix, etc.)." },
+      { tipo: "nueva", texto: "Panel Analítico de Nuevas Altas (Cohortes Históricas): visualizador mensual y anual de activaciones que permite auditar cuántos Starlinks o Spotifys nuevos se contrataron en cualquier mes histórico, con MRR nuevo y ganancia neta agregada." },
+      { tipo: "nueva", texto: "Widget de Dashboard 'Nuevas Altas de Suscripciones': tarjeta visual en el panel principal que resume las activaciones del mes en curso con desglose por servicio y enlace directo a la Bóveda." },
+      { tipo: "nueva", texto: "Exportación a Excel / CSV en 1 Clic: descarga inmediata de la base de datos de cuentas filtrada con todos los campos clave (identificador, cliente, correos, seriales, montos y fechas)." },
+      { tipo: "mejora", texto: "Panel de Cobranzas Optimizado: sección informativa exclusiva para clientes en Acompañamiento VIP que permite supervisar sus fechas de corte y renovaciones de soporte sin marcarlos como deudores." },
+    ],
+  },
+  {
     version: "3.0",
     fecha: "25 Oct 2026",
     titulo: "Sprint 8 — Gestión de Proyectos, Operaciones & Documentación Técnica Integral",

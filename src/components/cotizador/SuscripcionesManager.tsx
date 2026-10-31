@@ -44,6 +44,13 @@ import {
   ShieldCheck,
   Eye,
   EyeOff,
+  Download,
+  FileSpreadsheet,
+  Layers,
+  Filter,
+  Handshake,
+  Shield,
+  Sparkles,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
@@ -88,6 +95,7 @@ export type Suscripcion = {
     contacto: string;
     empresa?: string;
     telefono?: string;
+    email?: string;
     rif_cedula?: string;
     direccion?: string;
   };
@@ -175,6 +183,10 @@ const isDue = (dateString: string) => {
   return new Date(dateString) <= hoy;
 };
 
+const isAcompanamiento = (s: { monto?: number }) => {
+  return Number(s.monto || 0) <= 0;
+};
+
 const getSocioShare = (s: Suscripcion, perfilId: string): number => {
   if (!s.socios || !Array.isArray(s.socios)) return 0;
   const match = s.socios.find((p) => p.perfil_id === perfilId);
@@ -221,8 +233,16 @@ export default function SuscripcionesManager() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"activas" | "cobranzas" | "catalogo">("activas");
   const [filtroSocio, setFiltroSocio] = useState<string>("todos");
+  const [filtroServicio, setFiltroServicio] = useState<string>("todos");
+  const [filtroModalidad, setFiltroModalidad] = useState<"todas" | "gestionada" | "acompanamiento">("todas");
+  const [modoVista, setModoVista] = useState<"financiera" | "boveda">("financiera");
   const [filtroInicializado, setFiltroInicializado] = useState(false);
   const [busqueda, setBusqueda] = useState<string>("");
+
+  // Período para análisis de nuevas altas históricas
+  const [mesSeleccionado, setMesSeleccionado] = useState<number>(new Date().getMonth());
+  const [anioSeleccionado, setAnioSeleccionado] = useState<number>(new Date().getFullYear());
+  const [clavesVisibles, setClavesVisibles] = useState<Record<string, boolean>>({});
 
   // Drawer lateral
   const [selected, setSelected] = useState<Suscripcion | null>(null);
@@ -245,6 +265,7 @@ export default function SuscripcionesManager() {
     ciclo_facturacion: "Mensual",
     monto: "",
     costo_base: "0",
+    modalidad: "gestionada" as "gestionada" | "acompanamiento",
     fecha_inicio: new Date().toISOString().split("T")[0],
     proximo_pago: new Date().toISOString().split("T")[0],
     credenciales_usuario: "",
@@ -305,7 +326,7 @@ export default function SuscripcionesManager() {
         .from("suscripciones")
         .select(`
           *,
-          clientes(id, empresa, contacto, telefono, rif_cedula, direccion),
+          clientes(id, empresa, contacto, telefono, email, rif_cedula, direccion),
           servicios_recurrentes(id, nombre, mensaje_whatsapp, precio_sugerido)
         `)
         .order("proximo_pago", { ascending: true });
@@ -401,7 +422,8 @@ export default function SuscripcionesManager() {
     suscripciones.forEach((s) => {
       if (s.estado !== "Activo") return;
 
-      const overdue = new Date(s.proximo_pago) <= hoy;
+      const esCobroReal = Number(s.monto || 0) > 0;
+      const overdue = esCobroReal && new Date(s.proximo_pago) <= hoy;
 
       if (filtroSocio === "todos") {
         const sMrr = getMrrMensual(s);
@@ -522,29 +544,215 @@ export default function SuscripcionesManager() {
   }, [suscripciones, perfilesEquipo]);
 
   // ─────────────────────────────────────────────────────────────
-  // FILTRADO DE SUSCRIPCIONES
+  // FILTRADO DINÁMICO DE SUSCRIPCIONES
   // ─────────────────────────────────────────────────────────────
   const suscripcionesFiltradas = useMemo(() => {
     return suscripciones.filter((s) => {
       // 1. Filtro de socio
       if (!doesSocioParticipate(s, filtroSocio)) return false;
 
-      // 2. Filtro de texto de búsqueda
+      // 2. Filtro de servicio específico
+      if (filtroServicio !== "todos" && s.servicio_id !== filtroServicio) {
+        return false;
+      }
+
+      // 3. Filtro de modalidad (Gestionada vs Acompañamiento)
+      if (filtroModalidad === "gestionada" && isAcompanamiento(s)) {
+        return false;
+      }
+      if (filtroModalidad === "acompanamiento" && !isAcompanamiento(s)) {
+        return false;
+      }
+
+      // 4. Filtro de texto de búsqueda expandido
       if (busqueda.trim()) {
         const q = busqueda.toLowerCase();
         const clienteNom = (s.clientes?.empresa || s.clientes?.contacto || "").toLowerCase();
         const rif = (s.clientes?.rif_cedula || "").toLowerCase();
         const serv = (s.servicios_recurrentes?.nombre || "").toLowerCase();
-        if (!clienteNom.includes(q) && !rif.includes(q) && !serv.includes(q)) {
+        const userCred = (s.credenciales_usuario || "").toLowerCase();
+        const serial = (s.equipo_serial || "").toLowerCase();
+        const notasCred = (s.credenciales_notas || "").toLowerCase();
+        const emailCliente = ((s.clientes as any)?.email || "").toLowerCase();
+
+        if (
+          !clienteNom.includes(q) &&
+          !rif.includes(q) &&
+          !serv.includes(q) &&
+          !userCred.includes(q) &&
+          !serial.includes(q) &&
+          !notasCred.includes(q) &&
+          !emailCliente.includes(q)
+        ) {
           return false;
         }
       }
 
       return true;
     });
-  }, [suscripciones, filtroSocio, busqueda]);
+  }, [suscripciones, filtroSocio, filtroServicio, filtroModalidad, busqueda]);
 
-  // Secciones para la pestaña de Cobranzas
+  // Conteos dinámicos por servicio para las píldoras del filtro
+  const conteoPorServicio = useMemo(() => {
+    const map = new Map<string, number>();
+    suscripciones.forEach((s) => {
+      if (!doesSocioParticipate(s, filtroSocio)) return;
+      if (filtroModalidad === "gestionada" && isAcompanamiento(s)) return;
+      if (filtroModalidad === "acompanamiento" && !isAcompanamiento(s)) return;
+
+      const sId = s.servicio_id || "sin_servicio";
+      map.set(sId, (map.get(sId) || 0) + 1);
+    });
+    return map;
+  }, [suscripciones, filtroSocio, filtroModalidad]);
+
+  // Conteos por modalidad (Gestionada vs Acompañamiento)
+  const conteoModalidades = useMemo(() => {
+    let gestionadas = 0;
+    let acompanamiento = 0;
+    suscripciones.forEach((s) => {
+      if (!doesSocioParticipate(s, filtroSocio)) return;
+      if (filtroServicio !== "todos" && s.servicio_id !== filtroServicio) return;
+      if (isAcompanamiento(s)) {
+        acompanamiento++;
+      } else {
+        gestionadas++;
+      }
+    });
+    return { gestionadas, acompanamiento, total: gestionadas + acompanamiento };
+  }, [suscripciones, filtroSocio, filtroServicio]);
+
+  // Métricas de grupo para la Vista Bóveda (Estilo Excel)
+  const statsBoveda = useMemo(() => {
+    const totalCuentas = suscripcionesFiltradas.length;
+    let totalRecaudado = 0;
+    let cuentasConMonto = 0;
+
+    suscripcionesFiltradas.forEach((s) => {
+      const m = Number(s.monto || 0);
+      totalRecaudado += m;
+      if (m > 0) cuentasConMonto++;
+    });
+
+    const promedio = cuentasConMonto > 0 ? totalRecaudado / cuentasConMonto : 0;
+
+    return {
+      totalCuentas,
+      totalRecaudado,
+      promedio,
+    };
+  }, [suscripcionesFiltradas]);
+
+  // Estadísticas históricas de Nuevas Altas (Altas mensuales)
+  const statsAltas = useMemo(() => {
+    const altasMes: Suscripcion[] = [];
+    const desgloseServiciosMap = new Map<string, { nombre: string; count: number; mrr: number }>();
+
+    suscripciones.forEach((s) => {
+      // Usar fecha_inicio o created_at
+      const fStr = s.fecha_inicio || s.created_at;
+      if (!fStr) return;
+      const f = new Date(fStr);
+      if (f.getFullYear() === anioSeleccionado && f.getMonth() === mesSeleccionado) {
+        altasMes.push(s);
+
+        const servNombre = s.servicios_recurrentes?.nombre || "Otros Servicios";
+        const servId = s.servicio_id || "sin_servicio";
+        const current = desgloseServiciosMap.get(servId) || { nombre: servNombre, count: 0, mrr: 0 };
+        current.count += 1;
+        current.mrr += getMrrMensual(s);
+        desgloseServiciosMap.set(servId, current);
+      }
+    });
+
+    let nuevoMrr = 0;
+    let nuevaGanancia = 0;
+    let gestionadas = 0;
+    let acompanamiento = 0;
+
+    altasMes.forEach((s) => {
+      nuevoMrr += getMrrMensual(s);
+      nuevaGanancia += getGananciaMensual(s);
+      if (isAcompanamiento(s)) {
+        acompanamiento++;
+      } else {
+        gestionadas++;
+      }
+    });
+
+    const desglose = Array.from(desgloseServiciosMap.values()).sort((a, b) => b.count - a.count);
+
+    return {
+      totalAltas: altasMes.length,
+      gestionadas,
+      acompanamiento,
+      nuevoMrr,
+      nuevaGanancia,
+      desglose,
+      promedioAlta: gestionadas > 0 ? nuevoMrr / gestionadas : 0,
+    };
+  }, [suscripciones, anioSeleccionado, mesSeleccionado]);
+
+  // Exportar vista actual a formato CSV / Excel
+  const exportarCSV = () => {
+    if (suscripcionesFiltradas.length === 0) {
+      alert("No hay suscripciones en la vista actual para exportar.");
+      return;
+    }
+    const encabezados = [
+      "ID Ref",
+      "Cliente",
+      "RIF/Cedula",
+      "Telefono",
+      "Correo Cliente",
+      "Servicio",
+      "Modalidad",
+      "Cuenta Creada (Usuario)",
+      "Clave",
+      "Serial / KIT",
+      "Fecha Inscripcion",
+      "Monto USD",
+      "Costo Base USD",
+      "Ciclo",
+      "Estado",
+      "Proximo Pago",
+    ];
+
+    const filas = suscripcionesFiltradas.map((s, idx) => {
+      const idRef = `USR-${String(idx + 1).padStart(3, "0")}`;
+      const modalidad = isAcompanamiento(s) ? "Acompanamiento" : "Cobro TecnoSmart";
+      return [
+        `"${idRef}"`,
+        `"${(s.clientes?.empresa || s.clientes?.contacto || "").replace(/"/g, '""')}"`,
+        `"${(s.clientes?.rif_cedula || "").replace(/"/g, '""')}"`,
+        `"${(s.clientes?.telefono || "").replace(/"/g, '""')}"`,
+        `"${((s.clientes as any)?.email || "").replace(/"/g, '""')}"`,
+        `"${(s.servicios_recurrentes?.nombre || "").replace(/"/g, '""')}"`,
+        `"${modalidad}"`,
+        `"${(s.credenciales_usuario || "").replace(/"/g, '""')}"`,
+        `"${(s.credenciales_clave || "").replace(/"/g, '""')}"`,
+        `"${(s.equipo_serial || s.credenciales_notas || "").replace(/"/g, '""')}"`,
+        `"${s.fecha_inicio || ""}"`,
+        s.monto || 0,
+        s.costo_base || 0,
+        `"${s.ciclo_facturacion || "Mensual"}"`,
+        `"${s.estado || "Activo"}"`,
+        `"${s.proximo_pago || ""}"`,
+      ].join(",");
+    });
+
+    const csvContent = "\uFEFF" + [encabezados.join(","), ...filas].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `TecnoSmart_Cuentas_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Secciones para la pestaña de Cobranzas (Excluye acompañamiento con monto 0 de deudas)
   const cobranzasCategorizadas = useMemo(() => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
@@ -558,11 +766,18 @@ export default function SuscripcionesManager() {
     const vencidas: Suscripcion[] = [];
     const proximos7Dias: Suscripcion[] = [];
     const esteMes: Suscripcion[] = [];
+    const acompanamientoCortes: Suscripcion[] = [];
 
     suscripcionesFiltradas.forEach((s) => {
       if (s.estado !== "Activo") return;
-      const f = new Date(s.proximo_pago);
 
+      // Si es acompañamiento (pago directo cliente), va a su lista informativa sin considerarse deuda
+      if (isAcompanamiento(s)) {
+        acompanamientoCortes.push(s);
+        return;
+      }
+
+      const f = new Date(s.proximo_pago);
       if (f < hoy) {
         vencidas.push(s);
       } else if (f <= en7Dias) {
@@ -572,7 +787,7 @@ export default function SuscripcionesManager() {
       }
     });
 
-    return { vencidas, proximos7Dias, esteMes };
+    return { vencidas, proximos7Dias, esteMes, acompanamientoCortes };
   }, [suscripcionesFiltradas]);
 
   // ─────────────────────────────────────────────────────────────
@@ -587,6 +802,7 @@ export default function SuscripcionesManager() {
       ciclo_facturacion: "Mensual",
       monto: "",
       costo_base: "0",
+      modalidad: "gestionada",
       fecha_inicio: new Date().toISOString().split("T")[0],
       proximo_pago: new Date().toISOString().split("T")[0],
       credenciales_usuario: "",
@@ -609,12 +825,15 @@ export default function SuscripcionesManager() {
         ? s.socios
         : [];
 
+    const esAcomp = Number(s.monto || 0) <= 0;
+
     setFormData({
       servicio_id: s.servicio_id || "",
       estado: s.estado || "Activo",
       ciclo_facturacion: s.ciclo_facturacion || "Mensual",
       monto: (s.monto ?? "").toString(),
       costo_base: (s.costo_base ?? 0).toString(),
+      modalidad: esAcomp ? "acompanamiento" : "gestionada",
       fecha_inicio: s.fecha_inicio || new Date().toISOString().split("T")[0],
       proximo_pago: s.proximo_pago || new Date().toISOString().split("T")[0],
       credenciales_usuario: s.credenciales_usuario || "",
@@ -690,13 +909,19 @@ export default function SuscripcionesManager() {
       return alert("Cliente y Servicio son obligatorios.");
     }
 
-    // Validar suma de porcentaje de socios
-    const totalPorcentaje = formData.socios.reduce(
-      (acc, curr) => acc + (Number(curr.porcentaje) || 0),
-      0
-    );
-    if (totalPorcentaje !== 100) {
-      return alert(`La división entre socios debe sumar exactamente 100% (Suma actual: ${totalPorcentaje}%).`);
+    const esAcomp = formData.modalidad === "acompanamiento";
+    const montoFinal = esAcomp ? 0 : Number(formData.monto) || 0;
+    const costoFinal = esAcomp ? 0 : Number(formData.costo_base) || 0;
+
+    // Validar suma de porcentaje de socios solo para suscripciones con ganancia/monto que tengan socios asignados
+    if (!esAcomp && formData.socios.length > 0) {
+      const totalPorcentaje = formData.socios.reduce(
+        (acc, curr) => acc + (Number(curr.porcentaje) || 0),
+        0
+      );
+      if (totalPorcentaje !== 100) {
+        return alert(`La división entre socios debe sumar exactamente 100% (Suma actual: ${totalPorcentaje}%).`);
+      }
     }
 
     try {
@@ -705,9 +930,9 @@ export default function SuscripcionesManager() {
         servicio_id: formData.servicio_id,
         estado: formData.estado,
         ciclo_facturacion: formData.ciclo_facturacion,
-        monto: Number(formData.monto) || 0,
-        costo_base: Number(formData.costo_base) || 0,
-        socios: formData.socios,
+        monto: montoFinal,
+        costo_base: costoFinal,
+        socios: esAcomp ? [] : formData.socios,
         fecha_inicio: formData.fecha_inicio,
         proximo_pago: formData.proximo_pago,
         credenciales_usuario: formData.credenciales_usuario,
@@ -1182,6 +1407,144 @@ export default function SuscripcionesManager() {
         </div>
       </div>
 
+      {/* ── 3.5 PANEL DE NUEVAS ALTAS & ACTIVACIONES (HISTÓRICO MENSUAL) ── */}
+      <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-[var(--ts-border)]">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wider">
+                Rendimiento de Nuevas Altas & Activaciones
+              </h3>
+              <p className="text-xs text-[var(--ts-text-muted)]">
+                Contrataciones y clientes nuevos incorporados por mes
+              </p>
+            </div>
+          </div>
+
+          {/* Selectores de Período */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={mesSeleccionado}
+              onChange={(e) => setMesSeleccionado(Number(e.target.value))}
+              className="bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl px-3 py-1.5 text-xs font-bold text-[var(--ts-text-primary)] focus:outline-none focus:border-[var(--ts-red)]"
+            >
+              {[
+                "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+              ].map((m, idx) => (
+                <option key={idx} value={idx}>{m}</option>
+              ))}
+            </select>
+
+            <select
+              value={anioSeleccionado}
+              onChange={(e) => setAnioSeleccionado(Number(e.target.value))}
+              className="bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl px-3 py-1.5 text-xs font-bold text-[var(--ts-text-primary)] focus:outline-none focus:border-[var(--ts-red)]"
+            >
+              {[2024, 2025, 2026, 2027].map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+
+            <button
+              onClick={() => {
+                setMesSeleccionado(new Date().getMonth());
+                setAnioSeleccionado(new Date().getFullYear());
+              }}
+              className="px-2.5 py-1.5 text-xs font-bold bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] rounded-xl transition-all"
+            >
+              Este Mes
+            </button>
+          </div>
+        </div>
+
+        {/* 4 Mini KPIs del Mes Seleccionado */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-[var(--ts-surface-2)]/60 rounded-xl p-3 border border-[var(--ts-border)]">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+              Nuevas Altas ({[
+                "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+                "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
+              ][mesSeleccionado]})
+            </p>
+            <p className="text-2xl font-black text-[var(--ts-text-primary)] mt-1">
+              {statsAltas.totalAltas}
+            </p>
+            <p className="text-[10px] text-[var(--ts-text-muted)] mt-0.5">
+              {statsAltas.gestionadas} cobro · {statsAltas.acompanamiento} soporte
+            </p>
+          </div>
+
+          <div className="bg-[var(--ts-surface-2)]/60 rounded-xl p-3 border border-[var(--ts-border)]">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+              Nuevo MRR Sumado
+            </p>
+            <p className="text-2xl font-black text-emerald-400 mt-1">
+              {formatUSD(statsAltas.nuevoMrr)}
+            </p>
+            <p className="text-[10px] text-[var(--ts-text-muted)] mt-0.5">
+              Ingreso mensual recurrente nuevo
+            </p>
+          </div>
+
+          <div className="bg-[var(--ts-surface-2)]/60 rounded-xl p-3 border border-[var(--ts-border)]">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+              Nueva Ganancia / Mes
+            </p>
+            <p className="text-2xl font-black text-blue-400 mt-1">
+              {formatUSD(statsAltas.nuevaGanancia)}
+            </p>
+            <p className="text-[10px] text-[var(--ts-text-muted)] mt-0.5">
+              Margen neto incorporado
+            </p>
+          </div>
+
+          <div className="bg-[var(--ts-surface-2)]/60 rounded-xl p-3 border border-[var(--ts-border)]">
+            <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+              Promedio por Alta
+            </p>
+            <p className="text-2xl font-black text-[var(--ts-text-primary)] mt-1">
+              {formatUSD(statsAltas.promedioAlta)}
+            </p>
+            <p className="text-[10px] text-[var(--ts-text-muted)] mt-0.5">
+              Ticket promedio por cliente nuevo
+            </p>
+          </div>
+        </div>
+
+        {/* Desglose de Altas por Servicio */}
+        <div className="pt-1">
+          <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)] mb-2 flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5" /> Desglose de contrataciones en el período:
+          </p>
+          {statsAltas.desglose.length === 0 ? (
+            <p className="text-xs text-[var(--ts-text-muted)] italic">
+              No hay nuevas activaciones registradas en este mes seleccionado.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {statsAltas.desglose.map((d, i) => (
+                <div
+                  key={i}
+                  className="px-3 py-1.5 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center gap-2 text-xs font-bold"
+                >
+                  <span className="text-[var(--ts-text-primary)]">{d.nombre}:</span>
+                  <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-400 font-black text-[11px]">
+                    {d.count} {d.count === 1 ? "alta" : "altas"}
+                  </span>
+                  <span className="text-[10px] text-[var(--ts-text-muted)]">
+                    (+{formatUSD(d.mrr)}/mes)
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ── 4. TABS, BUSCADOR Y BOTONES DE ACCIÓN ── */}
       <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
         {/* Pestañas */}
@@ -1228,11 +1591,11 @@ export default function SuscripcionesManager() {
         {/* Buscador y botones de acción */}
         <div className="flex items-center gap-2">
           {activeTab !== "catalogo" && (
-            <div className="relative flex-1 sm:w-64">
+            <div className="relative flex-1 sm:w-80">
               <Search className="w-4 h-4 text-[var(--ts-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Buscar cliente, RIF o servicio..."
+                placeholder="Buscar cliente, RIF, correo Starlink o serial KIT..."
                 value={busqueda}
                 onChange={(e) => setBusqueda(e.target.value)}
                 className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)] transition-colors"
@@ -1271,198 +1634,587 @@ export default function SuscripcionesManager() {
         </div>
       </div>
 
-      {/* ── 5. TAB 1: SUSCRIPCIONES ACTIVAS (TABLA) ── */}
+      {/* ── 5. TAB 1: SUSCRIPCIONES ACTIVAS (FILTROS POR SERVICIO, MODALIDAD Y TABLAS) ── */}
       {activeTab === "activas" && (
-        <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl overflow-hidden shadow-sm">
-          {loading ? (
-            <div className="p-12 text-center text-[var(--ts-text-muted)] text-sm flex items-center justify-center gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin text-[var(--ts-red)]" /> Cargando suscripciones...
+        <div className="space-y-4">
+          {/* BARRA DE FILTROS DINÁMICOS POR SERVICIO */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <span className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)] shrink-0 px-1 flex items-center gap-1">
+              <Filter className="w-3 h-3 text-[var(--ts-red)]" /> Servicio:
+            </span>
+
+            <button
+              onClick={() => setFiltroServicio("todos")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border ${
+                filtroServicio === "todos"
+                  ? "bg-[var(--ts-red)] text-white border-[var(--ts-red)] shadow-sm"
+                  : "bg-[var(--ts-surface)] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)]"
+              }`}
+            >
+              <span>Todos los Servicios</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                filtroServicio === "todos" ? "bg-white/20 text-white" : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)]"
+              }`}>
+                {Array.from(conteoPorServicio.values()).reduce((a, b) => a + b, 0)}
+              </span>
+            </button>
+
+            {servicios.map((s) => {
+              const count = conteoPorServicio.get(s.id) || 0;
+              const isSelected = filtroServicio === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setFiltroServicio(s.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border ${
+                    isSelected
+                      ? "bg-[var(--ts-red)] text-white border-[var(--ts-red)] shadow-sm"
+                      : "bg-[var(--ts-surface)] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)]"
+                  }`}
+                >
+                  <span>{s.nombre}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                    isSelected ? "bg-white/20 text-white" : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)]"
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* SUB-TOOLBAR: MODALIDAD (Cobro vs Acompañamiento) & TOGGLE DE VISTA (Financiera vs Bóveda) */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-[var(--ts-surface)] border border-[var(--ts-border)] p-2.5 rounded-2xl">
+            {/* Filtro por Modalidad */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)] px-2">
+                Modalidad:
+              </span>
+              <button
+                onClick={() => setFiltroModalidad("todas")}
+                className={`px-3 py-1 text-xs font-bold rounded-xl transition-all border ${
+                  filtroModalidad === "todas"
+                    ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] border-[var(--ts-border)] shadow-sm"
+                    : "border-transparent text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                }`}
+              >
+                Todas ({conteoModalidades.total})
+              </button>
+              <button
+                onClick={() => setFiltroModalidad("gestionada")}
+                className={`px-3 py-1 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border ${
+                  filtroModalidad === "gestionada"
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-sm"
+                    : "border-transparent text-[var(--ts-text-muted)] hover:text-emerald-400"
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                <span>Cobro TecnoSmart ({conteoModalidades.gestionadas})</span>
+              </button>
+              <button
+                onClick={() => setFiltroModalidad("acompanamiento")}
+                className={`px-3 py-1 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border ${
+                  filtroModalidad === "acompanamiento"
+                    ? "bg-blue-500/10 text-blue-400 border-blue-500/30 shadow-sm"
+                    : "border-transparent text-[var(--ts-text-muted)] hover:text-blue-400"
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                <span>Solo Acompañamiento ({conteoModalidades.acompanamiento})</span>
+              </button>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[950px]">
-                <thead>
-                  <tr className="bg-[var(--ts-surface-2)] border-b border-[var(--ts-border)]">
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
-                      Cliente
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
-                      Servicio
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
-                      Estado
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
-                      Próximo Pago
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
-                      Monto
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
-                      Ganancia Neta
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
-                      Socios
-                    </th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)] text-right">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--ts-border)] text-sm">
-                  {suscripcionesFiltradas.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-5 py-12 text-center text-[var(--ts-text-muted)]">
-                        No se encontraron suscripciones activas registradas.
-                      </td>
-                    </tr>
-                  ) : (
-                    suscripcionesFiltradas.map((s) => {
-                      const ganancia = Number(s.monto || 0) - Number(s.costo_base || 0);
-                      const overdue = isDue(s.proximo_pago) && s.estado === "Activo";
 
-                      return (
-                        <tr
-                          key={s.id}
-                          onClick={() => abrirDetalle(s)}
-                          className="hover:bg-[var(--ts-surface-2)]/60 cursor-pointer transition-colors"
-                        >
-                          {/* Cliente */}
-                          <td className="px-5 py-4">
-                            <div className="font-bold text-[var(--ts-text-primary)]">
-                              {s.clientes?.empresa || s.clientes?.contacto || "Sin Cliente"}
-                            </div>
-                            <div className="text-xs text-[var(--ts-text-muted)]">
-                              {s.clientes?.rif_cedula || s.clientes?.contacto || "—"}
-                            </div>
-                          </td>
+            {/* Toggle de Modo de Vista & Exportar CSV */}
+            <div className="flex items-center gap-2">
+              <div className="flex bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl p-0.5">
+                <button
+                  onClick={() => setModoVista("financiera")}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                    modoVista === "financiera"
+                      ? "bg-[var(--ts-surface)] text-[var(--ts-text-primary)] shadow-sm"
+                      : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                  }`}
+                  title="Vista Financiera (Monto, Ganancia, Próximo Pago, Socios)"
+                >
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">Financiera</span>
+                </button>
+                <button
+                  onClick={() => setModoVista("boveda")}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 ${
+                    modoVista === "boveda"
+                      ? "bg-[var(--ts-surface)] text-[var(--ts-text-primary)] shadow-sm"
+                      : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                  }`}
+                  title="Vista Bóveda de Cuentas (Estilo Excel con Correos, Claves y Seriales)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Bóveda Excel</span>
+                </button>
+              </div>
 
-                          {/* Servicio */}
-                          <td className="px-5 py-4">
-                            <div className="font-semibold text-[var(--ts-text-primary)] flex items-center gap-1.5">
-                              <RefreshCw className="w-3.5 h-3.5 text-[var(--ts-red)]" />
-                              {s.servicios_recurrentes?.nombre || "Servicio"}
-                            </div>
-                            <div className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider mt-0.5">
-                              Ciclo {s.ciclo_facturacion}
-                            </div>
-                          </td>
+              <button
+                onClick={exportarCSV}
+                className="px-3 py-1 text-xs font-bold bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface)] text-[var(--ts-text-primary)] border border-[var(--ts-border)] rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                title="Descargar datos en CSV compatible con Excel"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline">Exportar CSV</span>
+              </button>
+            </div>
+          </div>
 
-                          {/* Estado */}
-                          <td className="px-5 py-4">
-                            <span
-                              className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 border ${getStatusBadge(
-                                s.estado
-                              )}`}
-                            >
-                              {s.estado === "Activo" && <CheckCircle className="w-3 h-3" />}
-                              {s.estado === "Suspendido" && <AlertTriangle className="w-3 h-3" />}
-                              {s.estado === "Cancelado" && <X className="w-3 h-3" />}
-                              {s.estado}
-                            </span>
-                          </td>
+          {/* VISTA 1: BÓVEDA DE CUENTAS (ESTILO HOJA DE CÁLCULO EXCEL) */}
+          {modoVista === "boveda" && (
+            <div className="space-y-4">
+              {/* HEADER DE MÉTRICAS OPERATIVAS (IDÉNTICO A LA HOJA DE EXCEL) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl p-4 shadow-sm text-center">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                    Total Usuarios / Cuentas
+                  </p>
+                  <p className="text-2xl font-black text-[var(--ts-text-primary)] mt-1">
+                    {statsBoveda.totalCuentas}
+                  </p>
+                </div>
+                <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl p-4 shadow-sm text-center">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                    Total Recaudado / Facturado
+                  </p>
+                  <p className="text-2xl font-black text-emerald-400 mt-1">
+                    {formatUSD(statsBoveda.totalRecaudado)}
+                  </p>
+                </div>
+                <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl p-4 shadow-sm text-center">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                    Promedio por Usuario
+                  </p>
+                  <p className="text-2xl font-black text-blue-400 mt-1">
+                    {formatUSD(statsBoveda.promedio)}
+                  </p>
+                </div>
+              </div>
 
-                          {/* Próximo Pago */}
-                          <td className="px-5 py-4">
-                            <div
-                              className={`font-semibold flex items-center gap-1.5 ${
-                                overdue ? "text-amber-500 font-bold" : "text-[var(--ts-text-primary)]"
-                              }`}
-                            >
-                              <Calendar className="w-4 h-4 shrink-0" />
-                              {formatFecha(s.proximo_pago)}
-                            </div>
-                            {overdue && (
-                              <div className="text-[10px] text-amber-500 font-bold mt-0.5 flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3" /> Pago Vencido
-                              </div>
-                            )}
-                          </td>
-
-                          {/* Monto */}
-                          <td className="px-5 py-4">
-                            <div className="font-black text-[var(--ts-text-primary)]">
-                              {formatUSD(s.monto)}
-                            </div>
-                            <div className="text-[10px] text-[var(--ts-text-muted)]">
-                              MRR: {formatUSD(getMrrMensual(s))}/mes
-                            </div>
-                          </td>
-
-                          {/* Ganancia */}
-                          <td className="px-5 py-4">
-                            <div className="font-black text-emerald-400">
-                              {formatUSD(ganancia)}
-                            </div>
-                            <div className="text-[10px] text-[var(--ts-text-muted)]">
-                              Costo: {formatUSD(s.costo_base || 0)}
-                            </div>
-                          </td>
-
-                          {/* Socios (Avatar Initials Pills) */}
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-1">
-                              {Array.isArray(s.socios) && s.socios.length > 0 ? (
-                                s.socios.map((socio, idx) => {
-                                  const info = getSocioBadgeInfo(socio);
-                                  return (
-                                    <div
-                                      key={idx}
-                                      title={`${info.nombre} (${socio.porcentaje}%)`}
-                                      className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-sm border border-black/30"
-                                      style={{ backgroundColor: info.color }}
-                                    >
-                                      {info.iniciales}
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <span className="text-[10px] text-[var(--ts-text-muted)] italic">
-                                  Sin asignar
-                                </span>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Acciones */}
-                          <td className="px-5 py-4 text-right">
-                            <div
-                              className="flex items-center justify-end gap-1.5"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <button
-                                onClick={() => handleGenerarFactura(s)}
-                                title="Generar Factura"
-                                className="text-xs font-bold text-[var(--ts-text-muted)] hover:text-white bg-[var(--ts-surface-2)] hover:bg-emerald-600 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                              >
-                                <CreditCard className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Facturar</span>
-                              </button>
-
-                              <button
-                                onClick={() => openRenovarModal(s)}
-                                title="Renovar Suscripción"
-                                className="text-xs font-bold text-[var(--ts-text-muted)] hover:text-white bg-[var(--ts-surface-2)] hover:bg-[var(--ts-red)] px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                              >
-                                <RefreshCw className="w-3.5 h-3.5" />
-                                <span className="hidden sm:inline">Renovar</span>
-                              </button>
-
-                              <button
-                                onClick={() => openEditSuscripcion(s)}
-                                title="Editar"
-                                className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                            </div>
+              {/* TABLA ESTILO EXCEL CON CREDENCIALES DIRECTAS */}
+              <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[1100px]">
+                    <thead>
+                      <tr className="bg-[var(--ts-surface-2)] border-b border-[var(--ts-border)] text-[9px] uppercase font-black text-[var(--ts-text-muted)]">
+                        <th className="px-4 py-3">ID</th>
+                        <th className="px-4 py-3">Usuario / Cliente</th>
+                        <th className="px-4 py-3">Correo Cliente</th>
+                        <th className="px-4 py-3">Cuenta Creada (Email)</th>
+                        <th className="px-4 py-3">Clave</th>
+                        <th className="px-4 py-3">Equipo / Serial</th>
+                        <th className="px-4 py-3">Inscripción</th>
+                        <th className="px-4 py-3">Monto</th>
+                        <th className="px-4 py-3">Modalidad</th>
+                        <th className="px-4 py-3">Estado</th>
+                        <th className="px-4 py-3 text-right">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--ts-border)] text-xs">
+                      {suscripcionesFiltradas.length === 0 ? (
+                        <tr>
+                          <td colSpan={11} className="px-5 py-12 text-center text-[var(--ts-text-muted)]">
+                            No se encontraron cuentas registradas con este filtro.
                           </td>
                         </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+                      ) : (
+                        suscripcionesFiltradas.map((s, idx) => {
+                          const idRef = `USR-${String(idx + 1).padStart(3, "0")}`;
+                          const esAcomp = isAcompanamiento(s);
+                          const claveVisible = clavesVisibles[s.id] || false;
+
+                          return (
+                            <tr
+                              key={s.id}
+                              onClick={() => abrirDetalle(s)}
+                              className="hover:bg-[var(--ts-surface-2)]/60 cursor-pointer transition-colors"
+                            >
+                              {/* ID Ref */}
+                              <td className="px-4 py-3 font-mono font-bold text-[11px] text-[var(--ts-text-muted)]">
+                                {idRef}
+                              </td>
+
+                              {/* Usuario / Cliente */}
+                              <td className="px-4 py-3">
+                                <div className="font-bold text-[var(--ts-text-primary)]">
+                                  {s.clientes?.empresa || s.clientes?.contacto || "Sin Cliente"}
+                                </div>
+                                <div className="text-[10px] text-[var(--ts-text-muted)]">
+                                  {s.servicios_recurrentes?.nombre}
+                                </div>
+                              </td>
+
+                              {/* Correo Cliente */}
+                              <td className="px-4 py-3 text-[11px] text-[var(--ts-text-muted)]">
+                                {(s.clientes as any)?.email ? (
+                                  <span className="font-mono">{((s.clientes as any).email)}</span>
+                                ) : (
+                                  <span className="italic text-gray-500">—</span>
+                                )}
+                              </td>
+
+                              {/* Cuenta Creada (credenciales_usuario) + Copiar */}
+                              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                {s.credenciales_usuario ? (
+                                  <div className="flex items-center gap-1.5 font-mono text-[11px] text-blue-400 bg-[var(--ts-surface-2)] px-2 py-1 rounded-lg border border-[var(--ts-border)] max-w-fit">
+                                    <span className="truncate max-w-[180px]">{s.credenciales_usuario}</span>
+                                    <button
+                                      onClick={() => handleCopiar(s.credenciales_usuario!, `usr-${s.id}`)}
+                                      className="p-1 hover:text-white transition-colors"
+                                      title="Copiar correo de la cuenta"
+                                    >
+                                      {copiado === `usr-${s.id}` ? (
+                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                      ) : (
+                                        <Copy className="w-3.5 h-3.5 text-[var(--ts-text-muted)]" />
+                                      )}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-[var(--ts-text-muted)] italic">No registrado</span>
+                                )}
+                              </td>
+
+                              {/* Clave (credenciales_clave) + Toggle Ver + Copiar */}
+                              <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                {s.credenciales_clave ? (
+                                  <div className="flex items-center gap-1.5 font-mono text-[11px] bg-[var(--ts-surface-2)] px-2 py-1 rounded-lg border border-[var(--ts-border)] max-w-fit">
+                                    <span className="text-[var(--ts-text-primary)] min-w-[70px]">
+                                      {claveVisible ? s.credenciales_clave : "••••••••"}
+                                    </span>
+                                    <button
+                                      onClick={() => setClavesVisibles(prev => ({ ...prev, [s.id]: !prev[s.id] }))}
+                                      className="p-1 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors"
+                                      title={claveVisible ? "Ocultar clave" : "Mostrar clave"}
+                                    >
+                                      {claveVisible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                      onClick={() => handleCopiar(s.credenciales_clave!, `pwd-${s.id}`)}
+                                      className="p-1 hover:text-white transition-colors"
+                                      title="Copiar contraseña"
+                                    >
+                                      {copiado === `pwd-${s.id}` ? (
+                                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                      ) : (
+                                        <Copy className="w-3.5 h-3.5 text-[var(--ts-text-muted)]" />
+                                      )}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-[var(--ts-text-muted)] italic">—</span>
+                                )}
+                              </td>
+
+                              {/* Equipo / Serial / Kit */}
+                              <td className="px-4 py-3 text-[11px] font-mono text-[var(--ts-text-muted)]">
+                                {s.equipo_serial || s.credenciales_notas ? (
+                                  <span className="truncate max-w-[150px] block" title={s.equipo_serial || s.credenciales_notas}>
+                                    {s.equipo_serial || s.credenciales_notas}
+                                  </span>
+                                ) : (
+                                  <span className="italic text-gray-500">—</span>
+                                )}
+                              </td>
+
+                              {/* Fecha de Inscripción */}
+                              <td className="px-4 py-3 text-[11px] text-[var(--ts-text-muted)] whitespace-nowrap">
+                                {formatFecha(s.fecha_inicio || s.created_at)}
+                              </td>
+
+                              {/* Monto */}
+                              <td className="px-4 py-3 font-black text-[var(--ts-text-primary)]">
+                                {esAcomp ? (
+                                  <span className="text-[11px] text-blue-400 font-bold">$0.00 (Directo)</span>
+                                ) : (
+                                  formatUSD(s.monto)
+                                )}
+                              </td>
+
+                              {/* Modalidad */}
+                              <td className="px-4 py-3">
+                                {esAcomp ? (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 inline-flex items-center gap-1">
+                                    <Handshake className="w-3 h-3" /> Acompañamiento
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                                    <DollarSign className="w-3 h-3" /> Cobro TecnoSmart
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Estado */}
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 border ${getStatusBadge(
+                                    s.estado
+                                  )}`}
+                                >
+                                  {s.estado}
+                                </span>
+                              </td>
+
+                              {/* Acciones */}
+                              <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button
+                                    onClick={() => openEditSuscripcion(s)}
+                                    title="Editar cuenta"
+                                    className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => abrirDetalle(s)}
+                                    title="Ver panel lateral completo"
+                                    className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
+                                  >
+                                    <ChevronRight className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VISTA 2: FINANCIERA (TABLA TRADICIONAL CON MARGEN, SOCIOS Y FACTURACIÓN) */}
+          {modoVista === "financiera" && (
+            <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl overflow-hidden shadow-sm">
+              {loading ? (
+                <div className="p-12 text-center text-[var(--ts-text-muted)] text-sm flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin text-[var(--ts-red)]" /> Cargando suscripciones...
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[950px]">
+                    <thead>
+                      <tr className="bg-[var(--ts-surface-2)] border-b border-[var(--ts-border)]">
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                          Cliente
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                          Servicio
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                          Modalidad
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                          Estado
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                          Próximo Pago
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                          Monto
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                          Ganancia Neta
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)]">
+                          Socios
+                        </th>
+                        <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)] text-right">
+                          Acciones
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--ts-border)] text-sm">
+                      {suscripcionesFiltradas.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="px-5 py-12 text-center text-[var(--ts-text-muted)]">
+                            No se encontraron suscripciones activas registradas con este filtro.
+                          </td>
+                        </tr>
+                      ) : (
+                        suscripcionesFiltradas.map((s) => {
+                          const ganancia = Number(s.monto || 0) - Number(s.costo_base || 0);
+                          const esAcomp = isAcompanamiento(s);
+                          const overdue = !esAcomp && isDue(s.proximo_pago) && s.estado === "Activo";
+
+                          return (
+                            <tr
+                              key={s.id}
+                              onClick={() => abrirDetalle(s)}
+                              className="hover:bg-[var(--ts-surface-2)]/60 cursor-pointer transition-colors"
+                            >
+                              {/* Cliente */}
+                              <td className="px-5 py-4">
+                                <div className="font-bold text-[var(--ts-text-primary)]">
+                                  {s.clientes?.empresa || s.clientes?.contacto || "Sin Cliente"}
+                                </div>
+                                <div className="text-xs text-[var(--ts-text-muted)] flex items-center gap-2 mt-0.5">
+                                  <span>{s.clientes?.rif_cedula || s.clientes?.contacto || "—"}</span>
+                                  {s.fecha_inicio && (
+                                    <span className="text-[10px] text-gray-400">· Alta: {formatFecha(s.fecha_inicio)}</span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Servicio */}
+                              <td className="px-5 py-4">
+                                <div className="font-semibold text-[var(--ts-text-primary)] flex items-center gap-1.5">
+                                  <RefreshCw className="w-3.5 h-3.5 text-[var(--ts-red)]" />
+                                  {s.servicios_recurrentes?.nombre || "Servicio"}
+                                </div>
+                                <div className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider mt-0.5">
+                                  Ciclo {s.ciclo_facturacion}
+                                </div>
+                              </td>
+
+                              {/* Modalidad */}
+                              <td className="px-5 py-4">
+                                {esAcomp ? (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 inline-flex items-center gap-1">
+                                    <Handshake className="w-3 h-3" /> Acompañamiento
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                                    <DollarSign className="w-3 h-3" /> Cobro TecnoSmart
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Estado */}
+                              <td className="px-5 py-4">
+                                <span
+                                  className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1 border ${getStatusBadge(
+                                    s.estado
+                                  )}`}
+                                >
+                                  {s.estado === "Activo" && <CheckCircle className="w-3 h-3" />}
+                                  {s.estado === "Suspendido" && <AlertTriangle className="w-3 h-3" />}
+                                  {s.estado === "Cancelado" && <X className="w-3 h-3" />}
+                                  {s.estado}
+                                </span>
+                              </td>
+
+                              {/* Próximo Pago */}
+                              <td className="px-5 py-4">
+                                <div
+                                  className={`font-semibold flex items-center gap-1.5 ${
+                                    overdue ? "text-amber-500 font-bold" : "text-[var(--ts-text-primary)]"
+                                  }`}
+                                >
+                                  <Calendar className="w-4 h-4 shrink-0" />
+                                  {formatFecha(s.proximo_pago)}
+                                </div>
+                                {overdue && (
+                                  <div className="text-[10px] text-amber-500 font-bold mt-0.5 flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3" /> Pago Vencido
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Monto */}
+                              <td className="px-5 py-4">
+                                <div className="font-black text-[var(--ts-text-primary)]">
+                                  {esAcomp ? (
+                                    <span className="text-xs text-blue-400 font-bold">$0.00 (Directo)</span>
+                                  ) : (
+                                    formatUSD(s.monto)
+                                  )}
+                                </div>
+                                {!esAcomp && (
+                                  <div className="text-[10px] text-[var(--ts-text-muted)]">
+                                    MRR: {formatUSD(getMrrMensual(s))}/mes
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Ganancia */}
+                              <td className="px-5 py-4">
+                                <div className="font-black text-emerald-400">
+                                  {formatUSD(ganancia)}
+                                </div>
+                                {!esAcomp && (
+                                  <div className="text-[10px] text-[var(--ts-text-muted)]">
+                                    Costo: {formatUSD(s.costo_base || 0)}
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Socios (Avatar Initials Pills) */}
+                              <td className="px-5 py-4">
+                                <div className="flex items-center gap-1">
+                                  {Array.isArray(s.socios) && s.socios.length > 0 ? (
+                                    s.socios.map((socio, idx) => {
+                                      const info = getSocioBadgeInfo(socio);
+                                      return (
+                                        <div
+                                          key={idx}
+                                          title={`${info.nombre} (${socio.porcentaje}%)`}
+                                          className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black text-white shadow-sm border border-black/30"
+                                          style={{ backgroundColor: info.color }}
+                                        >
+                                          {info.iniciales}
+                                        </div>
+                                      );
+                                    })
+                                  ) : (
+                                    <span className="text-[10px] text-[var(--ts-text-muted)] italic">
+                                      {esAcomp ? "N/A" : "Sin asignar"}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Acciones */}
+                              <td className="px-5 py-4 text-right">
+                                <div
+                                  className="flex items-center justify-end gap-1.5"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {!esAcomp && (
+                                    <>
+                                      <button
+                                        onClick={() => handleGenerarFactura(s)}
+                                        title="Generar Factura"
+                                        className="text-xs font-bold text-[var(--ts-text-muted)] hover:text-white bg-[var(--ts-surface-2)] hover:bg-emerald-600 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <CreditCard className="w-3.5 h-3.5" />
+                                        <span className="hidden sm:inline">Facturar</span>
+                                      </button>
+
+                                      <button
+                                        onClick={() => openRenovarModal(s)}
+                                        title="Renovar Suscripción"
+                                        className="text-xs font-bold text-[var(--ts-text-muted)] hover:text-white bg-[var(--ts-surface-2)] hover:bg-[var(--ts-red)] px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                                      >
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                        <span className="hidden sm:inline">Renovar</span>
+                                      </button>
+                                    </>
+                                  )}
+
+                                  <button
+                                    onClick={() => openEditSuscripcion(s)}
+                                    title="Editar"
+                                    className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1747,6 +2499,81 @@ export default function SuscripcionesManager() {
                               <RefreshCw className="w-3.5 h-3.5" /> Renovar
                             </button>
                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Sub-sección 4: 🤝 CLIENTES EN ACOMPAÑAMIENTO (SOLO SOPORTE - PAGO DIRECTO CLIENTE) */}
+          <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl overflow-hidden shadow-sm">
+            <div className="px-5 py-3.5 bg-blue-500/10 border-b border-[var(--ts-border)] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-blue-500" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-blue-400 flex items-center gap-1.5">
+                  <Handshake className="w-4 h-4" /> Clientes en Acompañamiento VIP ({cobranzasCategorizadas.acompanamientoCortes.length})
+                </h3>
+              </div>
+              <span className="text-[11px] text-[var(--ts-text-muted)] font-semibold">
+                Informativo: Pago directo del cliente · $0 deuda TecnoSmart
+              </span>
+            </div>
+
+            {cobranzasCategorizadas.acompanamientoCortes.length === 0 ? (
+              <div className="p-8 text-center text-xs text-[var(--ts-text-muted)]">
+                No hay clientes registrados en modalidad de acompañamiento.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead>
+                    <tr className="bg-[var(--ts-surface-2)] border-b border-[var(--ts-border)] text-[9px] uppercase font-black text-[var(--ts-text-muted)]">
+                      <th className="px-5 py-2.5">Día de Corte / Pago</th>
+                      <th className="px-5 py-2.5">Cliente</th>
+                      <th className="px-5 py-2.5">Servicio</th>
+                      <th className="px-5 py-2.5">Cuenta (Email)</th>
+                      <th className="px-5 py-2.5">Serial KIT</th>
+                      <th className="px-5 py-2.5 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[var(--ts-border)] text-xs">
+                    {cobranzasCategorizadas.acompanamientoCortes.map((s) => (
+                      <tr
+                        key={s.id}
+                        onClick={() => abrirDetalle(s)}
+                        className="hover:bg-[var(--ts-surface-2)]/60 cursor-pointer transition-colors"
+                      >
+                        <td className="px-5 py-3.5">
+                          <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 font-bold rounded-md text-[10px] inline-flex items-center gap-1 border border-blue-500/20">
+                            <Calendar className="w-3 h-3" />
+                            Corte: {formatFecha(s.proximo_pago)}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 font-bold text-[var(--ts-text-primary)]">
+                          {s.clientes?.empresa || s.clientes?.contacto}
+                          <div className="text-[10px] text-[var(--ts-text-muted)] font-normal">
+                            {s.clientes?.telefono || "Sin teléfono"}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 font-semibold text-[var(--ts-text-primary)]">
+                          {s.servicios_recurrentes?.nombre}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-[11px] text-blue-400">
+                          {s.credenciales_usuario || "—"}
+                        </td>
+                        <td className="px-5 py-3.5 font-mono text-[11px] text-[var(--ts-text-muted)]">
+                          {s.equipo_serial || s.credenciales_notas || "—"}
+                        </td>
+                        <td className="px-5 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => abrirDetalle(s)}
+                            className="px-2.5 py-1 text-xs font-bold bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface)] text-[var(--ts-text-primary)] rounded-lg transition-colors border border-[var(--ts-border)]"
+                          >
+                            Ver Datos
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -2306,6 +3133,80 @@ export default function SuscripcionesManager() {
               ) : (
                 // ── FORMULARIO SUSCRIPCIÓN ──
                 <div className="space-y-6">
+                  {/* Selector de Modalidad */}
+                  <div className="bg-[var(--ts-surface-2)]/60 border border-[var(--ts-border)] rounded-2xl p-4">
+                    <label className="block text-xs font-bold text-[var(--ts-text-muted)] mb-2 uppercase tracking-wider">
+                      Modalidad del Servicio
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const serv = servicios.find((s) => s.id === formData.servicio_id);
+                          setFormData({
+                            ...formData,
+                            modalidad: "gestionada",
+                            monto: formData.monto === "0" || formData.monto === "0.00" ? (serv ? serv.precio_sugerido.toString() : "") : formData.monto,
+                          });
+                        }}
+                        className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                          formData.modalidad !== "acompanamiento"
+                            ? "bg-[var(--ts-red)]/10 border-[var(--ts-red)] text-[var(--ts-text-primary)] shadow-sm"
+                            : "bg-[var(--ts-surface)] border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:border-[var(--ts-border-strong)]"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center shrink-0 ${
+                            formData.modalidad !== "acompanamiento" ? "border-[var(--ts-red)]" : "border-[var(--ts-text-muted)]"
+                          }`}
+                        >
+                          {formData.modalidad !== "acompanamiento" && (
+                            <div className="w-2 h-2 rounded-full bg-[var(--ts-red)]" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black">💳 Cobro TecnoSmart</p>
+                          <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5 leading-snug">
+                            El cliente nos paga la mensualidad directamente. Suma al MRR, ganancias y gestión de cobranzas.
+                          </p>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormData({
+                            ...formData,
+                            modalidad: "acompanamiento",
+                            monto: "0",
+                            costo_base: "0",
+                          });
+                        }}
+                        className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
+                          formData.modalidad === "acompanamiento"
+                            ? "bg-amber-500/10 border-amber-500 text-[var(--ts-text-primary)] shadow-sm"
+                            : "bg-[var(--ts-surface)] border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:border-[var(--ts-border-strong)]"
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 mt-0.5 flex items-center justify-center shrink-0 ${
+                            formData.modalidad === "acompanamiento" ? "border-amber-500" : "border-[var(--ts-text-muted)]"
+                          }`}
+                        >
+                          {formData.modalidad === "acompanamiento" && (
+                            <div className="w-2 h-2 rounded-full bg-amber-500" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black">🤝 Solo Acompañamiento VIP</p>
+                          <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5 leading-snug">
+                            El cliente paga con su propia tarjeta. No genera deuda ni distorsiona ingresos; guardamos accesos y fecha de corte.
+                          </p>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Cliente */}
                   <div>
                     <label className="block text-xs font-bold text-[var(--ts-text-muted)] mb-1.5 uppercase tracking-wider">
@@ -2368,7 +3269,7 @@ export default function SuscripcionesManager() {
                           setFormData({
                             ...formData,
                             servicio_id: e.target.value,
-                            monto: s ? s.precio_sugerido.toString() : formData.monto,
+                            monto: formData.modalidad === "acompanamiento" ? "0" : (s ? s.precio_sugerido.toString() : formData.monto),
                           });
                         }}
                         className="w-full bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)] transition-colors"
@@ -2384,7 +3285,7 @@ export default function SuscripcionesManager() {
 
                     <div>
                       <label className="block text-xs font-bold text-[var(--ts-text-muted)] mb-1.5 uppercase tracking-wider">
-                        Ciclo de Facturación
+                        Ciclo de Facturación / Corte
                       </label>
                       <select
                         value={formData.ciclo_facturacion}
@@ -2403,41 +3304,57 @@ export default function SuscripcionesManager() {
                       <label className="block text-xs font-bold text-[var(--ts-text-muted)] mb-1.5 uppercase tracking-wider">
                         Monto a Facturar ($)
                       </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.monto}
-                        onChange={(e) => setFormData({ ...formData, monto: e.target.value })}
-                        className="w-full bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)] transition-colors"
-                        placeholder="60.00"
-                      />
+                      {formData.modalidad === "acompanamiento" ? (
+                        <div className="w-full bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs text-amber-500 font-bold">
+                          <span>$0.00 (Pago directo cliente)</span>
+                          <span className="text-[10px] uppercase tracking-wider bg-amber-500/20 px-2 py-0.5 rounded">Acompañamiento</span>
+                        </div>
+                      ) : (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.monto}
+                          onChange={(e) => setFormData({ ...formData, monto: e.target.value })}
+                          className="w-full bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)] transition-colors"
+                          placeholder="60.00"
+                        />
+                      )}
                     </div>
 
-                    {/* ENHANCEMENT A: Costo Base Field */}
-                    <div className="sm:col-span-2 bg-[var(--ts-surface-2)]/60 border border-[var(--ts-border)] p-3.5 rounded-xl">
-                      <label className="block text-xs font-bold text-[var(--ts-text-primary)] mb-1 uppercase tracking-wider">
-                        Costo Base del Proveedor ($)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={formData.costo_base}
-                        onChange={(e) => setFormData({ ...formData, costo_base: e.target.value })}
-                        className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)] transition-colors"
-                        placeholder="0.00"
-                      />
-                      <p className="text-[10px] text-[var(--ts-text-muted)] mt-1.5">
-                        Lo que pagas al proveedor. La ganancia = Monto − Costo Base (
-                        <span className="font-bold text-emerald-400">
-                          {formatUSD(Math.max(0, (Number(formData.monto) || 0) - (Number(formData.costo_base) || 0)))}
-                        </span>
-                        ).
-                      </p>
-                    </div>
+                    {/* Costo Base Field */}
+                    {formData.modalidad !== "acompanamiento" ? (
+                      <div className="sm:col-span-2 bg-[var(--ts-surface-2)]/60 border border-[var(--ts-border)] p-3.5 rounded-xl">
+                        <label className="block text-xs font-bold text-[var(--ts-text-primary)] mb-1 uppercase tracking-wider">
+                          Costo Base del Proveedor ($)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={formData.costo_base}
+                          onChange={(e) => setFormData({ ...formData, costo_base: e.target.value })}
+                          className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)] transition-colors"
+                          placeholder="0.00"
+                        />
+                        <p className="text-[10px] text-[var(--ts-text-muted)] mt-1.5">
+                          Lo que pagas al proveedor. La ganancia = Monto − Costo Base (
+                          <span className="font-bold text-emerald-400">
+                            {formatUSD(Math.max(0, (Number(formData.monto) || 0) - (Number(formData.costo_base) || 0)))}
+                          </span>
+                          ).
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="sm:col-span-2 bg-amber-500/5 border border-amber-500/20 p-3 rounded-xl flex items-center gap-2">
+                        <Handshake className="w-4 h-4 text-amber-500 shrink-0" />
+                        <p className="text-[11px] text-amber-400">
+                          Cuenta en modalidad de acompañamiento: no genera costos base para TecnoSmart ni cuentas por cobrar.
+                        </p>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block text-xs font-bold text-[var(--ts-text-muted)] mb-1.5 uppercase tracking-wider">
-                        Fecha de Inicio
+                        Fecha de Inicio / Inscripción
                       </label>
                       <input
                         type="date"
@@ -2449,7 +3366,7 @@ export default function SuscripcionesManager() {
 
                     <div>
                       <label className="block text-xs font-bold text-[var(--ts-text-muted)] mb-1.5 uppercase tracking-wider">
-                        Próximo Pago
+                        {formData.modalidad === "acompanamiento" ? "Fecha de Próximo Corte / Renovación" : "Próximo Pago"}
                       </label>
                       <input
                         type="date"
@@ -2492,7 +3409,7 @@ export default function SuscripcionesManager() {
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-[var(--ts-text-muted)] mb-1 uppercase tracking-wider">
-                          Serial del Equipo
+                          Serial del Equipo / KIT Starlink
                         </label>
                         <input
                           type="text"
@@ -2518,157 +3435,182 @@ export default function SuscripcionesManager() {
                   </div>
 
                   {/* ENHANCEMENT B: División de Socios */}
-                  <div className="border border-[var(--ts-border)] rounded-xl p-4 bg-[var(--ts-surface-2)]/50 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-[var(--ts-text-primary)] flex items-center gap-2 uppercase tracking-wider">
-                        <Users className="w-4 h-4 text-blue-500" /> División de Socios
+                  {formData.modalidad === "acompanamiento" ? (
+                    <div className="border border-[var(--ts-border)] rounded-xl p-4 bg-[var(--ts-surface-2)]/30 space-y-1.5">
+                      <h3 className="text-xs font-bold text-[var(--ts-text-muted)] flex items-center gap-2 uppercase tracking-wider">
+                        <Users className="w-4 h-4 text-[var(--ts-text-muted)]" /> División de Socios
                       </h3>
-                      {/* Running Total Indicator */}
-                      {formData.socios.length > 0 && (() => {
-                        const total = formData.socios.reduce((a, b) => a + (Number(b.porcentaje) || 0), 0);
-                        return (
-                          <span
-                            className={`text-xs font-black px-2 py-0.5 rounded-md ${
-                              total === 100
-                                ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
-                                : "bg-red-500/10 text-[var(--ts-red)] border border-red-500/20"
-                            }`}
-                          >
-                            Total: {total}% {total === 100 ? "✓" : "(debe sumar 100%)"}
-                          </span>
-                        );
-                      })()}
-                    </div>
-
-                    {formData.socios.length === 0 && (
-                      <p className="text-[11px] text-[var(--ts-text-muted)] italic">
-                        No hay socios asignados. Agrega socios para distribuir la ganancia.
+                      <p className="text-xs text-[var(--ts-text-muted)]">
+                        Las cuentas en modalidad de <strong className="text-[var(--ts-text-primary)]">Acompañamiento VIP</strong> no generan comisiones monetarias recurrentes para socios ($0.00 en sistema), ya que el cliente paga de manera directa al proveedor.
                       </p>
-                    )}
-
-                    {/* Lista siempre visible de socios */}
-                    <div className="space-y-2">
-                      {formData.socios.map((socio, idx) => {
-                        const isSystemUser = perfilesEquipo.some((m) => m.id === socio.perfil_id);
-                        return (
-                          <div key={idx} className="flex items-center gap-2 bg-[var(--ts-surface)] rounded-lg p-2 border border-[var(--ts-border)]">
-                            {isSystemUser ? (
-                              <select
-                                value={socio.perfil_id || ""}
-                                onChange={(e) => {
-                                  const selectedMember = perfilesEquipo.find((m) => m.id === e.target.value);
-                                  if (selectedMember) {
-                                    const updated = [...formData.socios];
-                                    updated[idx] = {
-                                      ...updated[idx],
-                                      perfil_id: selectedMember.id,
-                                      nombre: selectedMember.nombre,
-                                    };
-                                    setFormData({ ...formData, socios: updated });
-                                  }
-                                }}
-                                className="flex-1 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)]"
-                              >
-                                {perfilesEquipo.map((m) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.nombre} {m.rol_nombre ? `(${m.rol_nombre})` : ""}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <div className="flex-1 flex items-center gap-1.5">
-                                <span className="text-[10px] text-[var(--ts-text-muted)] shrink-0">✏️</span>
-                                <input
-                                  type="text"
-                                  value={socio.nombre}
-                                  onChange={(e) => {
-                                    const updated = [...formData.socios];
-                                    updated[idx] = { ...updated[idx], nombre: e.target.value };
-                                    setFormData({ ...formData, socios: updated });
-                                  }}
-                                  className="flex-1 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)]"
-                                  placeholder="Nombre del socio"
-                                />
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-1 w-24">
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={socio.porcentaje}
-                                onChange={(e) => {
-                                  const updated = [...formData.socios];
-                                  updated[idx] = { ...updated[idx], porcentaje: Number(e.target.value) || 0 };
-                                  setFormData({ ...formData, socios: updated });
-                                }}
-                                className="w-full bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-2 py-2 text-xs text-right focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)]"
-                                placeholder="%"
-                              />
-                              <span className="text-xs font-bold text-[var(--ts-text-muted)]">%</span>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = formData.socios.filter((_, i) => i !== idx);
-                                setFormData({ ...formData, socios: updated });
-                              }}
-                              className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] transition-colors rounded-lg hover:bg-red-500/10"
-                              title="Eliminar socio"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        );
-                      })}
                     </div>
-
-                    {/* Agregar socio: elegir del equipo o escribir nombre nuevo */}
-                    <div className="pt-2 border-t border-[var(--ts-border)] space-y-2">
-                      <p className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">Agregar socio del equipo</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {perfilesEquipo.filter(
-                          (m) => !formData.socios.some((s) => s.perfil_id === m.id)
-                        ).map((m) => (
-                          <button
-                            key={m.id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({
-                                ...formData,
-                                socios: [
-                                  ...formData.socios,
-                                  { perfil_id: m.id, nombre: m.nombre, porcentaje: 0 },
-                                ],
-                              });
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all border bg-[var(--ts-surface)] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-[var(--ts-text-primary)] hover:border-[var(--ts-red)]"
-                          >
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} />
-                            + {m.nombre.split(" ")[0]}
-                            {m.rol_nombre && (
-                              <span className="text-[9px] text-[var(--ts-text-muted)] opacity-60">({m.rol_nombre})</span>
-                            )}
-                          </button>
-                        ))}
-                        {perfilesEquipo.filter((m) => !formData.socios.some((s) => s.perfil_id === m.id)).length === 0 && (
-                          <span className="text-[11px] text-[var(--ts-text-muted)] italic">Todos los usuarios ya están agregados</span>
-                        )}
+                  ) : (
+                    <div className="border border-[var(--ts-border)] rounded-xl p-4 bg-[var(--ts-surface-2)]/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold text-[var(--ts-text-primary)] flex items-center gap-2 uppercase tracking-wider">
+                          <Users className="w-4 h-4 text-blue-500" /> División de Socios
+                        </h3>
+                        {/* Running Total Indicator */}
+                        {formData.socios.length > 0 && (() => {
+                          const total = formData.socios.reduce((a, b) => a + (Number(b.porcentaje) || 0), 0);
+                          return (
+                            <span
+                              className={`text-xs font-black px-2 py-0.5 rounded-md ${
+                                total === 100
+                                  ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                                  : "bg-red-500/10 text-[var(--ts-red)] border border-red-500/20"
+                              }`}
+                            >
+                              Total: {total}% {total === 100 ? "✓" : "(debe sumar 100%)"}
+                            </span>
+                          );
+                        })()}
                       </div>
 
-                      {/* Input para socio nuevo con nombre personalizado */}
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={nuevoSocioNombre}
-                          onChange={(e) => setNuevoSocioNombre(e.target.value)}
-                          className="flex-1 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)]"
-                          placeholder="Nombre de socio nuevo..."
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && nuevoSocioNombre.trim()) {
-                              e.preventDefault();
+                      {formData.socios.length === 0 && (
+                        <p className="text-[11px] text-[var(--ts-text-muted)] italic">
+                          No hay socios asignados. Agrega socios para distribuir la ganancia.
+                        </p>
+                      )}
+
+                      {/* Lista siempre visible de socios */}
+                      <div className="space-y-2">
+                        {formData.socios.map((socio, idx) => {
+                          const isSystemUser = perfilesEquipo.some((m) => m.id === socio.perfil_id);
+                          return (
+                            <div key={idx} className="flex items-center gap-2 bg-[var(--ts-surface)] rounded-lg p-2 border border-[var(--ts-border)]">
+                              {isSystemUser ? (
+                                <select
+                                  value={socio.perfil_id || ""}
+                                  onChange={(e) => {
+                                    const selectedMember = perfilesEquipo.find((m) => m.id === e.target.value);
+                                    if (selectedMember) {
+                                      const updated = [...formData.socios];
+                                      updated[idx] = {
+                                        ...updated[idx],
+                                        perfil_id: selectedMember.id,
+                                        nombre: selectedMember.nombre,
+                                      };
+                                      setFormData({ ...formData, socios: updated });
+                                    }
+                                  }}
+                                  className="flex-1 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)]"
+                                >
+                                  {perfilesEquipo.map((m) => (
+                                    <option key={m.id} value={m.id}>
+                                      {m.nombre} {m.rol_nombre ? `(${m.rol_nombre})` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <div className="flex-1 flex items-center gap-1.5">
+                                  <span className="text-[10px] text-[var(--ts-text-muted)] shrink-0">✏️</span>
+                                  <input
+                                    type="text"
+                                    value={socio.nombre}
+                                    onChange={(e) => {
+                                      const updated = [...formData.socios];
+                                      updated[idx] = { ...updated[idx], nombre: e.target.value };
+                                      setFormData({ ...formData, socios: updated });
+                                    }}
+                                    className="flex-1 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)]"
+                                    placeholder="Nombre del socio"
+                                  />
+                                </div>
+                              )}
+
+                              <div className="flex items-center gap-1 w-24">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={socio.porcentaje}
+                                  onChange={(e) => {
+                                    const updated = [...formData.socios];
+                                    updated[idx] = { ...updated[idx], porcentaje: Number(e.target.value) || 0 };
+                                    setFormData({ ...formData, socios: updated });
+                                  }}
+                                  className="w-full bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-2 py-2 text-xs text-right focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)]"
+                                  placeholder="%"
+                                />
+                                <span className="text-xs font-bold text-[var(--ts-text-muted)]">%</span>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = formData.socios.filter((_, i) => i !== idx);
+                                  setFormData({ ...formData, socios: updated });
+                                }}
+                                className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] transition-colors rounded-lg hover:bg-red-500/10"
+                                title="Eliminar socio"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Agregar socio: elegir del equipo o escribir nombre nuevo */}
+                      <div className="pt-2 border-t border-[var(--ts-border)] space-y-2">
+                        <p className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">Agregar socio del equipo</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {perfilesEquipo.filter(
+                            (m) => !formData.socios.some((s) => s.perfil_id === m.id)
+                          ).map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  socios: [
+                                    ...formData.socios,
+                                    { perfil_id: m.id, nombre: m.nombre, porcentaje: 0 },
+                                  ],
+                                });
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all border bg-[var(--ts-surface)] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-[var(--ts-text-primary)] hover:border-[var(--ts-red)]"
+                            >
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: m.color }} />
+                              + {m.nombre.split(" ")[0]}
+                              {m.rol_nombre && (
+                                <span className="text-[9px] text-[var(--ts-text-muted)] opacity-60">({m.rol_nombre})</span>
+                              )}
+                            </button>
+                          ))}
+                          {perfilesEquipo.filter((m) => !formData.socios.some((s) => s.perfil_id === m.id)).length === 0 && (
+                            <span className="text-[11px] text-[var(--ts-text-muted)] italic">Todos los usuarios ya están agregados</span>
+                          )}
+                        </div>
+
+                        {/* Input para socio nuevo con nombre personalizado */}
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={nuevoSocioNombre}
+                            onChange={(e) => setNuevoSocioNombre(e.target.value)}
+                            className="flex-1 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)]"
+                            placeholder="Nombre de socio nuevo..."
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && nuevoSocioNombre.trim()) {
+                                e.preventDefault();
+                                setFormData({
+                                  ...formData,
+                                  socios: [
+                                    ...formData.socios,
+                                    { nombre: nuevoSocioNombre.trim(), porcentaje: 0 },
+                                  ],
+                                });
+                                setNuevoSocioNombre("");
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!nuevoSocioNombre.trim()) return;
                               setFormData({
                                 ...formData,
                                 socios: [
@@ -2677,30 +3619,16 @@ export default function SuscripcionesManager() {
                                 ],
                               });
                               setNuevoSocioNombre("");
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!nuevoSocioNombre.trim()) return;
-                            setFormData({
-                              ...formData,
-                              socios: [
-                                ...formData.socios,
-                                { nombre: nuevoSocioNombre.trim(), porcentaje: 0 },
-                              ],
-                            });
-                            setNuevoSocioNombre("");
-                          }}
-                          disabled={!nuevoSocioNombre.trim()}
-                          className="px-3 py-2 text-xs font-bold rounded-xl transition-all border bg-[var(--ts-red)] text-white border-transparent hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Agregar
-                        </button>
+                            }}
+                            disabled={!nuevoSocioNombre.trim()}
+                            className="px-3 py-2 text-xs font-bold rounded-xl transition-all border bg-[var(--ts-red)] text-white border-transparent hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Agregar
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Botones del Modal */}
                   <div className="pt-4 flex justify-between items-center border-t border-[var(--ts-border)]">
