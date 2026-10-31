@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Search, Clock, LayoutGrid, List, Trash2,
   RotateCcw, AlertTriangle, Phone, MoreVertical,
-  X, Download, FileText, MessageCircle
+  X, Download, FileText, MessageCircle, Wrench
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -220,6 +220,20 @@ export default function CRMManager() {
           ))}
         </select>
       </div>
+
+      {/* Botón rápido para cotizaciones aprobadas */}
+      {(["aprobada", "aprobadas", "Aprobada", "Aprobadas"].includes(cot.estado)) && (
+        <div className="mt-2.5 pt-2 border-t border-[var(--ts-border-2)]">
+          <a
+            href={`/ordenes?cotizacion_id=${cot.id}`}
+            onClick={e => e.stopPropagation()}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/40 text-[var(--ts-red)] text-[11px] font-bold border border-red-200 dark:border-red-900/40 transition-colors shadow-xs"
+          >
+            <Wrench className="w-3 h-3" />
+            <span>Generar Orden de Trabajo</span>
+          </a>
+        </div>
+      )}
 
       {/* Botones de acción rápida */}
       {showTrash && (
@@ -568,6 +582,16 @@ export default function CRMManager() {
 
             {/* ── Acciones del drawer ── */}
             <div className="p-5 border-t border-[var(--ts-border)] space-y-2">
+              {(["aprobada", "aprobadas", "Aprobada", "Aprobadas"].includes(selected.estado)) && (
+                <a
+                  href={`/ordenes?cotizacion_id=${selected.id}`}
+                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white text-sm font-bold py-2.5 rounded-xl transition-colors shadow-xs"
+                >
+                  <Wrench className="w-4 h-4" />
+                  Generar Orden de Trabajo (OT)
+                </a>
+              )}
+
               <button
                 onClick={() => handleRedescargarCot(selected)}
                 disabled={regenerando || loadingDetalles || detalles.length === 0}

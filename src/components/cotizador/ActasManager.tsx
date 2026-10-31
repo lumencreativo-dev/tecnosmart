@@ -80,6 +80,7 @@ export default function ActasManager() {
           tipo_servicio,
           direccion_obra,
           cliente_id,
+          eliminada,
           tecnico_lider:perfiles!ordenes_trabajo_tecnico_lider_id_fkey(nombre)
         )
       `)
@@ -89,14 +90,18 @@ export default function ActasManager() {
     // 2. Cruzar con tabla de clientes
     const { data: clientesData } = await supabase
       .from("clientes")
-      .select("id, nombre")
+      .select("id, empresa, contacto")
       .limit(1000);
 
     const mapaCli: Record<string, string> = {};
-    (clientesData || []).forEach(c => { mapaCli[c.id] = c.nombre; });
+    (clientesData || []).forEach(c => {
+      mapaCli[c.id] = c.empresa ? (c.contacto ? `${c.empresa} (${c.contacto})` : c.empresa) : (c.contacto || "Cliente");
+    });
 
     if (!error && data) {
-      const procesados = (data as any[]).map(inf => ({
+      const procesados = (data as any[])
+        .filter(inf => !inf.orden?.eliminada)
+        .map(inf => ({
         ...inf,
         orden: {
           ...inf.orden,

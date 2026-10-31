@@ -10,7 +10,7 @@ import {
   Plus, Trash2, Save, CheckCircle2, AlertTriangle, Loader2,
   Search, BookOpen, Zap, Eye, Download, ToggleLeft, ToggleRight,
   FileCheck, Shield, BarChart3, ClipboardList, Image as ImageIcon,
-  Star, ArrowRight, Info
+  Star, ArrowRight, Info, ArrowLeft
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useUsuario } from "@/hooks/useUsuario";
@@ -155,9 +155,11 @@ const PASOS_FINAL = [
 export default function InformeTecnicoWizard({
   orden,
   onClose,
+  onBack,
 }: {
   orden: OrdenResumen;
   onClose: () => void;
+  onBack?: () => void;
 }) {
   const { usuario } = useUsuario();
   const [tipoSeleccionado, setTipoSeleccionado] = useState<"inspeccion" | "final_cierre" | null>(null);
@@ -171,6 +173,8 @@ export default function InformeTecnicoWizard({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [firmaCaptured, setFirmaCaptured] = useState(false);
+  const fotoInputRef = useRef<HTMLInputElement>(null);
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
 
   // Cargar cláusulas predefinidas
   useEffect(() => {
@@ -290,14 +294,31 @@ export default function InformeTecnicoWizard({
   // ── Sección: Selección de Tipo ─────────────────────────────────────────────
   if (!tipoSeleccionado || !informe) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div className="ts-surface rounded-2xl w-full max-w-xl">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <div className="ts-surface rounded-2xl w-full max-w-xl shadow-2xl border ts-border">
           <div className="flex items-center justify-between p-6 border-b ts-border">
-            <div>
-              <h2 className="text-base font-black ts-text">Nuevo Informe Técnico</h2>
-              <p className="text-xs ts-text-muted mt-0.5">Orden: {orden.numero} — {orden.tipo_servicio}</p>
+            <div className="flex items-center gap-2.5">
+              {onBack && (
+                <button
+                  type="button"
+                  onClick={onBack}
+                  className="p-1.5 -ml-1 rounded-xl hover:bg-[var(--ts-surface-2)] ts-text-muted hover:ts-text transition-colors"
+                  title="Volver a la orden"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
+              )}
+              <div>
+                <h2 className="text-base font-black ts-text">Nuevo Informe Técnico</h2>
+                <p className="text-xs ts-text-muted mt-0.5">Orden: {orden.numero} — {orden.tipo_servicio}</p>
+              </div>
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--ts-surface-2)] ts-text-muted">
+            <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--ts-surface-2)] ts-text-muted" title="Cerrar">
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -372,12 +393,31 @@ export default function InformeTecnicoWizard({
   const PasoActualIcon = pasos[pasoActual].icon;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 md:p-4">
-      <div className="ts-surface rounded-2xl w-full max-w-3xl max-h-[95vh] flex flex-col">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 md:p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="ts-surface rounded-2xl w-full max-w-3xl max-h-[95vh] flex flex-col shadow-2xl border ts-border">
 
         {/* Header Wizard */}
         <div className="flex items-center justify-between p-4 border-b ts-border">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (pasoActual > 0) {
+                  setPasoActual(p => p - 1);
+                } else {
+                  setTipoSeleccionado(null);
+                }
+              }}
+              className="p-1.5 -ml-1 rounded-xl hover:bg-[var(--ts-surface-2)] ts-text-muted hover:ts-text transition-colors"
+              title="Paso anterior o cambiar tipo"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
               tipoSeleccionado === "inspeccion" ? "bg-purple-100 dark:bg-purple-900/20" : "bg-red-100 dark:bg-red-900/20"
             }`}>
@@ -477,26 +517,26 @@ export default function InformeTecnicoWizard({
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // RENDERIZADO DE CADA PASO
+  // RENDERIZADO DE CADA PASO (Funciones directas para preservar foco del DOM)
   // ═══════════════════════════════════════════════════════════════════════════
   function renderPaso(pasoId: string) {
     switch (pasoId) {
-      case "intro":     return <PasoIntroduccion />;
-      case "diagnostico": return <PasoDiagnostico />;
-      case "riesgos":   return <PasoRiesgos />;
-      case "comparativo": return <PasoComparativo />;
-      case "fases":     return <PasoFases />;
-      case "trabajos":  return <PasoTrabajos />;
-      case "parametros": return <PasoParametros />;
-      case "fotos":     return <PasoFotos />;
-      case "garantia":  return <PasoGarantia />;
-      case "firma":     return <PasoFirma />;
-      default:          return null;
+      case "intro":       return renderPasoIntroduccion();
+      case "diagnostico": return renderPasoDiagnostico();
+      case "riesgos":     return renderPasoRiesgos();
+      case "comparativo": return renderPasoComparativo();
+      case "fases":       return renderPasoFases();
+      case "trabajos":    return renderPasoTrabajos();
+      case "parametros":  return renderPasoParametros();
+      case "fotos":       return renderPasoFotos();
+      case "garantia":    return renderPasoGarantia();
+      case "firma":       return renderPasoFirma();
+      default:            return null;
     }
   }
 
   // ── Paso 1: Introducción ────────────────────────────────────────────────────
-  function PasoIntroduccion() {
+  function renderPasoIntroduccion() {
     return (
       <div className="space-y-4">
         <SectionHeader icon={FileText} title="Datos Generales del Informe" />
@@ -539,7 +579,7 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso 2: Diagnóstico (Radiografía del sitio) ────────────────────────────
-  function PasoDiagnostico() {
+  function renderPasoDiagnostico() {
     const clausulasFiltradas = clausulas.filter(c =>
       !queryClausula || [c.titulo, c.contenido, ...(c.tags || [])].some(t =>
         t.toLowerCase().includes(queryClausula.toLowerCase())
@@ -666,7 +706,7 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso 3: Análisis de Riesgos ────────────────────────────────────────────
-  function PasoRiesgos() {
+  function renderPasoRiesgos() {
     const agregar = () => upd("analisis_riesgos", [...informe!.analisis_riesgos, { riesgo: "", nivel: "medio" as const, impacto: "" }]);
 
     return (
@@ -728,7 +768,7 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso 4: Cuadro Comparativo ─────────────────────────────────────────────
-  function PasoComparativo() {
+  function renderPasoComparativo() {
     const agregar = () => upd("cuadro_comparativo", [...informe!.cuadro_comparativo, { aspecto: "", actual: "", propuesto: "" }]);
 
     return (
@@ -780,7 +820,7 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso 5: Fases de Acción ─────────────────────────────────────────────────
-  function PasoFases() {
+  function renderPasoFases() {
     const agregar = () => upd("fases_accion", [...informe!.fases_accion, { fase: `Fase ${informe!.fases_accion.length + 1}`, descripcion: "", duracion: "" }]);
 
     return (
@@ -813,7 +853,7 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso: Trabajos Realizados (solo final_cierre) ──────────────────────────
-  function PasoTrabajos() {
+  function renderPasoTrabajos() {
     const agregar = () => upd("trabajos_realizados", [...informe!.trabajos_realizados, { descripcion: "", cantidad: "1", unidad: "und" }]);
 
     return (
@@ -857,7 +897,7 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso: Parámetros Técnicos Medidos ─────────────────────────────────────
-  function PasoParametros() {
+  function renderPasoParametros() {
     const PARAMETROS_COMUNES = [
       "Señal (dBm)", "Latencia (ms)", "Velocidad Bajada (Mbps)", "Velocidad Subida (Mbps)",
       "Pérdida de Paquetes (%)", "Temperatura Equipo (°C)", "Voltaje Alimentación (V)",
@@ -890,12 +930,9 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso: Evidencia Fotográfica ────────────────────────────────────────────
-  function PasoFotos() {
-    const inputRef = useRef<HTMLInputElement>(null);
-    const [uploading, setUploading] = useState(false);
-
+  function renderPasoFotos() {
     const subirFoto = async (file: File) => {
-      setUploading(true);
+      setSubiendoFoto(true);
       const ext = file.name.split(".").pop();
       const path = `campo/${orden.id}/${Date.now()}.${ext}`;
       const { data, error } = await supabase.storage.from("campo").upload(path, file, { upsert: true });
@@ -904,7 +941,7 @@ export default function InformeTecnicoWizard({
         const foto: FotoEvidencia = { url: url.publicUrl, descripcion: "", tomada_en: new Date().toISOString() };
         upd("evidencia_fotos", [...informe!.evidencia_fotos, foto]);
       }
-      setUploading(false);
+      setSubiendoFoto(false);
     };
 
     return (
@@ -912,14 +949,14 @@ export default function InformeTecnicoWizard({
         <div className="flex items-center justify-between">
           <SectionHeader icon={Camera} title="Evidencia Fotográfica" />
           <button
-            onClick={() => inputRef.current?.click()}
-            disabled={uploading}
+            onClick={() => fotoInputRef.current?.click()}
+            disabled={subiendoFoto}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--ts-surface-2)] ts-text border ts-border"
           >
-            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-            {uploading ? "Subiendo..." : "Agregar Foto"}
+            {subiendoFoto ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
+            {subiendoFoto ? "Subiendo..." : "Agregar Foto"}
           </button>
-          <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => { if (e.target.files?.[0]) subirFoto(e.target.files[0]); }} />
+          <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => { if (e.target.files?.[0]) subirFoto(e.target.files[0]); }} />
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
@@ -955,7 +992,7 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso: Garantía ──────────────────────────────────────────────────────────
-  function PasoGarantia() {
+  function renderPasoGarantia() {
     return (
       <div className="space-y-4">
         <SectionHeader icon={Shield} title="Garantía del Servicio" />
@@ -996,7 +1033,7 @@ export default function InformeTecnicoWizard({
   }
 
   // ── Paso final: Firma Digital ──────────────────────────────────────────────
-  function PasoFirma() {
+  function renderPasoFirma() {
     return (
       <div className="space-y-4">
         <SectionHeader icon={PenTool} title="Firma Digital del Cliente" />

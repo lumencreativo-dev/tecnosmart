@@ -64,6 +64,7 @@ export default function MaterialesManager() {
         orden:ordenes_trabajo!requisicion_materiales_orden_id_fkey(
           numero,
           tipo_servicio,
+          eliminada,
           tecnico_lider:perfiles!ordenes_trabajo_tecnico_lider_id_fkey(nombre)
         )
       `)
@@ -71,7 +72,8 @@ export default function MaterialesManager() {
       .limit(300);
 
     if (!error && data) {
-      setItems(data as unknown as RequisicionConOrden[]);
+      const activas = (data as any[]).filter(item => !item.orden?.eliminada);
+      setItems(activas as unknown as RequisicionConOrden[]);
     }
     setLoading(false);
   }, []);

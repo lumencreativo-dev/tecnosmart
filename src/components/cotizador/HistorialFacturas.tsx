@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Search, Trash2, AlertTriangle, Lock, CheckCircle,
-  X, FileText, Download, XCircle, AlertCircle
+  X, FileText, Download, XCircle, AlertCircle, Wrench
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -397,6 +397,16 @@ export default function HistorialFacturas() {
 
             {/* Acciones del drawer */}
             <div className="p-5 border-t border-[var(--ts-border)] space-y-2">
+              {selected.estado !== "anulada" && (
+                <a
+                  href={`/ordenes?factura_id=${selected.id}`}
+                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white text-sm font-bold py-2.5 rounded-xl transition-colors shadow-xs"
+                >
+                  <Wrench className="w-4 h-4" />
+                  Generar Orden de Trabajo (OT)
+                </a>
+              )}
+
               <button
                 onClick={() => handleRedescargar(selected)}
                 disabled={regenerando}

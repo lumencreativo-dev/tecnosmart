@@ -51,9 +51,11 @@ const ESTADO_COLORES = {
 export default function RequisicionMateriales({
   orden,
   onClose,
+  onBack,
 }: {
   orden: OrdenResumen;
   onClose: () => void;
+  onBack?: () => void;
 }) {
   const { usuario } = useUsuario();
   const [items, setItems] = useState<Requisicion[]>([]);
@@ -183,18 +185,35 @@ export default function RequisicionMateriales({
   const totalSalida = items.reduce((sum, i) => sum + i.cantidad_salida, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="ts-surface rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="ts-surface rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl border ts-border">
 
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b ts-border">
-          <div>
-            <h2 className="text-base font-black ts-text flex items-center gap-2">
-              <Boxes className="w-4 h-4 text-[var(--ts-red)]" /> Requisición de Materiales
-            </h2>
-            <p className="text-xs ts-text-muted">{orden.numero} — {orden.tipo_servicio}</p>
+          <div className="flex items-center gap-2.5">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="p-1.5 -ml-1 rounded-xl hover:bg-[var(--ts-surface-2)] ts-text-muted hover:ts-text transition-colors"
+                title="Volver a la orden"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
+            <div>
+              <h2 className="text-base font-black ts-text flex items-center gap-2">
+                <Boxes className="w-4 h-4 text-[var(--ts-red)]" /> Requisición de Materiales
+              </h2>
+              <p className="text-xs ts-text-muted">{orden.numero} — {orden.tipo_servicio}</p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--ts-surface-2)] ts-text-muted">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--ts-surface-2)] ts-text-muted" title="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>

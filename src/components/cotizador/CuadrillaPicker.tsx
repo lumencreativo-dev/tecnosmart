@@ -5,7 +5,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { HardHat, Users, X, CheckCircle2, Loader2, Search, Star, UserCheck } from "lucide-react";
+import { HardHat, Users, X, CheckCircle2, Loader2, Search, Star, UserCheck, ArrowLeft } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useUsuario } from "@/hooks/useUsuario";
 
@@ -29,9 +29,11 @@ interface OrdenResumen {
 export default function CuadrillaPicker({
   orden,
   onClose,
+  onBack,
 }: {
   orden: OrdenResumen;
   onClose: () => void;
+  onBack?: () => void;
 }) {
   const { usuario } = useUsuario();
   const [tecnicos, setTecnicos] = useState<Tecnico[]>([]);
@@ -146,18 +148,35 @@ export default function CuadrillaPicker({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="ts-surface rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="ts-surface rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl border ts-border">
 
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b ts-border">
-          <div>
-            <h2 className="text-base font-black ts-text flex items-center gap-2">
-              <HardHat className="w-4 h-4 text-[var(--ts-red)]" /> Asignar Cuadrilla
-            </h2>
-            <p className="text-xs ts-text-muted">{orden.numero} — {orden.tipo_servicio}</p>
+          <div className="flex items-center gap-2.5">
+            {onBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="p-1.5 -ml-1 rounded-xl hover:bg-[var(--ts-surface-2)] ts-text-muted hover:ts-text transition-colors"
+                title="Volver a la orden"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+            )}
+            <div>
+              <h2 className="text-base font-black ts-text flex items-center gap-2">
+                <HardHat className="w-4 h-4 text-[var(--ts-red)]" /> Asignar Cuadrilla
+              </h2>
+              <p className="text-xs ts-text-muted">{orden.numero} — {orden.tipo_servicio}</p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--ts-surface-2)] ts-text-muted">
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-[var(--ts-surface-2)] ts-text-muted" title="Cerrar">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -214,8 +233,12 @@ export default function CuadrillaPicker({
             {ayudantes.length + (lider ? 1 : 0)} persona{ayudantes.length + (lider ? 1 : 0) !== 1 ? "s" : ""} en cuadrilla
           </p>
           <div className="flex gap-2">
-            <button onClick={onClose} className="text-xs px-3 py-2 rounded-lg border ts-border ts-text-muted hover:bg-[var(--ts-surface-2)]">
-              Cancelar
+            <button
+              type="button"
+              onClick={onBack || onClose}
+              className="text-xs px-3.5 py-2 rounded-xl border ts-border ts-text-muted hover:bg-[var(--ts-surface-2)] transition-colors"
+            >
+              {onBack ? "Volver" : "Cancelar"}
             </button>
             <button
               onClick={guardar}
