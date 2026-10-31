@@ -109,11 +109,10 @@ export default function OrdenesTrabajoManager() {
   // ── Carga de datos ─────────────────────────────────────────────────────────
   const cargarOrdenes = useCallback(async () => {
     setLoading(true);
-    let query = supabase
+    let q = supabase
       .from("ordenes_trabajo")
       .select(`
         *,
-        cliente:perfiles!ordenes_trabajo_cliente_id_fkey(nombre, email),
         tecnico_lider:perfiles!ordenes_trabajo_tecnico_lider_id_fkey(nombre, avatar_url)
       `)
       .order("created_at", { ascending: false })
@@ -121,21 +120,39 @@ export default function OrdenesTrabajoManager() {
 
     // Los técnicos solo ven sus propias órdenes
     if (!puedeCrear && puedeVerPropias && usuario) {
-      query = query.or(`tecnico_lider_id.eq.${usuario.id},ayudantes.cs.{${usuario.id}}`);
+      q = q.or(`tecnico_lider_id.eq.${usuario.id},ayudantes.cs.{${usuario.id}}`);
     }
 
-    const { data, error } = await query;
-    if (!error && data) setOrdenes(data as OrdenTrabajo[]);
+    const { data, error } = await q;
+    if (!error && data) {
+      // Cruzar clientes por ID para evitar errores de foreign key o esquemas mixtos
+      const { data: listaClientes } = await supabase
+        .from("clientes")
+        .select("id, nombre, email, telefono")
+        .limit(1000);
+      
+      const mapaCli: Record<string, { nombre: string; email: string }> = {};
+      (listaClientes || []).forEach(c => {
+        mapaCli[c.id] = { nombre: c.nombre, email: c.email || "" };
+      });
+
+      const ordenesConCliente = (data as any[]).map(ord => ({
+        ...ord,
+        cliente: ord.cliente_id && mapaCli[ord.cliente_id] ? mapaCli[ord.cliente_id] : ord.cliente || null
+      }));
+
+      setOrdenes(ordenesConCliente as OrdenTrabajo[]);
+    }
     setLoading(false);
   }, [puedeCrear, puedeVerPropias, usuario]);
 
   const cargarClientes = async () => {
+    // Cargar de la tabla "clientes" (Directorio de Clientes de la empresa)
     const { data } = await supabase
-      .from("perfiles")
+      .from("clientes")
       .select("id, nombre")
-      .eq("estado", "activo")
       .order("nombre")
-      .limit(300);
+      .limit(500);
     if (data) setClientes(data);
   };
 
@@ -175,9 +192,10 @@ export default function OrdenesTrabajoManager() {
     setSaving(true);
     setError(null);
 
+    const esMock = !usuario?.id || usuario.id === "00000000-0000-0000-0000-000000000000";
     const payload = {
       ...form,
-      creado_por: usuario?.id,
+      creado_por: esMock ? null : usuario.id,
       cliente_id: form.cliente_id || null,
       fecha_visita: form.fecha_visita || null,
       fecha_ejecucion: form.fecha_ejecucion || null,
@@ -432,7 +450,7 @@ export default function OrdenesTrabajoManager() {
   );
 
   // ── Render: Modal Detalle ─────────────────────────────────────────────────
-  const ModalDetalle = () => {
+  const renderModalDetalle = () => {
     if (!ordenActual) return null;
     const estadoCfg = ESTADOS_CONFIG[ordenActual.estado];
 
@@ -541,7 +559,7 @@ export default function OrdenesTrabajoManager() {
   };
 
   // ── Render: Modal Formulario ──────────────────────────────────────────────
-  const ModalFormulario = () => (
+  const renderModalFormulario = () => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="ts-surface rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b ts-border">
@@ -852,8 +870,8 @@ export default function OrdenesTrabajoManager() {
       )}
 
       {/* Modales */}
-      {(modal === "nueva" || modal === "editar") && <ModalFormulario />}
-      {modal === "detalle" && ordenActual && <ModalDetalle />}
+      {(modal === "nueva" || modal === "editar") && renderModalFormulario()}
+      {modal === "detalle" && ordenActual && renderModalDetalle()}
       {modal === "informe" && ordenActual && (
         <InformeTecnicoWizard
           orden={ordenActual as any}

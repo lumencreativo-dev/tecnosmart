@@ -114,6 +114,7 @@ export default function RequisicionMateriales({
     if (!nuevoItem.nombre_producto || nuevoItem.cantidad_salida < 1) return;
     setSaving(true);
 
+    const esMock = !usuario?.id || usuario.id === "00000000-0000-0000-0000-000000000000";
     const { data } = await supabase.from("requisicion_materiales").insert({
       orden_id: orden.id,
       producto_id: nuevoItem.producto_id || null,
@@ -124,7 +125,7 @@ export default function RequisicionMateriales({
       cantidad_retorno: 0,
       notas: nuevoItem.notas || null,
       estado: "pendiente",
-      creado_por: usuario?.id,
+      creado_por: esMock ? null : usuario.id,
     }).select().single();
 
     if (data) {

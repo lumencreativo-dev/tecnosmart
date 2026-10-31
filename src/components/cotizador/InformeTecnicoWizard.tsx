@@ -236,11 +236,12 @@ export default function InformeTecnicoWizard({
     if (!data || !tipoSeleccionado) return;
     setSaving(true);
 
+    const esMock = !usuario?.id || usuario.id === "00000000-0000-0000-0000-000000000000";
     const payload = {
       orden_id: orden.id,
       tipo_informe: data.tipo_informe,
       estado: data.estado,
-      representante_tecnico_id: usuario?.id,
+      representante_tecnico_id: esMock ? null : usuario.id,
       fecha_informe: data.fecha_informe,
       lugar_inspeccion: data.lugar_inspeccion,
       introduccion: data.introduccion,
@@ -259,7 +260,7 @@ export default function InformeTecnicoWizard({
       garantia_meses: data.garantia_meses,
       omitido: data.omitido,
       motivo_omision: data.motivo_omision,
-      creado_por: usuario?.id,
+      creado_por: esMock ? null : usuario.id,
     };
 
     if (informeId) {
