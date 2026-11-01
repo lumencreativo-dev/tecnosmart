@@ -1,73 +1,49 @@
-import Image from "next/image";
-import { ArrowRight, BadgeCheck } from "lucide-react";
+"use client";
 
-const beneficios = [
-  "Precios especiales para técnicos e instaladores",
-  "Soporte técnico y asesoría comercial directa",
-  "Acceso a catálogo completo de equipos",
-  "Capacitación e instalación conjunta disponible",
-];
+import { ArrowRight, Wrench, ShieldCheck, CheckCircle2 } from "lucide-react";
 
 export default function BannerB2B() {
-  const wa = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "584122789273";
-
   return (
-    <section id="b2b" className="py-0 relative overflow-hidden">
-      {/* Foto de fondo — técnico trabajando */}
-      <div className="relative h-auto">
-        <Image
-          src="https://images.unsplash.com/photo-1521791136064-7986c2920216?w=1400&q=80"
-          alt="Técnico en instalación profesional"
-          width={1400}
-          height={600}
-          className="w-full h-[500px] sm:h-[420px] object-cover object-center"
-        />
-        {/* Overlay negro fuerte */}
-        <div className="absolute inset-0 bg-[var(--ts-surface-raised)]/88" />
+    <section id="b2b" className="py-16 bg-[#101015] border-t border-b border-[#20202a] text-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="bg-gradient-to-r from-[#15151e] via-[#1a1a26] to-[#15151e] border border-[#282836] rounded-3xl p-8 sm:p-12 flex flex-col lg:flex-row items-center justify-between gap-8 shadow-2xl">
+          
+          <div className="space-y-3 max-w-2xl">
+            <div className="inline-flex items-center gap-2 bg-[var(--ts-red)]/15 border border-[var(--ts-red)]/40 text-[var(--ts-red)] text-xs font-bold uppercase tracking-widest px-3.5 py-1.5 rounded-full">
+              <Wrench className="w-3.5 h-3.5" />
+              <span>Para Técnicos e Instaladores</span>
+            </div>
 
-        {/* Línea roja superior */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-[var(--ts-red)]" />
+            <h3 className="text-2xl sm:text-3xl font-black text-white">
+              ¿Eres instalador o técnico independiente?
+            </h3>
 
-        {/* Contenido centrado */}
-        <div className="absolute inset-0 flex items-center">
-          <div className="max-w-5xl mx-auto px-6 w-full">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+            <p className="text-sm text-[#a5a5b2] leading-relaxed">
+              Trabajamos de la mano con profesionales del área en todo el país. En nuestro formulario de asesoría puedes identificarte como <strong>Técnico-Instalador</strong> para coordinar requerimientos técnicos, soporte y proyectos conjuntos con nuestros ingenieros.
+            </p>
 
-              {/* Texto */}
-              <div>
-                <span className="inline-block bg-[var(--ts-red)] text-[var(--ts-text-primary)] text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full mb-4">
-                  Técnicos e Instaladores
-                </span>
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-[var(--ts-text-primary)] mb-3 leading-tight">
-                  ¿Eres técnico o instalador independiente?
-                </h2>
-                <p className="text-[var(--ts-text-muted)] text-base leading-relaxed">
-                  Conseguí tus equipos de seguridad a <strong className="text-white">precio especial de técnico</strong>, diferente al precio de cliente final. Sin compromisos, sin mínimos de compra.
-                </p>
-              </div>
-
-              {/* Lista + CTA */}
-              <div>
-                <ul className="space-y-3 mb-7">
-                  {beneficios.map((b) => (
-                    <li key={b} className="flex items-start gap-3 text-[#d9d9d9] text-sm">
-                      <BadgeCheck className="w-5 h-5 text-[var(--ts-red)] flex-shrink-0 mt-0.5" />
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-                <a
-                  href={`https://wa.me/${wa}?text=Hola%20TecnoSmart%2C%20soy%20t%C3%A9cnico%20instalador%20y%20me%20interesa%20precio%20especial`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-[var(--ts-text-primary)] font-bold px-6 py-3.5 rounded-lg transition-all hover:scale-105 shadow-lg shadow-red-900/30"
-                >
-                  Consultar precio de técnico
-                  <ArrowRight className="w-4 h-4" />
-                </a>
-              </div>
+            <div className="flex flex-wrap items-center gap-4 pt-2 text-xs text-[#c0c0cc]">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-[var(--ts-red)]" />
+                Coordinación con ingenieros certificados
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-[var(--ts-red)]" />
+                Respaldo en proyectos a nivel nacional
+              </span>
             </div>
           </div>
+
+          <div className="flex-shrink-0">
+            <a
+              href="#asesoria-gratuita"
+              className="inline-flex items-center gap-2 bg-[var(--ts-red)] hover:bg-[#b01f25] text-white font-bold px-7 py-4 rounded-xl shadow-lg shadow-red-950/40 transition-all hover:scale-105"
+            >
+              <span>Solicitar asesoría técnica</span>
+              <ArrowRight className="w-4 h-4" />
+            </a>
+          </div>
+
         </div>
       </div>
     </section>

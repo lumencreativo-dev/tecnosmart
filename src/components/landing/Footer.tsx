@@ -1,108 +1,138 @@
 import Link from "next/link";
 import Image from "next/image";
-import { MapPin, Phone, Mail, Building2 } from "lucide-react";
+import { MapPin, Phone, Mail, Building2, Globe, ShieldCheck } from "lucide-react";
 
 export default function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer id="contacto" className="bg-[var(--ts-surface-raised)] text-[#d9d9d9]">
-      <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-3 gap-10">
-
-        {/* Columna 1: Marca */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
+    <footer id="contacto" className="bg-[#0b0b0e] border-t border-[#1e1e26] text-[#c8c8cf]">
+      <div className="max-w-7xl mx-auto px-6 py-16 grid grid-cols-1 md:grid-cols-12 gap-10">
+        
+        {/* Columna 1: Empresa & Legal (5 cols) */}
+        <div className="md:col-span-5 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
             <Image
               src="/logo-blanco.png"
-              alt="TecnoSmart"
+              alt="TecnoSmart VZL"
               width={160}
               height={45}
-              className="h-10 w-auto object-contain"
+              className="h-9 w-auto object-contain"
             />
           </div>
-          <p className="text-sm leading-relaxed text-[var(--ts-text-muted)] italic mt-2">
-            "Tu seguridad, es nuestra prioridad."
+
+          <p className="text-sm font-semibold text-white italic">
+            «Tu seguridad es nuestra prioridad, y nos comprometemos de verdad contigo»
           </p>
-          <p className="text-sm leading-relaxed text-[var(--ts-text-muted)] mt-2">
-            Tienda especializada en seguridad electrónica, automatización y redes.
-            Equipos Hikvision, HiLook, EZVIZ, Tapo, TP-Link y más.
+
+          <p className="text-xs text-[#8e8e9c] leading-relaxed max-w-sm">
+            Empresa familiar especializada en instalaciones de seguridad electrónica, videovigilancia, redes, Starlink y automatizaciones tecnológicas para empresas y hogares.
           </p>
-          <div className="mt-3 space-y-1">
-            <p className="text-xs text-[var(--ts-text-muted)] flex items-center gap-1.5">
-              <Building2 className="w-3 h-3 text-[var(--ts-red)] flex-shrink-0" />
-              TECNO SMART VZL C.A
+
+          <div className="pt-2 space-y-1.5 text-xs text-[#9595a2]">
+            <p className="flex items-center gap-2 font-medium text-white">
+              <Building2 className="w-3.5 h-3.5 text-[var(--ts-red)] flex-shrink-0" />
+              <span>TECNO SMART VZL C.A</span>
             </p>
-            <p className="text-xs text-[var(--ts-text-muted)]">RIF: J-50701960-8</p>
+            <p className="font-mono text-[#80808e]">
+              RIF: J-50701960-8
+            </p>
+            <p className="flex items-center gap-2 text-[#80808e]">
+              <Globe className="w-3.5 h-3.5 text-[var(--ts-red)] flex-shrink-0" />
+              <span>www.somostecnosmart.com</span>
+            </p>
           </div>
         </div>
 
-        {/* Columna 2: Contacto */}
-        <div>
-          <h4 className="text-[var(--ts-text-primary)] font-semibold mb-4 text-sm uppercase tracking-wider">
-            Contacto
+        {/* Columna 2: Contacto Aprobado (4 cols) */}
+        <div className="md:col-span-4 space-y-4">
+          <h4 className="text-xs font-bold uppercase tracking-widest text-white">
+            Contacto Directo
           </h4>
-          <ul className="space-y-3 text-sm">
-            <li className="flex items-start gap-2">
+
+          <ul className="space-y-3 text-xs sm:text-sm text-[#b0b0bc]">
+            <li className="flex items-start gap-2.5">
               <MapPin className="w-4 h-4 text-[var(--ts-red)] mt-0.5 flex-shrink-0" />
               <span className="leading-snug">
-                Av. Bolívar C/C c. Páez, Edif. Sta. Eduviges II,
-                local-02, Tinaquillo, Edo. Cojedes
+                Av. Bolívar c/c Páez, Edif. Sta. Eduviges II, local-02, Tinaquillo, Edo. Cojedes
               </span>
             </li>
-            <li className="flex items-center gap-2">
+
+            <li className="flex items-center gap-2.5">
               <Phone className="w-4 h-4 text-[var(--ts-red)] flex-shrink-0" />
               <a
                 href="https://wa.me/584122789273"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-[var(--ts-text-primary)] transition-colors"
+                className="hover:text-white transition-colors"
               >
-                0412-2789273
+                WhatsApp: 0412-2789273
               </a>
             </li>
-            <li className="flex items-center gap-2">
+
+            <li className="flex items-center gap-2.5">
               <Mail className="w-4 h-4 text-[var(--ts-red)] flex-shrink-0" />
               <a
-                href="mailto:tecnosmartvzla@gmail.com"
-                className="hover:text-[var(--ts-text-primary)] transition-colors"
+                href="mailto:contacto@somostecnosmart.com"
+                className="hover:text-white transition-colors"
               >
-                tecnosmartvzla@gmail.com
+                Ventas: contacto@somostecnosmart.com
+              </a>
+            </li>
+
+            <li className="flex items-center gap-2.5">
+              <Mail className="w-4 h-4 text-[var(--ts-red)] flex-shrink-0" />
+              <a
+                href="mailto:soporte@somostecnosmart.com"
+                className="hover:text-white transition-colors"
+              >
+                Soporte: soporte@somostecnosmart.com
               </a>
             </li>
           </ul>
         </div>
 
-        {/* Columna 3: Servicios rápidos */}
-        <div>
-          <h4 className="text-[var(--ts-text-primary)] font-semibold mb-4 text-sm uppercase tracking-wider">
+        {/* Columna 3: Servicios Aprobados (3 cols) */}
+        <div className="md:col-span-3 space-y-4">
+          <h4 className="text-xs font-bold uppercase tracking-widest text-white">
             Servicios
           </h4>
-          <ul className="space-y-2 text-sm text-[var(--ts-text-muted)]">
-            {[
-              "Videovigilancia CCTV / IP",
-              "Domótica & Control de Acceso",
-              "Cableado Estructurado",
-              "Mantenimiento Industrial",
-              "Distribución Hikvision B2B",
-            ].map((s) => (
-              <li key={s} className="hover:text-[var(--ts-red)] cursor-default transition-colors">
-                › {s}
-              </li>
-            ))}
+
+          <ul className="space-y-2 text-xs text-[#8e8e9c]">
+            <li className="hover:text-[var(--ts-red)] transition-colors cursor-default">
+              › Cámaras y seguridad (CCTV/IP)
+            </li>
+            <li className="hover:text-[var(--ts-red)] transition-colors cursor-default">
+              › Starlink (antena y red)
+            </li>
+            <li className="hover:text-[var(--ts-red)] transition-colors cursor-default">
+              › Domótica y control de acceso
+            </li>
+            <li className="hover:text-[var(--ts-red)] transition-colors cursor-default">
+              › Cableado estructurado y redes
+            </li>
+            <li className="hover:text-[var(--ts-red)] transition-colors cursor-default">
+              › Automatizaciones para empresas
+            </li>
+            <li className="hover:text-[var(--ts-red)] transition-colors cursor-default">
+              › Plan Premium ($5/mes)
+            </li>
           </ul>
         </div>
+
       </div>
 
-      {/* Barra inferior */}
-      <div className="border-t border-[#222] py-4 px-6">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-[var(--ts-text-muted)]">
+      {/* Barra Inferior */}
+      <div className="border-t border-[#181820] py-5 px-6">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#70707c]">
           <span>
-            © {year} TECNO SMART VZL C.A · RIF: J-50701960-8 · Todos los derechos reservados.
+            © {year} TECNO SMART VZL C.A · RIF: J-50701960-8 · Tinaquillo, Cojedes, Venezuela.
           </span>
-          {/* Acceso discreto al cotizador — NO indexado */}
+
+          {/* Acceso discreto al portal interno (sin tocar rutas) */}
           <Link
             href="/dashboard"
-            className="hover:text-[var(--ts-red)] transition-colors"
+            className="hover:text-[var(--ts-red)] transition-colors font-medium"
           >
             Acceso Interno
           </Link>

@@ -10,17 +10,17 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "TecnoSmart VZL | Tienda Especializada en Soluciones Tecnológicas",
+  title: "TecnoSmart VZL | Tu seguridad es nuestra prioridad",
   description:
-    "Tienda especializada en tecnología, seguridad electrónica y automatización en Tinaquillo, Venezuela. Ofrecemos equipos CCTV, Starlink, redes, control de acceso y servicio técnico profesional.",
+    "Instalaciones de seguridad realizadas por técnicos certificados, limpias y según normas internacionales, por una empresa familiar en la que puedes confiar. Videovigilancia CCTV/IP, Starlink, domótica, redes y automatizaciones en Venezuela.",
   keywords: [
     "cámaras de seguridad", "CCTV", "Starlink", "internet satelital", "redes", "domótica",
-    "Hikvision", "Ezviz", "Tapo", "HiLook", "Tinaquillo", "Cojedes", "Venezuela", "tecnología"
+    "Hikvision", "Ezviz", "Tapo", "HiLook", "Tinaquillo", "Cojedes", "Valencia", "Caracas", "Venezuela", "tecnología"
   ],
   openGraph: {
-    title: "TecnoSmart VZL | Seguridad & Tecnología",
-    description: "Equipos de seguridad, redes e internet satelital en Venezuela. Instalación y servicio técnico profesional.",
-    url: "https://tecnosmartvzl.com",
+    title: "TecnoSmart VZL | Tu seguridad es nuestra prioridad",
+    description: "Instalaciones de seguridad y soluciones tecnológicas en Venezuela realizadas por técnicos certificados.",
+    url: "https://www.somostecnosmart.com",
     siteName: "TecnoSmart VZL",
     type: "website",
     locale: "es_VE",

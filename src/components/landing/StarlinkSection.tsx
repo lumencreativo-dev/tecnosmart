@@ -1,98 +1,110 @@
-import Image from "next/image";
-import { Wifi, Settings, CreditCard, ArrowRight } from "lucide-react";
+"use client";
 
-const planes = [
+import { Radio, Wifi, CreditCard, ArrowRight, CheckCircle2 } from "lucide-react";
+import LandingImage from "./LandingImage";
+
+const starlinkFeatures = [
   {
-    titulo: "Instalación",
-    precio: "Desde $80",
-    descripcion: "Montaje de antena, soporte, alineación satelital y tendido de cable.",
-    icono: Settings,
+    titulo: "Instalación Física Profesional",
+    descripcion:
+      "Montaje en mástil o pared con soportes de grado industrial, alineación satelital con línea de vista despejada y tendido de cableado limpio.",
+    icono: Radio,
   },
   {
-    titulo: "Configuración",
-    precio: "$50",
-    descripcion: "Setup completo de red, integración con router y dispositivos locales.",
+    titulo: "Configuración y Red Interna",
+    descripcion:
+      "Setup del router Starlink, configuración de red Wi-Fi de alta cobertura e integración con switches o sistemas de videovigilancia.",
     icono: Wifi,
   },
   {
-    titulo: "Gestión de Pago Mensual",
-    precio: "Plan + $10",
-    descripcion: "Sin tarjeta internacional, nosotros gestionamos tu mensualidad. Solo $10 de comisión.",
+    titulo: "Gestión de Mensualidad",
+    descripcion:
+      "Si no posees tarjeta internacional, nosotros nos encargamos de tramitar y gestionar el pago mensual directo de tu servicio satelital.",
     icono: CreditCard,
   },
 ];
 
 export default function StarlinkSection() {
-  const wa = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "584122789273";
-
   return (
-    <section id="starlink" className="py-24 bg-[var(--ts-bg)]">
+    <section id="starlink" className="py-24 bg-[#0e0e12] border-t border-[#1a1a22] text-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-
-          {/* Imagen */}
-          <div className="relative h-80 lg:h-full min-h-[400px] rounded-2xl overflow-hidden">
-            <Image
-              src="https://images.unsplash.com/photo-1614728894747-a83421e2b9c9?w=800&q=80"
-              alt="Antena Starlink instalada"
-              fill
-              className="object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent" />
-            {/* Badge nuevo servicio */}
-            <span className="absolute top-5 left-5 bg-[var(--ts-red)] text-[var(--ts-text-primary)] text-xs font-bold uppercase tracking-widest px-3 py-1.5 rounded-full">
-              ★ Nuevo Servicio
-            </span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+          
+          {/* Columna Izquierda: [FOTO: starlink] */}
+          <div className="lg:col-span-5 order-2 lg:order-1">
+            <div className="w-full aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl shadow-black/80">
+              <LandingImage
+                src="/landing/starlink.jpg"
+                alt="Instalación de antena Starlink por TecnoSmart"
+                label="[FOTO: Instalación Starlink]"
+                fileHint="public/landing/starlink.jpg"
+                fill
+                className="w-full h-full min-h-[320px]"
+              />
+            </div>
+            <p className="text-center text-xs text-[#80808c] mt-3">
+              Instalación satelital en hogares, comercios, empresas y fincas.
+            </p>
           </div>
 
-          {/* Contenido */}
-          <div>
-            <span className="text-[var(--ts-red)] text-xs font-bold uppercase tracking-widest">
-              Internet Satelital
+          {/* Columna Derecha: Contenido y Características (Sin precios) */}
+          <div className="lg:col-span-7 order-1 lg:order-2">
+            <span className="text-[var(--ts-red)] text-xs font-bold uppercase tracking-widest bg-red-950/30 border border-red-900/40 px-3 py-1 rounded-full">
+              Internet Satelital de Alta Velocidad
             </span>
-            <h2 className="mt-2 text-3xl sm:text-4xl font-extrabold text-[var(--ts-text-primary)] mb-4">
-              Starlink en Venezuela
+            <h2 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight mb-4">
+              Starlink en Venezuela: Instalación, Configuración y Pago de Mensualidad
             </h2>
-            <p className="text-[var(--ts-text-muted)] mb-8 leading-relaxed">
-              Instalamos y configuramos tu antena Starlink. ¿No tienes tarjeta
-              internacional? Nosotros gestionamos el pago mensual de tu plan — solo
-              pagas <strong className="text-[var(--ts-text-primary)]">$10 de comisión</strong>.
+            <p className="text-base text-[#a5a5b2] mb-8 leading-relaxed">
+              Disfruta de conectividad satelital estable en cualquier rincón del país. Nos encargamos de todo el proceso técnico y administrativo para que no tengas complicaciones.
             </p>
 
-            {/* Tarjetas de planes */}
-            <div className="space-y-3 mb-8">
-              {planes.map((p) => {
-                const Icon = p.icono;
+            {/* Lista de características técnicas */}
+            <div className="space-y-4 mb-8">
+              {starlinkFeatures.map((f) => {
+                const Icon = f.icono;
                 return (
                   <div
-                    key={p.titulo}
-                    className="flex items-start gap-4 bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-4"
+                    key={f.titulo}
+                    className="flex items-start gap-4 bg-[#14141a] rounded-xl border border-[#23232c] p-4.5 hover:border-[#383848] transition-colors"
                   >
-                    <div className="w-10 h-10 rounded-lg bg-[var(--ts-red-subtle)] flex items-center justify-center flex-shrink-0">
-                      <Icon className="w-5 h-5 text-[var(--ts-red)]" />
+                    <div className="w-10 h-10 rounded-lg bg-red-950/30 border border-red-900/40 flex items-center justify-center text-[var(--ts-red)] flex-shrink-0 mt-0.5">
+                      <Icon className="w-5 h-5" />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="font-bold text-[var(--ts-text-primary)] text-sm">{p.titulo}</p>
-                        <span className="text-[var(--ts-red)] font-bold text-sm">{p.precio}</span>
-                      </div>
-                      <p className="text-[var(--ts-text-muted)] text-xs mt-0.5 leading-snug">{p.descripcion}</p>
+                    <div>
+                      <h4 className="text-base font-bold text-white mb-1">
+                        {f.titulo}
+                      </h4>
+                      <p className="text-xs sm:text-sm text-[#9595a0] leading-relaxed">
+                        {f.descripcion}
+                      </p>
                     </div>
                   </div>
                 );
               })}
             </div>
 
+            {/* Aviso de cotización */}
+            <div className="bg-[#181822] border border-[#2b2b3a] rounded-xl p-4 mb-8 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2.5 text-xs sm:text-sm text-[#c5c5d0]">
+                <CheckCircle2 className="w-4 h-4 text-[var(--ts-red)] flex-shrink-0" />
+                <span>
+                  Los costos varían según el tipo de montaje, altura y distancia de tendido. Recibe tu presupuesto exacto en la asesoría telefónica.
+                </span>
+              </div>
+            </div>
+
+            {/* Botón CTA hacia formulario */}
             <a
-              href={`https://wa.me/${wa}?text=Hola%20TecnoSmart%2C%20me%20interesa%20el%20servicio%20de%20Starlink`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-[var(--ts-text-primary)] font-bold px-6 py-3 rounded-lg transition-all hover:scale-105 shadow-md shadow-red-900/20"
+              href="#asesoria-gratuita"
+              className="inline-flex items-center gap-2 bg-[var(--ts-red)] hover:bg-[#b01f25] text-white font-bold px-7 py-3.5 rounded-xl shadow-lg shadow-red-950/40 transition-all hover:scale-105"
             >
-              Cotizar Starlink
+              <span>Solicitar asesoría para Starlink</span>
               <ArrowRight className="w-4 h-4" />
             </a>
+
           </div>
+
         </div>
       </div>
     </section>
