@@ -156,6 +156,13 @@ export default function HistorialFacturas() {
         igtfBs:         Number(f.igtf_bs || 0),
         totalBs:        Number(f.total_bs || 0),
         aplicaIgtf:     Boolean(f.aplica_igtf),
+        aplicaRetencionIva: Boolean(f.aplica_retencion_iva),
+        retencionIvaPct:    Number(f.retencion_iva_pct || 75),
+        retencionIvaBs:     Number(f.retencion_iva_bs || 0),
+        aplicaRetencionIslr:Boolean(f.aplica_retencion_islr),
+        retencionIslrPct:   Number(f.retencion_islr_pct || 2),
+        retencionIslrBs:    Number(f.retencion_islr_bs || 0),
+        totalNetoBs:        Number(f.total_neto_bs || f.total_bs || 0),
       });
     } catch (e) {
       console.error("Error al re-generar PDF:", e);

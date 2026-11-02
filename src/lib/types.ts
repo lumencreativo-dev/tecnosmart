@@ -45,6 +45,9 @@ export interface Cliente {
   tipo?: "cliente_normal" | "tecnico";  // Tipo para precios diferenciados
   notas?: string;
   acepta_promociones?: boolean;
+  es_contribuyente_especial?: boolean; // Contribuyente Especial / Agente de Retención
+  retencion_iva_pct?: number;          // % sugerido de retención IVA (ej. 75, 100)
+  retencion_islr_pct?: number;         // % sugerido de retención ISLR (ej. 2)
 }
 
 export type TipoItem = "producto" | "servicio";
@@ -62,8 +65,26 @@ export interface LineaDetalle {
 export interface ResumenCotizacion {
   subtotal: number;
   descuento: number;
+  baseImponible?: number;
+  // IVA
+  aplicaIva?: boolean;
+  ivaPct?: number;
+  ivaMonto?: number;
+  // Total bruto (Base + IVA)
   total: number;
-  anticipo: number; // 70% si total > 500
-  saldo: number; // 30%
+  anticipo: number; // 70% si aplica esquema
+  saldo: number;    // 30%
   aplicaEsquemaPago: boolean;
+  // Moneda y tasa de cambio
+  moneda?: "USD" | "VES";
+  tasaBcv?: number;
+  // Retenciones fiscales
+  aplicaRetenciones?: boolean;
+  aplicaRetencionIva?: boolean;
+  retencionIvaPct?: number;
+  retencionIvaMonto?: number;
+  aplicaRetencionIslr?: boolean;
+  retencionIslrPct?: number;
+  retencionIslrMonto?: number;
+  totalNeto?: number;
 }

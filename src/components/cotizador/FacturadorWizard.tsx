@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   Search, FileText, CheckCircle2, AlertCircle,
   RefreshCw, ShoppingCart, Plus, Minus, Trash2,
-  ArrowRight, Package,
+  ArrowRight, Package, Building2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, tempId } from "@/lib/utils";
@@ -187,6 +187,14 @@ export default function FacturadorWizard() {
     setBuscando(false);
     if (err || !data) { setError("No se encontró ninguna cotización con ese número."); return; }
     setCotizacion(data);
+    if (data.clientes?.es_contribuyente_especial) {
+      setAplicaRetencionIva(true);
+      if (typeof data.clientes.retencion_iva_pct === "number") setRetencionIvaPct(data.clientes.retencion_iva_pct);
+      if (typeof data.clientes.retencion_islr_pct === "number") {
+        setRetencionIslrPct(data.clientes.retencion_islr_pct);
+        setAplicaRetencionIslr(true);
+      }
+    }
     if (data.estado !== "facturada") fetchBCVRate();
   };
 
@@ -243,15 +251,33 @@ export default function FacturadorWizard() {
   const totalDirecto = lineasDirectas.reduce((s, l) => s + l.subtotal, 0);
 
   const [aplicaIva, setAplicaIva]       = useState(true);
-  const [aplicaIgtfManual, setAplicaIgtfManual] = useState(true);
+  const [ivaPct, setIvaPct]             = useState(16);
+  const [aplicaIgtf, setAplicaIgtf]     = useState(false);
+  const [igtfPct, setIgtfPct]           = useState(3);
+
+  // ── Retenciones Fiscales (Contribuyente Especial) ──
+  const [aplicaRetencionIva, setAplicaRetencionIva]   = useState(false);
+  const [retencionIvaPct, setRetencionIvaPct]         = useState(75);
+  const [aplicaRetencionIslr, setAplicaRetencionIslr] = useState(false);
+  const [retencionIslrPct, setRetencionIslrPct]       = useState(2);
+
+  // Sincronizar IGTF sugerido al cambiar método de pago (siempre editable por el usuario)
+  useEffect(() => {
+    const esDivisa = metodoPago === "usd_efectivo" || metodoPago === "zelle" || metodoPago === "binance";
+    setAplicaIgtf(esDivisa);
+  }, [metodoPago]);
 
   // ── Cálculos fiscales comunes ──
   const subtotalUsd  = modo === "desde_cotizacion" ? (cotizacion?.total || 0) : totalDirecto;
-  const aplicaIgtf   = aplicaIgtfManual && (metodoPago === "usd_efectivo" || metodoPago === "zelle" || metodoPago === "binance");
   const subtotalBs   = subtotalUsd * tasaBcv;
-  const ivaBs        = aplicaIva ? subtotalBs * 0.16 : 0;
-  const igtfBs       = aplicaIgtf ? subtotalBs * 0.03 : 0;
+  const ivaBs        = aplicaIva ? subtotalBs * (ivaPct / 100) : 0;
+  const igtfBs       = aplicaIgtf ? subtotalBs * (igtfPct / 100) : 0;
   const totalBs      = subtotalBs + ivaBs + igtfBs;
+
+  // ── Retenciones ──
+  const retencionIvaBs  = (aplicaIva && aplicaRetencionIva) ? (ivaBs * (retencionIvaPct / 100)) : 0;
+  const retencionIslrBs = aplicaRetencionIslr ? (subtotalBs * (retencionIslrPct / 100)) : 0;
+  const totalNetoBs     = Math.max(0, totalBs - retencionIvaBs - retencionIslrBs);
 
   // ── Descontar stock de un array de líneas ──
   const descontarStock = async (lineas: { producto_id?: string; item_id?: string; descripcion?: string; cantidad: number; tipo_item?: string }[]) => {
@@ -289,7 +315,13 @@ export default function FacturadorWizard() {
       const { data: numFactura, error: rpcErr } = await supabase.rpc("next_factura_number");
       if (rpcErr) throw new Error("Error al generar número de factura: " + rpcErr.message);
 
-      const { data: factData, error: insErr } = await supabase.from("facturas").insert([{
+      const infoRetenciones = [
+        aplicaRetencionIva && retencionIvaBs > 0 ? `Ret. IVA ${retencionIvaPct}% (-Bs. ${retencionIvaBs.toFixed(2)})` : null,
+        aplicaRetencionIslr && retencionIslrBs > 0 ? `Ret. ISLR ${retencionIslrPct}% (-Bs. ${retencionIslrBs.toFixed(2)})` : null,
+        (aplicaRetencionIva || aplicaRetencionIslr) ? `Neto a Cobrar: Bs. ${totalNetoBs.toFixed(2)}` : null
+      ].filter(Boolean).join(" | ");
+
+      const facturaPayload: any = {
         cotizacion_id: cotizacion.id,
         numero_factura: numFactura,
         tasa_bcv:       tasaBcv,
@@ -301,11 +333,41 @@ export default function FacturadorWizard() {
         iva_bs:         ivaBs,
         igtf_bs:        igtfBs,
         total_bs:       totalBs,
-      }]).select().single();
+        aplica_retencion_iva: aplicaRetencionIva,
+        retencion_iva_pct: retencionIvaPct,
+        retencion_iva_bs: retencionIvaBs,
+        aplica_retencion_islr: aplicaRetencionIslr,
+        retencion_islr_pct: retencionIslrPct,
+        retencion_islr_bs: retencionIslrBs,
+        total_neto_bs: totalNetoBs,
+        notas: infoRetenciones ? `${cotizacion.notas || ""} [${infoRetenciones}]`.trim() : cotizacion.notas,
+      };
+
+      let factData = null;
+      const { data: resData, error: insErr } = await supabase.from("facturas").insert([facturaPayload]).select().single();
 
       if (insErr) {
         if (insErr.code === "23505") throw new Error("Esta cotización ya fue facturada.");
-        throw new Error("Error al guardar factura: " + insErr.message);
+        // Fallback por si la base de datos no tiene las columnas de retención aún
+        const fallbackPayload = {
+          cotizacion_id: cotizacion.id,
+          numero_factura: numFactura,
+          tasa_bcv:       tasaBcv,
+          metodo_pago:    metodoPago,
+          aplica_igtf:    aplicaIgtf,
+          aplica_iva:     aplicaIva,
+          subtotal_usd:   subtotalUsd,
+          subtotal_bs:    subtotalBs,
+          iva_bs:         ivaBs,
+          igtf_bs:        igtfBs,
+          total_bs:       totalBs,
+          notas: infoRetenciones ? `${cotizacion.notas || ""} [${infoRetenciones}]`.trim() : cotizacion.notas,
+        };
+        const { data: fallbackData, error: fbErr } = await supabase.from("facturas").insert([fallbackPayload]).select().single();
+        if (fbErr) throw new Error("Error al guardar factura: " + fbErr.message);
+        factData = fallbackData;
+      } else {
+        factData = resData;
       }
 
       // ✅ Guardar los detalles en factura_detalles
@@ -343,9 +405,18 @@ export default function FacturadorWizard() {
         tasaBcv,
         subtotalBs,
         ivaBs,
+        ivaPct,
         igtfBs,
+        igtfPct,
         totalBs,
         aplicaIgtf,
+        aplicaRetencionIva,
+        retencionIvaPct,
+        retencionIvaBs,
+        aplicaRetencionIslr,
+        retencionIslrPct,
+        retencionIslrBs,
+        totalNetoBs,
       });
 
     } catch (err: any) {
@@ -368,7 +439,13 @@ export default function FacturadorWizard() {
       const nombreCliente = clienteDirecto?.empresa || clienteDirecto?.contacto || "Cliente General";
       const rifCliente    = clienteDirecto?.rif_cedula || "";
 
-      const { data: factData, error: insErr } = await supabase.from("facturas").insert([{
+      const infoRetenciones = [
+        aplicaRetencionIva && retencionIvaBs > 0 ? `Ret. IVA ${retencionIvaPct}% (-Bs. ${retencionIvaBs.toFixed(2)})` : null,
+        aplicaRetencionIslr && retencionIslrBs > 0 ? `Ret. ISLR ${retencionIslrPct}% (-Bs. ${retencionIslrBs.toFixed(2)})` : null,
+        (aplicaRetencionIva || aplicaRetencionIslr) ? `Neto a Cobrar: Bs. ${totalNetoBs.toFixed(2)}` : null
+      ].filter(Boolean).join(" | ");
+
+      const directPayload: any = {
         cotizacion_id:  null,
         numero_factura: numFactura,
         tasa_bcv:       tasaBcv,
@@ -382,10 +459,43 @@ export default function FacturadorWizard() {
         total_bs:       totalBs,
         cliente_nombre: nombreCliente,
         cliente_rif:    rifCliente,
-        notas:          "Venta directa sin cotización previa",
-      }]).select().single();
+        aplica_retencion_iva: aplicaRetencionIva,
+        retencion_iva_pct: retencionIvaPct,
+        retencion_iva_bs: retencionIvaBs,
+        aplica_retencion_islr: aplicaRetencionIslr,
+        retencion_islr_pct: retencionIslrPct,
+        retencion_islr_bs: retencionIslrBs,
+        total_neto_bs: totalNetoBs,
+        notas: infoRetenciones ? `Venta directa [${infoRetenciones}]` : "Venta directa sin cotización previa",
+      };
 
-      if (insErr) throw new Error("Error al guardar factura: " + insErr.message);
+      let factData = null;
+      const { data: resData, error: insErr } = await supabase.from("facturas").insert([directPayload]).select().single();
+
+      if (insErr) {
+        // Fallback por si la base de datos no tiene las columnas de retención aún
+        const fbPayload = {
+          cotizacion_id:  null,
+          numero_factura: numFactura,
+          tasa_bcv:       tasaBcv,
+          metodo_pago:    metodoPago,
+          aplica_igtf:    aplicaIgtf,
+          aplica_iva:     aplicaIva,
+          subtotal_usd:   subtotalUsd,
+          subtotal_bs:    subtotalBs,
+          iva_bs:         ivaBs,
+          igtf_bs:        igtfBs,
+          total_bs:       totalBs,
+          cliente_nombre: nombreCliente,
+          cliente_rif:    rifCliente,
+          notas: infoRetenciones ? `Venta directa [${infoRetenciones}]` : "Venta directa sin cotización previa",
+        };
+        const { data: fbData, error: fbErr } = await supabase.from("facturas").insert([fbPayload]).select().single();
+        if (fbErr) throw new Error("Error al guardar factura: " + fbErr.message);
+        factData = fbData;
+      } else {
+        factData = resData;
+      }
 
       // ✅ Guardar los detalles en factura_detalles para las estadísticas
       if (factData && lineasDirectas.length > 0) {
@@ -433,9 +543,18 @@ export default function FacturadorWizard() {
         tasaBcv,
         subtotalBs,
         ivaBs,
+        ivaPct,
         igtfBs,
+        igtfPct,
         totalBs,
         aplicaIgtf,
+        aplicaRetencionIva,
+        retencionIvaPct,
+        retencionIvaBs,
+        aplicaRetencionIslr,
+        retencionIslrPct,
+        retencionIslrBs,
+        totalNetoBs,
       });
 
     } catch (err: any) {
@@ -454,6 +573,14 @@ export default function FacturadorWizard() {
     setClienteDirecto(null);
     setError(null);
     setTasaBcv(0);
+    setAplicaIva(true);
+    setIvaPct(16);
+    setAplicaIgtf(false);
+    setIgtfPct(3);
+    setAplicaRetencionIva(false);
+    setRetencionIvaPct(75);
+    setAplicaRetencionIslr(false);
+    setRetencionIslrPct(2);
   };
 
   // ── Formulario fiscal (compartido entre ambos modos) ──
@@ -499,51 +626,344 @@ export default function FacturadorWizard() {
             <option value="binance">Binance (USDT)</option>
           </select>
           <p className="text-[10px] text-[var(--ts-text-muted)] mt-1">
-            {aplicaIgtf ? "Aplica recargo del 3% por IGTF." : "No aplica IGTF."}
+            {aplicaIgtf ? `Aplica recargo del ${igtfPct}% por IGTF.` : "No aplica IGTF."}
           </p>
         </div>
 
-        {/* Toggles IVA e IGTF */}
-        <div className="md:col-span-2 mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <label className="flex items-center gap-2 cursor-pointer w-fit group">
-            <div className="relative">
-              <input 
-                type="checkbox" 
-                className="sr-only" 
-                checked={aplicaIva}
-                onChange={(e) => setAplicaIva(e.target.checked)}
-              />
-              <div className={`block w-10 h-6 rounded-full transition-colors ${aplicaIva ? "bg-[var(--ts-red)]" : "bg-[var(--ts-border)]"}`}></div>
-              <div className={`absolute left-1 top-1 bg-[var(--ts-surface)] w-4 h-4 rounded-full transition-transform ${aplicaIva ? "translate-x-4" : ""}`}></div>
-            </div>
+        {/* ── Impuestos y Retenciones Fiscales ── */}
+        <div className="md:col-span-2 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[var(--ts-border)] pb-2 gap-2">
             <div>
-              <span className="text-sm font-bold text-[var(--ts-text-primary)] transition-colors group-hover:text-[var(--ts-red)]">
-                Incluir IVA (16%)
+              <span className="text-xs font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
+                Impuestos y Retenciones Fiscales
               </span>
-              <p className="text-[10px] text-[var(--ts-text-muted)]">Por defecto activado. Desmárcalo si la factura no lleva IVA.</p>
+              <p className="text-[10px] text-[var(--ts-text-muted)]">
+                Personaliza alícuotas libremente o apaga los que no apliquen
+              </p>
             </div>
-          </label>
+            {/* Presets rápidos */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  setAplicaIva(true);
+                  setIvaPct(16);
+                  setAplicaIgtf(true);
+                  setIgtfPct(3);
+                  setAplicaRetencionIva(true);
+                  setRetencionIvaPct(75);
+                  setAplicaRetencionIslr(true);
+                  setRetencionIslrPct(2);
+                }}
+                className="text-[11px] px-2.5 py-1 rounded bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)] border border-[var(--ts-border)] font-semibold text-[var(--ts-text-primary)] transition-colors shadow-sm"
+                title="Activar IVA (16%), IGTF (3%), Ret. IVA (75%) y Ret. ISLR (2%)"
+              >
+                + Incluir Todo
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAplicaIva(true);
+                  setIvaPct(16);
+                  setAplicaIgtf(false);
+                  setAplicaRetencionIva(false);
+                  setAplicaRetencionIslr(false);
+                }}
+                className="text-[11px] px-2.5 py-1 rounded bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors"
+              >
+                Solo IVA (16%)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAplicaIva(false);
+                  setAplicaIgtf(false);
+                  setAplicaRetencionIva(false);
+                  setAplicaRetencionIslr(false);
+                }}
+                className="text-[11px] px-2.5 py-1 rounded bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-red-500 transition-colors"
+              >
+                Apagar Todos
+              </button>
+            </div>
+          </div>
 
-          {metodoPago !== "bs_transferencia" && (
-            <label className="flex items-center gap-2 cursor-pointer w-fit group">
-              <div className="relative">
-                <input 
-                  type="checkbox" 
-                  className="sr-only" 
-                  checked={aplicaIgtfManual}
-                  onChange={(e) => setAplicaIgtfManual(e.target.checked)}
-                />
-                <div className={`block w-10 h-6 rounded-full transition-colors ${aplicaIgtfManual ? "bg-[var(--ts-red)]" : "bg-[var(--ts-border)]"}`}></div>
-                <div className={`absolute left-1 top-1 bg-[var(--ts-surface)] w-4 h-4 rounded-full transition-transform ${aplicaIgtfManual ? "translate-x-4" : ""}`}></div>
-              </div>
-              <div>
-                <span className="text-sm font-bold text-[var(--ts-text-primary)] transition-colors group-hover:text-[var(--ts-red)]">
-                  Incluir IGTF (3%)
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* 1. IVA */}
+            <div className={`p-4 rounded-xl border transition-all ${
+              aplicaIva
+                ? "bg-[var(--ts-surface-2)] border-[var(--ts-border)]"
+                : "bg-[var(--ts-surface)] border-[var(--ts-border)] opacity-60"
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center gap-2.5 cursor-pointer group">
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only" 
+                      checked={aplicaIva}
+                      onChange={(e) => setAplicaIva(e.target.checked)}
+                    />
+                    <div className={`block w-9 h-5 rounded-full transition-colors ${
+                      aplicaIva ? "bg-[var(--ts-red)]" : "bg-[var(--ts-border)]"
+                    }`}></div>
+                    <div className={`absolute left-0.5 top-0.5 bg-[var(--ts-surface)] w-4 h-4 rounded-full transition-transform ${
+                      aplicaIva ? "translate-x-4" : ""
+                    }`}></div>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[var(--ts-text-primary)] group-hover:text-[var(--ts-red)]">
+                      IVA ({ivaPct}%)
+                    </span>
+                    <p className="text-[10px] text-[var(--ts-text-muted)]">Impuesto al Valor Agregado</p>
+                  </div>
+                </label>
+                <span className="text-xs font-bold text-[var(--ts-text-primary)]">
+                  {aplicaIva ? formatBs(ivaBs) : "Bs. 0,00"}
                 </span>
-                <p className="text-[10px] text-[var(--ts-text-muted)]">Por defecto activado en pagos en divisas. Desmárcalo para no aplicarlo.</p>
               </div>
-            </label>
-          )}
+
+              {aplicaIva && (
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--ts-border)]">
+                  <span className="text-[11px] text-[var(--ts-text-muted)]">Alícuota IVA:</span>
+                  <div className="flex items-center gap-1.5">
+                    {[16, 8].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setIvaPct(pct)}
+                        className={`text-[11px] px-2.5 py-0.5 rounded font-bold transition-colors ${
+                          ivaPct === pct
+                            ? "bg-[var(--ts-red)] text-white"
+                            : "bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={ivaPct}
+                        onChange={(e) => setIvaPct(parseFloat(e.target.value) || 0)}
+                        className="w-14 text-center border border-[var(--ts-border)] rounded px-1 py-0.5 text-xs bg-[var(--ts-surface)] focus:outline-none focus:border-[var(--ts-red)]"
+                      />
+                      <span className="text-[11px] text-[var(--ts-text-muted)]">%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 2. IGTF */}
+            <div className={`p-4 rounded-xl border transition-all ${
+              aplicaIgtf
+                ? "bg-[var(--ts-surface-2)] border-[var(--ts-border)]"
+                : "bg-[var(--ts-surface)] border-[var(--ts-border)] opacity-60"
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center gap-2.5 cursor-pointer group">
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only" 
+                      checked={aplicaIgtf}
+                      onChange={(e) => setAplicaIgtf(e.target.checked)}
+                    />
+                    <div className={`block w-9 h-5 rounded-full transition-colors ${
+                      aplicaIgtf ? "bg-[var(--ts-red)]" : "bg-[var(--ts-border)]"
+                    }`}></div>
+                    <div className={`absolute left-0.5 top-0.5 bg-[var(--ts-surface)] w-4 h-4 rounded-full transition-transform ${
+                      aplicaIgtf ? "translate-x-4" : ""
+                    }`}></div>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[var(--ts-text-primary)] group-hover:text-[var(--ts-red)]">
+                      IGTF ({igtfPct}%)
+                    </span>
+                    <p className="text-[10px] text-[var(--ts-text-muted)]">Grandes Transacciones Financieras</p>
+                  </div>
+                </label>
+                <span className="text-xs font-bold text-[var(--ts-text-primary)]">
+                  {aplicaIgtf ? formatBs(igtfBs) : "Bs. 0,00"}
+                </span>
+              </div>
+
+              {aplicaIgtf && (
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--ts-border)]">
+                  <span className="text-[11px] text-[var(--ts-text-muted)]">Alícuota IGTF:</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setIgtfPct(3)}
+                      className={`text-[11px] px-2.5 py-0.5 rounded font-bold transition-colors ${
+                        igtfPct === 3
+                          ? "bg-[var(--ts-red)] text-white"
+                          : "bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                      }`}
+                    >
+                      3%
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={igtfPct}
+                        onChange={(e) => setIgtfPct(parseFloat(e.target.value) || 0)}
+                        className="w-14 text-center border border-[var(--ts-border)] rounded px-1 py-0.5 text-xs bg-[var(--ts-surface)] focus:outline-none focus:border-[var(--ts-red)]"
+                      />
+                      <span className="text-[11px] text-[var(--ts-text-muted)]">%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 3. Retención IVA */}
+            <div className={`p-4 rounded-xl border transition-all ${
+              aplicaRetencionIva && aplicaIva
+                ? "bg-[var(--ts-surface-2)] border-[var(--ts-red)]/40 shadow-sm"
+                : "bg-[var(--ts-surface)] border-[var(--ts-border)] opacity-60"
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center gap-2.5 cursor-pointer group">
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only" 
+                      disabled={!aplicaIva}
+                      checked={aplicaRetencionIva && aplicaIva}
+                      onChange={(e) => setAplicaRetencionIva(e.target.checked)}
+                    />
+                    <div className={`block w-9 h-5 rounded-full transition-colors ${
+                      aplicaRetencionIva && aplicaIva ? "bg-[var(--ts-red)]" : "bg-[var(--ts-border)]"
+                    }`}></div>
+                    <div className={`absolute left-0.5 top-0.5 bg-[var(--ts-surface)] w-4 h-4 rounded-full transition-transform ${
+                      aplicaRetencionIva && aplicaIva ? "translate-x-4" : ""
+                    }`}></div>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[var(--ts-text-primary)] group-hover:text-[var(--ts-red)]">
+                      Retención IVA ({retencionIvaPct}%)
+                    </span>
+                    <p className="text-[10px] text-[var(--ts-text-muted)]">Contribuyentes Especiales (s/ IVA)</p>
+                  </div>
+                </label>
+                {aplicaRetencionIva && aplicaIva && (
+                  <span className="text-xs font-bold text-[var(--ts-red)]">
+                    -{formatBs(retencionIvaBs)}
+                  </span>
+                )}
+              </div>
+
+              {aplicaRetencionIva && aplicaIva && (
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--ts-border)]">
+                  <span className="text-[11px] text-[var(--ts-text-muted)]">Alícuota Retención:</span>
+                  <div className="flex items-center gap-1.5">
+                    {[75, 100].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setRetencionIvaPct(pct)}
+                        className={`text-[11px] px-2.5 py-0.5 rounded font-bold transition-colors ${
+                          retencionIvaPct === pct
+                            ? "bg-[var(--ts-red)] text-white"
+                            : "bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={retencionIvaPct}
+                        onChange={(e) => setRetencionIvaPct(parseFloat(e.target.value) || 0)}
+                        className="w-14 text-center border border-[var(--ts-border)] rounded px-1 py-0.5 text-xs bg-[var(--ts-surface)] focus:outline-none focus:border-[var(--ts-red)]"
+                      />
+                      <span className="text-[11px] text-[var(--ts-text-muted)]">%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 4. Retención ISLR */}
+            <div className={`p-4 rounded-xl border transition-all ${
+              aplicaRetencionIslr
+                ? "bg-[var(--ts-surface-2)] border-[var(--ts-red)]/40 shadow-sm"
+                : "bg-[var(--ts-surface)] border-[var(--ts-border)] opacity-60"
+            }`}>
+              <div className="flex items-center justify-between mb-2">
+                <label className="flex items-center gap-2.5 cursor-pointer group">
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only" 
+                      checked={aplicaRetencionIslr}
+                      onChange={(e) => setAplicaRetencionIslr(e.target.checked)}
+                    />
+                    <div className={`block w-9 h-5 rounded-full transition-colors ${
+                      aplicaRetencionIslr ? "bg-[var(--ts-red)]" : "bg-[var(--ts-border)]"
+                    }`}></div>
+                    <div className={`absolute left-0.5 top-0.5 bg-[var(--ts-surface)] w-4 h-4 rounded-full transition-transform ${
+                      aplicaRetencionIslr ? "translate-x-4" : ""
+                    }`}></div>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-[var(--ts-text-primary)] group-hover:text-[var(--ts-red)]">
+                      Retención ISLR ({retencionIslrPct}%)
+                    </span>
+                    <p className="text-[10px] text-[var(--ts-text-muted)]">Contribuyentes Especiales (s/ Base)</p>
+                  </div>
+                </label>
+                {aplicaRetencionIslr && (
+                  <span className="text-xs font-bold text-[var(--ts-red)]">
+                    -{formatBs(retencionIslrBs)}
+                  </span>
+                )}
+              </div>
+
+              {aplicaRetencionIslr && (
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--ts-border)]">
+                  <span className="text-[11px] text-[var(--ts-text-muted)]">Alícuota Retención:</span>
+                  <div className="flex items-center gap-1.5">
+                    {[1, 2, 5].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => setRetencionIslrPct(pct)}
+                        className={`text-[11px] px-2.5 py-0.5 rounded font-bold transition-colors ${
+                          retencionIslrPct === pct
+                            ? "bg-[var(--ts-red)] text-white"
+                            : "bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                        }`}
+                      >
+                        {pct}%
+                      </button>
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.5}
+                        value={retencionIslrPct}
+                        onChange={(e) => setRetencionIslrPct(parseFloat(e.target.value) || 0)}
+                        className="w-14 text-center border border-[var(--ts-border)] rounded px-1 py-0.5 text-xs bg-[var(--ts-surface)] focus:outline-none focus:border-[var(--ts-red)]"
+                      />
+                      <span className="text-[11px] text-[var(--ts-text-muted)]">%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -562,19 +982,44 @@ export default function FacturadorWizard() {
             <span className="font-medium">{formatBs(subtotalBs)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-[var(--ts-text-muted)]">IVA (16%)</span>
+            <span className="text-[var(--ts-text-muted)]">IVA ({aplicaIva ? `${ivaPct}%` : "0%"})</span>
             <span className="font-medium">{formatBs(ivaBs)}</span>
           </div>
           {aplicaIgtf && (
             <div className="flex justify-between">
-              <span className="text-[var(--ts-text-muted)]">IGTF (3%)</span>
+              <span className="text-[var(--ts-text-muted)]">IGTF ({igtfPct}%)</span>
               <span className="font-medium text-[var(--ts-red)]">{formatBs(igtfBs)}</span>
             </div>
           )}
           <div className="flex justify-between border-t border-[var(--ts-border)] pt-2 mt-2">
-            <span className="font-bold text-[var(--ts-text-primary)] text-base">TOTAL A PAGAR</span>
-            <span className="font-extrabold text-[var(--ts-red)] text-base">{formatBs(totalBs)}</span>
+            <span className="font-bold text-[var(--ts-text-primary)] text-sm">TOTAL FACTURA FISCAL</span>
+            <span className="font-bold text-[var(--ts-text-primary)] text-sm">{formatBs(totalBs)}</span>
           </div>
+
+          {/* Deducciones por Retenciones */}
+          {Boolean((aplicaRetencionIva && retencionIvaBs > 0) || (aplicaRetencionIslr && retencionIslrBs > 0)) && (
+            <div className="border-t border-dashed border-[var(--ts-border)] pt-2 space-y-1.5">
+              {Boolean(aplicaRetencionIva && retencionIvaBs > 0) && (
+                <div className="flex justify-between text-xs text-[var(--ts-red)]">
+                  <span>(-) Retención IVA ({retencionIvaPct}%)</span>
+                  <span className="font-bold">-{formatBs(retencionIvaBs)}</span>
+                </div>
+              )}
+              {Boolean(aplicaRetencionIslr && retencionIslrBs > 0) && (
+                <div className="flex justify-between text-xs text-[var(--ts-red)]">
+                  <span>(-) Retención ISLR ({retencionIslrPct}%)</span>
+                  <span className="font-bold">-{formatBs(retencionIslrBs)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-2.5 rounded-lg mt-2">
+                <div>
+                  <span className="block font-extrabold text-emerald-800 dark:text-emerald-300 text-sm">TOTAL NETO A COBRAR</span>
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400">Monto a pagar por el cliente</span>
+                </div>
+                <span className="font-extrabold text-emerald-700 dark:text-emerald-300 text-lg">{formatBs(totalNetoBs)}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -739,7 +1184,17 @@ export default function FacturadorWizard() {
             </div>
             <div className="p-4">
               <ClientePicker
-                onSelect={setClienteDirecto}
+                onSelect={(c) => {
+                  setClienteDirecto(c);
+                  if (c?.es_contribuyente_especial) {
+                    setAplicaRetencionIva(true);
+                    if (typeof c.retencion_iva_pct === "number") setRetencionIvaPct(c.retencion_iva_pct);
+                    if (typeof c.retencion_islr_pct === "number") {
+                      setRetencionIslrPct(c.retencion_islr_pct);
+                      setAplicaRetencionIslr(true);
+                    }
+                  }
+                }}
                 clienteSeleccionado={clienteDirecto}
               />
             </div>

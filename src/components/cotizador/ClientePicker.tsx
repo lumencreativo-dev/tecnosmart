@@ -89,6 +89,11 @@ export default function ClientePicker({ onSelect, clienteSeleccionado }: Props) 
             <p className="text-xs text-[var(--ts-text-muted)]">
               {clienteSeleccionado.rif_cedula && `${clienteSeleccionado.rif_cedula} · `}
               {clienteSeleccionado.telefono}
+              {clienteSeleccionado.es_contribuyente_especial && (
+                <span className="ml-1.5 text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                  Contribuyente Especial
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -171,6 +176,11 @@ export default function ClientePicker({ onSelect, clienteSeleccionado }: Props) 
                               TÉCNICO
                             </span>
                           )}
+                          {c.es_contribuyente_especial && (
+                            <span className="bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                              CONTRIB. ESPECIAL
+                            </span>
+                          )}
                         </p>
                       </div>
                       <ChevronRight className="w-4 h-4 text-[var(--ts-text-muted)]" />
@@ -241,6 +251,51 @@ export default function ClientePicker({ onSelect, clienteSeleccionado }: Props) 
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Contribuyente Especial */}
+            <div className="border-t border-[var(--ts-border)] pt-2 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="es_esp_picker"
+                  checked={form.es_contribuyente_especial || false}
+                  onChange={(e) => setForm(f => ({
+                    ...f,
+                    es_contribuyente_especial: e.target.checked,
+                    retencion_iva_pct: e.target.checked ? (f.retencion_iva_pct ?? 75) : f.retencion_iva_pct,
+                    retencion_islr_pct: e.target.checked ? (f.retencion_islr_pct ?? 2) : f.retencion_islr_pct,
+                  }))}
+                  className="w-4 h-4 text-[var(--ts-red)] focus:ring-[var(--ts-red)] border-[var(--ts-border)] rounded"
+                />
+                <label htmlFor="es_esp_picker" className="text-xs font-semibold text-[var(--ts-text-primary)] cursor-pointer">
+                  ¿Es Contribuyente Especial / Agente de Retención?
+                </label>
+              </div>
+
+              {form.es_contribuyente_especial && (
+                <div className="grid grid-cols-2 gap-2 pl-6">
+                  <div>
+                    <label className="block text-[10px] text-[var(--ts-text-muted)]">Ret. IVA %</label>
+                    <input
+                      type="number"
+                      value={form.retencion_iva_pct ?? 75}
+                      onChange={(e) => setForm(f => ({ ...f, retencion_iva_pct: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1 border border-[var(--ts-border)] rounded text-xs bg-[var(--ts-surface)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-[var(--ts-text-muted)]">Ret. ISLR %</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={form.retencion_islr_pct ?? 2}
+                      onChange={(e) => setForm(f => ({ ...f, retencion_islr_pct: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1 border border-[var(--ts-border)] rounded text-xs bg-[var(--ts-surface)]"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 mt-2">

@@ -58,8 +58,8 @@ const S = StyleSheet.create({
   clienteLabel: { fontSize: 7, color: "#6e6e6e", marginBottom: 1 },
   clienteVal: { fontSize: 9, color: "#111111", fontFamily: "Helvetica-Bold" },
 
-  // Tabla
-  tabla: { paddingHorizontal: 30, paddingTop: 20 },
+  // Tabla Detalle
+  tabla: { paddingHorizontal: 30, paddingTop: 16 },
   thRow: {
     flexDirection: "row",
     backgroundColor: "#111111",
@@ -82,14 +82,51 @@ const S = StyleSheet.create({
   colUnit: { width: "19%", textAlign: "right" },
   colSub:  { width: "19%", textAlign: "right" },
 
+  // Desglose fiscal SENIAT en columnas
+  desgloseFiscalWrap: {
+    paddingHorizontal: 30,
+    paddingTop: 14,
+  },
+  fiscalThRow: {
+    flexDirection: "row",
+    backgroundColor: "#1f2937",
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    borderRadius: 3,
+    borderBottom: "1pt solid #111111",
+  },
+  fiscalTh: {
+    fontSize: 6.5,
+    color: "#ffffff",
+    fontFamily: "Helvetica-Bold",
+    textTransform: "uppercase",
+    textAlign: "center",
+    paddingHorizontal: 2,
+  },
+  fiscalTdRow: {
+    flexDirection: "row",
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    backgroundColor: "#f9fafb",
+    borderBottom: "0.5pt solid #d1d5db",
+    borderLeft: "0.5pt solid #d1d5db",
+    borderRight: "0.5pt solid #d1d5db",
+  },
+  fiscalTd: {
+    fontSize: 7.5,
+    color: "#111111",
+    textAlign: "center",
+    paddingHorizontal: 2,
+  },
+
   // Resumen
   resumenWrap: {
     paddingHorizontal: 30,
-    paddingTop: 16,
+    paddingTop: 14,
     alignItems: "flex-end",
   },
   resumenBox: {
-    width: 230,
+    width: 240,
     borderRadius: 6,
     border: "1pt solid #d9d9d9",
     overflow: "hidden",
@@ -98,7 +135,7 @@ const S = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 5,
     borderBottom: "0.5pt solid #eeeeee",
   },
   resumenLabel: { fontSize: 8, color: "#6e6e6e" },
@@ -107,11 +144,11 @@ const S = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     backgroundColor: "#111111",
   },
-  totalLabel: { fontSize: 10, color: "#ffffff", fontFamily: "Helvetica-Bold" },
-  totalVal:   { fontSize: 10, color: "#c9242b", fontFamily: "Helvetica-Bold" },
+  totalLabel: { fontSize: 9, color: "#ffffff", fontFamily: "Helvetica-Bold" },
+  totalVal:   { fontSize: 9, color: "#c9242b", fontFamily: "Helvetica-Bold" },
 
   // Esquema de pago
   pagoBox: {
@@ -151,7 +188,6 @@ const S = StyleSheet.create({
     marginBottom: 5,
   },
   garantiaItem: { fontSize: 7, color: "#6e6e6e", marginBottom: 3 },
-  garantiaDot:  { color: "#c9242b" },
 
   // Footer
   footer: {
@@ -167,24 +203,18 @@ const S = StyleSheet.create({
   footerText: { fontSize: 7, color: "#6e6e6e" },
 });
 
-// ── Helpers ───────────────────────────────────────────────────
-const usd = (n: number) =>
-  "$" +
-  n.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
 // ── Componente PDF ────────────────────────────────────────────
-interface CotizacionPDFProps {
-  numeroCot:   string;
-  fecha:       Date;
-  cliente:     Cliente;
-  lineas:      LineaDetalle[];
-  resumen:     ResumenCotizacion;
-  notas?:      string;
-  esFactura?:  boolean;
+export interface CotizacionPDFProps {
+  numeroCot:      string;
+  fecha:          Date;
+  cliente:        Cliente;
+  lineas:         LineaDetalle[];
+  resumen:        ResumenCotizacion;
+  notas?:         string;
+  esFactura?:     boolean;
   numeroFactura?: string;
+  moneda?:        "USD" | "VES";
+  tasaBcv?:       number;
 }
 
 function CotizacionDocument({
@@ -196,11 +226,57 @@ function CotizacionDocument({
   notas,
   esFactura,
   numeroFactura,
+  moneda,
+  tasaBcv,
 }: CotizacionPDFProps) {
   const vencimiento = new Date(fecha);
   vencimiento.setDate(vencimiento.getDate() + 15);
 
   const docTitle = esFactura ? (numeroFactura ?? numeroCot) : numeroCot;
+
+  // Manejo de moneda y factor de conversión
+  const isVES = (moneda || resumen.moneda) === "VES";
+  const currentTasaBcv = tasaBcv || resumen.tasaBcv || 0;
+  const factor = isVES && currentTasaBcv > 0 ? currentTasaBcv : 1;
+
+  const fmt = (usdVal: number) => {
+    const converted = usdVal * factor;
+    if (isVES) {
+      return "Bs. " + converted.toLocaleString("es-VE", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+    return "$" + converted.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
+
+  // Cálculos consistentes
+  const baseImponible = typeof resumen.baseImponible === "number"
+    ? resumen.baseImponible
+    : Math.max(0, resumen.subtotal - (resumen.descuento || 0));
+
+  const ivaPct = typeof resumen.ivaPct === "number" ? resumen.ivaPct : 16;
+  const aplicaIva = resumen.aplicaIva ?? true;
+  const ivaMonto = typeof resumen.ivaMonto === "number"
+    ? resumen.ivaMonto
+    : (aplicaIva ? baseImponible * (ivaPct / 100) : 0);
+
+  const totalPresupuesto = typeof resumen.total === "number" && resumen.total > 0
+    ? resumen.total
+    : baseImponible + ivaMonto;
+
+  const retIvaMonto = resumen.retencionIvaMonto || 0;
+  const retIslrMonto = resumen.retencionIslrMonto || 0;
+  const totalNeto = typeof resumen.totalNeto === "number"
+    ? resumen.totalNeto
+    : Math.max(0, totalPresupuesto - retIvaMonto - retIslrMonto);
+
+  const tieneRetIva = Boolean(resumen.aplicaRetenciones && resumen.aplicaRetencionIva && retIvaMonto > 0);
+  const tieneRetIslr = Boolean(resumen.aplicaRetenciones && resumen.aplicaRetencionIslr && retIslrMonto > 0);
+  const tieneAlgunaRetencion = tieneRetIva || tieneRetIslr;
 
   return (
     <Document
@@ -213,9 +289,7 @@ function CotizacionDocument({
         {/* ── HEADER ── */}
         <View style={S.header}>
           <View style={S.headerLeft}>
-            {/* Isotipo (solo ícono) */}
             <PDFImage src={LOGO_BLANCO_B64} style={S.logoImg} />
-            {/* Nombre + slogan + datos */}
             <View style={S.headerBrand}>
               <Text style={S.logoName}>TECNO SMART VZL C.A</Text>
               <Text style={S.logoSub}>TIENDA ESPECIALIZADA · SOLUCIONES TECNOLÓGICAS</Text>
@@ -235,6 +309,14 @@ function CotizacionDocument({
             <Text style={S.cotFecha}>Fecha: {formatFecha(fecha)}</Text>
             {!esFactura && (
               <Text style={[S.cotFecha, { marginTop: 1 }]}>Válido hasta: {formatFecha(vencimiento)}</Text>
+            )}
+            <Text style={[S.cotFecha, { marginTop: 2, fontFamily: "Helvetica-Bold", color: "#ffffff" }]}>
+              Moneda: {isVES ? "Bolívares (Bs.)" : "Dólares (USD)"}
+            </Text>
+            {isVES && currentTasaBcv > 0 && (
+              <Text style={[S.cotFecha, { color: "#ffdddd", fontSize: 7 }]}>
+                Tasa BCV: Bs. {currentTasaBcv.toFixed(2)}
+              </Text>
             )}
           </View>
         </View>
@@ -273,8 +355,8 @@ function CotizacionDocument({
             <Text style={[S.th, S.colN]}>#</Text>
             <Text style={[S.th, S.colDesc]}>Descripción</Text>
             <Text style={[S.th, S.colCant]}>Cant.</Text>
-            <Text style={[S.th, S.colUnit]}>P. Unit.</Text>
-            <Text style={[S.th, S.colSub]}>Subtotal</Text>
+            <Text style={[S.th, S.colUnit]}>{isVES ? "P. Unit. (Bs.)" : "P. Unit."}</Text>
+            <Text style={[S.th, S.colSub]}>{isVES ? "Subtotal (Bs.)" : "Subtotal"}</Text>
           </View>
 
           {/* Filas */}
@@ -283,29 +365,116 @@ function CotizacionDocument({
               <Text style={[S.td, S.colN]}>{i + 1}</Text>
               <Text style={[S.td, S.colDesc]}>{l.descripcion}</Text>
               <Text style={[S.td, S.colCant]}>{l.cantidad}</Text>
-              <Text style={[S.td, S.colUnit]}>{usd(l.precio_unitario)}</Text>
-              <Text style={[S.td, S.colSub]}>{usd(l.cantidad * l.precio_unitario)}</Text>
+              <Text style={[S.td, S.colUnit]}>{fmt(l.precio_unitario)}</Text>
+              <Text style={[S.td, S.colSub]}>{fmt(l.cantidad * l.precio_unitario)}</Text>
             </View>
           ))}
+        </View>
+
+        {/* ── CUADRO DE DESGLOSE Y LIQUIDACIÓN FISCAL (ESTILO SENIAT) ── */}
+        <View style={S.desgloseFiscalWrap}>
+          <Text style={S.seccionTitulo}>Cuadro de Desglose y Liquidación Tributaria</Text>
+          <View style={S.fiscalThRow}>
+            <Text style={[S.fiscalTh, { flex: 1.2 }]}>Base Imponible</Text>
+            <Text style={[S.fiscalTh, { flex: 0.8 }]}>% Alíc. IVA</Text>
+            <Text style={[S.fiscalTh, { flex: 1.1 }]}>Monto IVA (+)</Text>
+            <Text style={[S.fiscalTh, { flex: 1.2 }]}>Total Presupuesto</Text>
+            {tieneRetIva && (
+              <>
+                <Text style={[S.fiscalTh, { flex: 0.8 }]}>% Ret. IVA</Text>
+                <Text style={[S.fiscalTh, { flex: 1.1, backgroundColor: "#991b1b" }]}>IVA Retenido (-)</Text>
+              </>
+            )}
+            {tieneRetIslr && (
+              <>
+                <Text style={[S.fiscalTh, { flex: 0.8 }]}>% Ret. ISLR</Text>
+                <Text style={[S.fiscalTh, { flex: 1.1, backgroundColor: "#991b1b" }]}>ISLR Retenido (-)</Text>
+              </>
+            )}
+            {tieneAlgunaRetencion && (
+              <Text style={[S.fiscalTh, { flex: 1.3, backgroundColor: "#15803d" }]}>Total Neto a Cobrar</Text>
+            )}
+          </View>
+          <View style={S.fiscalTdRow}>
+            <Text style={[S.fiscalTd, { flex: 1.2 }]}>{fmt(baseImponible)}</Text>
+            <Text style={[S.fiscalTd, { flex: 0.8 }]}>
+              {aplicaIva ? `${ivaPct}%` : "0% (Exento)"}
+            </Text>
+            <Text style={[S.fiscalTd, { flex: 1.1 }]}>
+              {aplicaIva ? `+${fmt(ivaMonto)}` : "—"}
+            </Text>
+            <Text style={[S.fiscalTd, { flex: 1.2, fontFamily: "Helvetica-Bold" }]}>
+              {fmt(totalPresupuesto)}
+            </Text>
+            {tieneRetIva && (
+              <>
+                <Text style={[S.fiscalTd, { flex: 0.8 }]}>{resumen.retencionIvaPct}%</Text>
+                <Text style={[S.fiscalTd, { flex: 1.1, color: "#c9242b", fontFamily: "Helvetica-Bold" }]}>
+                  -{fmt(retIvaMonto)}
+                </Text>
+              </>
+            )}
+            {tieneRetIslr && (
+              <>
+                <Text style={[S.fiscalTd, { flex: 0.8 }]}>{resumen.retencionIslrPct}%</Text>
+                <Text style={[S.fiscalTd, { flex: 1.1, color: "#c9242b", fontFamily: "Helvetica-Bold" }]}>
+                  -{fmt(retIslrMonto)}
+                </Text>
+              </>
+            )}
+            {tieneAlgunaRetencion && (
+              <Text style={[S.fiscalTd, { flex: 1.3, color: "#15803d", fontFamily: "Helvetica-Bold" }]}>
+                {fmt(totalNeto)}
+              </Text>
+            )}
+          </View>
         </View>
 
         {/* ── RESUMEN ── */}
         <View style={S.resumenWrap}>
           <View style={S.resumenBox}>
             <View style={S.resumenRow}>
-              <Text style={S.resumenLabel}>Subtotal</Text>
-              <Text style={S.resumenVal}>{usd(resumen.subtotal)}</Text>
+              <Text style={S.resumenLabel}>Base Imponible</Text>
+              <Text style={S.resumenVal}>{fmt(baseImponible)}</Text>
             </View>
             {resumen.descuento > 0 && (
               <View style={S.resumenRow}>
                 <Text style={S.resumenLabel}>Descuento</Text>
-                <Text style={S.resumenVal}>- {usd(resumen.descuento)}</Text>
+                <Text style={S.resumenVal}>- {fmt(resumen.descuento)}</Text>
               </View>
             )}
-            <View style={S.totalRow}>
-              <Text style={S.totalLabel}>TOTAL</Text>
-              <Text style={S.totalVal}>{usd(resumen.total)}</Text>
+            <View style={S.resumenRow}>
+              <Text style={S.resumenLabel}>
+                (+) IVA ({aplicaIva ? `${ivaPct}%` : "Exento"})
+              </Text>
+              <Text style={[S.resumenVal, { color: aplicaIva ? "#111111" : "#6e6e6e" }]}>
+                {aplicaIva ? `+ ${fmt(ivaMonto)}` : "—"}
+              </Text>
             </View>
+            <View style={S.totalRow}>
+              <Text style={S.totalLabel}>TOTAL PRESUPUESTO</Text>
+              <Text style={S.totalVal}>{fmt(totalPresupuesto)}</Text>
+            </View>
+            {tieneAlgunaRetencion && (
+              <>
+                {tieneRetIva && (
+                  <View style={S.resumenRow}>
+                    <Text style={[S.resumenLabel, { color: "#c9242b" }]}>(-) Ret. IVA ({resumen.retencionIvaPct}%):</Text>
+                    <Text style={[S.resumenVal, { color: "#c9242b" }]}>- {fmt(retIvaMonto)}</Text>
+                  </View>
+                )}
+                {tieneRetIslr && (
+                  <View style={S.resumenRow}>
+                    <Text style={[S.resumenLabel, { color: "#c9242b" }]}>(-) Ret. ISLR ({resumen.retencionIslrPct}%):</Text>
+                    <Text style={[S.resumenVal, { color: "#c9242b" }]}>- {fmt(retIslrMonto)}</Text>
+                  </View>
+                )}
+                <View style={[S.totalRow, { backgroundColor: "#15803d" }]}>
+                  <Text style={S.totalLabel}>TOTAL NETO A COBRAR</Text>
+                  <Text style={[S.totalVal, { color: "#ffffff" }]}>{fmt(totalNeto)}</Text>
+                </View>
+              </>
+            )}
           </View>
         </View>
 
@@ -317,14 +486,14 @@ function CotizacionDocument({
             </Text>
             <View style={S.pagoRow}>
               <Text style={S.pagoLabel}>Anticipo — 70% (inicio de proyecto)</Text>
-              <Text style={S.pagoVal}>{usd(resumen.anticipo)}</Text>
+              <Text style={S.pagoVal}>{fmt(resumen.anticipo)}</Text>
             </View>
             <View style={S.pagoRow}>
               <Text style={S.pagoLabel}>Saldo — 30% (contra entrega)</Text>
-              <Text style={S.pagoVal}>{usd(resumen.saldo)}</Text>
+              <Text style={S.pagoVal}>{fmt(resumen.saldo)}</Text>
             </View>
             <Text style={S.pagoNote}>
-              El saldo puede cancelarse en 4 cuotas semanales en un plazo de 1 mes.
+              El saldo puede cancelarse en 4 cuotas semanales en un plazo de 1 mes (4 cuotas de {fmt(resumen.saldo / 4)}).
             </Text>
           </View>
         )}
@@ -345,7 +514,9 @@ function CotizacionDocument({
             "• Instalación: 2 años de garantía bajo materiales y mano de obra TecnoSmart.",
             "• Redes estructuradas: Hasta 5 años de garantía bajo protocolo TecnoSmart.",
             "• Cotización válida por 15 días hábiles a partir de la fecha de emisión.",
-            "• Los precios están expresados en dólares americanos (USD).",
+            isVES && currentTasaBcv > 0
+              ? `• Precios expresados en Bolívares (Bs.) calculados según tasa oficial del Banco Central de Venezuela (BCV: Bs. ${currentTasaBcv.toFixed(2)} / USD).`
+              : "• Los precios están expresados en dólares americanos (USD). En caso de pago en bolívares, se calculará a la tasa oficial del Banco Central de Venezuela (BCV) del día de pago.",
           ].map((g) => (
             <Text key={g} style={S.garantiaItem}>
               {g}

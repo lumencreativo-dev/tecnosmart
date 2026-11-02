@@ -17,6 +17,14 @@ export function formatUSD(amount: number): string {
   }).format(amount);
 }
 
+/** Formatea número como Bolívares: Bs. 1.234,56 */
+export function formatBs(amount: number): string {
+  return "Bs. " + new Intl.NumberFormat("es-VE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
 /** Genera un ID temporal de cliente (para la sesión) */
 export function tempId(): string {
   return crypto.randomUUID();

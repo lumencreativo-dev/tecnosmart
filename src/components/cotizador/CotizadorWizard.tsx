@@ -28,14 +28,60 @@ export default function CotizadorWizard() {
   const [cotizacionId, setCotizacionId] = useState<string | null>(null);
   const [descuentoTecnico, setDescuentoTecnico] = useState(15); // porcentaje
 
+  // ── Estado: Moneda y Tasa BCV ──
+  const [moneda, setMoneda]             = useState<"USD" | "VES">("USD");
+  const [tasaBcv, setTasaBcv]           = useState<number>(0);
+  const [cargandoTasa, setCargandoTasa] = useState(false);
+
+  // ── Estado: Impuesto al Valor Agregado (IVA) ──
+  const [aplicaIva, setAplicaIva]       = useState(true);
+  const [ivaPct, setIvaPct]             = useState(16);
+
+  // ── Estado: Retenciones Fiscales (Contribuyente Especial) ──
+  const [aplicaRetenciones, setAplicaRetenciones]     = useState(false);
+  const [aplicaRetencionIva, setAplicaRetencionIva]   = useState(true);
+  const [retencionIvaPct, setRetencionIvaPct]         = useState(75);
+  const [aplicaRetencionIslr, setAplicaRetencionIslr] = useState(false);
+  const [retencionIslrPct, setRetencionIslrPct]       = useState(2);
+
+  // ── Estado: Esquema de Pago 70/30 (Cuotas) ──
+  const [incluirEsquemaPago, setIncluirEsquemaPago]   = useState(true);
+
   // ── Estado: Concepto Libre ──
   const [conceptoDesc, setConceptoDesc] = useState("");
   const [conceptoCant, setConceptoCant] = useState(1);
   const [conceptoPrecio, setConceptoPrecio] = useState(0);
 
-  // Obtener número correlativo y configuración global de Supabase al cargar
+  // Consultar tasa oficial BCV
+  const fetchBCVRate = async () => {
+    setCargandoTasa(true);
+    try {
+      const res = await fetch("https://ve.dolarapi.com/v1/dolares/oficial");
+      const data = await res.json();
+      if (data?.promedio) setTasaBcv(data.promedio);
+    } catch {
+      // Ingreso manual por el usuario
+    } finally {
+      setCargandoTasa(false);
+    }
+  };
+
+  // Sincronizar retenciones si el cliente es contribuyente especial
+  useEffect(() => {
+    if (cliente?.es_contribuyente_especial) {
+      setAplicaRetenciones(true);
+      if (typeof cliente.retencion_iva_pct === "number") setRetencionIvaPct(cliente.retencion_iva_pct);
+      if (typeof cliente.retencion_islr_pct === "number") {
+        setRetencionIslrPct(cliente.retencion_islr_pct);
+        setAplicaRetencionIslr(true);
+      }
+    }
+  }, [cliente]);
+
+  // Obtener número correlativo, configuración global y tasa BCV al cargar
   useEffect(() => {
     async function fetchInit() {
+      fetchBCVRate();
       const [{ data: numData, error: numErr }, { data: confData }] = await Promise.all([
         supabase.rpc("next_cotizacion_number"),
         supabase.from("configuracion").select("clave,valor").eq("clave", "descuento_tecnico").single(),
@@ -100,22 +146,67 @@ export default function CotizadorWizard() {
     setConceptoDesc("");
     setConceptoCant(1);
     setConceptoPrecio(0);
+    setAplicaRetenciones(false);
+    setAplicaRetencionIva(true);
+    setRetencionIvaPct(75);
+    setAplicaRetencionIslr(false);
+    setRetencionIslrPct(2);
+    setIncluirEsquemaPago(true);
   };
 
   // ── Cálculos ──────────────────────────────────────────────
   const resumen = useMemo<ResumenCotizacion>(() => {
-    const subtotal = lineas.reduce((s, l) => s + l.cantidad * l.precio_unitario, 0);
-    const total    = Math.max(0, subtotal - descuento);
-    const aplicaEsquemaPago = total > DESCUENTO_UMBRAL;
+    const subtotal      = lineas.reduce((s, l) => s + l.cantidad * l.precio_unitario, 0);
+    const baseImponible = Math.max(0, subtotal - descuento);
+    const ivaMonto      = aplicaIva ? baseImponible * (ivaPct / 100) : 0;
+    const total         = baseImponible + ivaMonto;
+
+    const retencionIvaMonto = (aplicaRetenciones && aplicaRetencionIva && aplicaIva)
+      ? (ivaMonto * (retencionIvaPct / 100))
+      : 0;
+    const retencionIslrMonto = (aplicaRetenciones && aplicaRetencionIslr)
+      ? (baseImponible * (retencionIslrPct / 100))
+      : 0;
+    const totalNeto = Math.max(0, total - retencionIvaMonto - retencionIslrMonto);
+
+    const aplicaEsquemaPago = incluirEsquemaPago && total > 0;
+
     return {
       subtotal,
       descuento,
+      baseImponible,
+      aplicaIva,
+      ivaPct,
+      ivaMonto,
       total,
       anticipo:         aplicaEsquemaPago ? total * 0.7 : 0,
       saldo:            aplicaEsquemaPago ? total * 0.3 : 0,
       aplicaEsquemaPago,
+      moneda,
+      tasaBcv,
+      aplicaRetenciones,
+      aplicaRetencionIva,
+      retencionIvaPct,
+      retencionIvaMonto,
+      aplicaRetencionIslr,
+      retencionIslrPct,
+      retencionIslrMonto,
+      totalNeto,
     };
-  }, [lineas, descuento]);
+  }, [
+    lineas,
+    descuento,
+    incluirEsquemaPago,
+    aplicaIva,
+    ivaPct,
+    moneda,
+    tasaBcv,
+    aplicaRetenciones,
+    aplicaRetencionIva,
+    retencionIvaPct,
+    aplicaRetencionIslr,
+    retencionIslrPct,
+  ]);
 
   // ── Guardar en Supabase + Exportar PDF ───────────────────
   const handleExportPDF = async () => {
@@ -150,6 +241,10 @@ export default function CotizadorWizard() {
         clienteId = cData.id;
       }
 
+      // Notas con metadata de moneda
+      const infoMoneda = moneda === "VES" ? `[Cotización emitida en Bolívares | Tasa BCV: Bs. ${tasaBcv.toFixed(2)}]` : "";
+      const notasFinales = [notas, infoMoneda].filter(Boolean).join(" ");
+
       // 2. Insertar cotización
       const { data: cotData, error: cotErr } = await supabase
         .from("cotizaciones")
@@ -162,7 +257,7 @@ export default function CotizadorWizard() {
           total: resumen.total,
           anticipo_monto: resumen.anticipo,
           saldo_monto: resumen.saldo,
-          notas,
+          notas: notasFinales,
           estado: "enviada",
         }])
         .select("id")
@@ -186,7 +281,16 @@ export default function CotizadorWizard() {
 
       // 4. Exportar PDF
       const { exportarCotizacionPDF } = await import("@/components/pdf/CotizacionPDF");
-      await exportarCotizacionPDF({ numeroCot, fecha: new Date(), cliente, lineas, resumen, notas });
+      await exportarCotizacionPDF({
+        numeroCot,
+        fecha: new Date(),
+        cliente,
+        lineas,
+        resumen,
+        notas,
+        moneda,
+        tasaBcv,
+      });
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Error desconocido";
@@ -367,6 +471,28 @@ export default function CotizadorWizard() {
             resumen={resumen}
             descuento={descuento}
             onDescuentoChange={setDescuento}
+            moneda={moneda}
+            onMonedaChange={setMoneda}
+            tasaBcv={tasaBcv}
+            onTasaBcvChange={setTasaBcv}
+            onRefreshTasa={fetchBCVRate}
+            cargandoTasa={cargandoTasa}
+            aplicaIva={aplicaIva}
+            onAplicaIvaChange={setAplicaIva}
+            ivaPct={ivaPct}
+            onIvaPctChange={setIvaPct}
+            aplicaRetenciones={aplicaRetenciones}
+            onAplicaRetencionesChange={setAplicaRetenciones}
+            aplicaRetencionIva={aplicaRetencionIva}
+            onAplicaRetencionIvaChange={setAplicaRetencionIva}
+            retencionIvaPct={retencionIvaPct}
+            onRetencionIvaPctChange={setRetencionIvaPct}
+            aplicaRetencionIslr={aplicaRetencionIslr}
+            onAplicaRetencionIslrChange={setAplicaRetencionIslr}
+            retencionIslrPct={retencionIslrPct}
+            onRetencionIslrPctChange={setRetencionIslrPct}
+            incluirEsquemaPago={incluirEsquemaPago}
+            onIncluirEsquemaPagoChange={setIncluirEsquemaPago}
           />
 
           {/* Badge guardado */}

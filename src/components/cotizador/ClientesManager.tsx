@@ -497,6 +497,67 @@ export default function ClientesManager() {
                       Acepta recibir promociones e informaciones
                     </label>
                   </div>
+
+                  {/* Contribuyente Especial */}
+                  <div className="border-t border-[var(--ts-border)] pt-3 mt-3">
+                    <div className="flex items-center gap-2">
+                      {editMode ? (
+                        <input
+                          type="checkbox"
+                          id="contrib_esp_edit"
+                          checked={form.es_contribuyente_especial || false}
+                          onChange={(e) => setForm({
+                            ...form,
+                            es_contribuyente_especial: e.target.checked,
+                            retencion_iva_pct: e.target.checked ? (form.retencion_iva_pct ?? 75) : form.retencion_iva_pct,
+                            retencion_islr_pct: e.target.checked ? (form.retencion_islr_pct ?? 2) : form.retencion_islr_pct,
+                          })}
+                          className="w-4 h-4 text-[var(--ts-red)] focus:ring-[var(--ts-red)] border-[var(--ts-border)] rounded"
+                        />
+                      ) : (
+                        <div className={`w-3 h-3 rounded-full ${clienteSeleccionado.es_contribuyente_especial ? 'bg-amber-500' : 'bg-gray-300'}`}></div>
+                      )}
+                      <label htmlFor="contrib_esp_edit" className="text-xs font-semibold text-[var(--ts-text-primary)] cursor-pointer">
+                        Contribuyente Especial (Agente de Retención)
+                      </label>
+                    </div>
+
+                    {(editMode ? form.es_contribuyente_especial : clienteSeleccionado.es_contribuyente_especial) && (
+                      <div className="grid grid-cols-2 gap-3 mt-2 pl-5 bg-[var(--ts-surface-2)] p-2.5 rounded-lg border border-[var(--ts-border)]">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] mb-0.5">% Ret. IVA</label>
+                          {editMode ? (
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={form.retencion_iva_pct ?? 75}
+                              onChange={e => setForm({ ...form, retencion_iva_pct: parseFloat(e.target.value) || 0 })}
+                              className="w-full px-2 py-1 border border-[var(--ts-border)] rounded text-xs bg-[var(--ts-surface)]"
+                            />
+                          ) : (
+                            <p className="text-xs font-bold text-[var(--ts-text-primary)]">{clienteSeleccionado.retencion_iva_pct ?? 75}%</p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] mb-0.5">% Ret. ISLR</label>
+                          {editMode ? (
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              value={form.retencion_islr_pct ?? 2}
+                              onChange={e => setForm({ ...form, retencion_islr_pct: parseFloat(e.target.value) || 0 })}
+                              className="w-full px-2 py-1 border border-[var(--ts-border)] rounded text-xs bg-[var(--ts-surface)]"
+                            />
+                          ) : (
+                            <p className="text-xs font-bold text-[var(--ts-text-primary)]">{clienteSeleccionado.retencion_islr_pct ?? 2}%</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -72,9 +72,18 @@ export interface FacturaFiscalProps {
   tasaBcv: number;
   subtotalBs: number;
   ivaBs: number;
+  ivaPct?: number;
   igtfBs: number;
+  igtfPct?: number;
   totalBs: number;
   aplicaIgtf: boolean;
+  aplicaRetencionIva?: boolean;
+  retencionIvaPct?: number;
+  retencionIvaBs?: number;
+  aplicaRetencionIslr?: boolean;
+  retencionIslrPct?: number;
+  retencionIslrBs?: number;
+  totalNetoBs?: number;
 }
 
 export const FacturaFiscalDocument = ({
@@ -86,9 +95,18 @@ export const FacturaFiscalDocument = ({
   tasaBcv,
   subtotalBs,
   ivaBs,
+  ivaPct = 16,
   igtfBs,
+  igtfPct = 3,
   totalBs,
-  aplicaIgtf
+  aplicaIgtf,
+  aplicaRetencionIva,
+  retencionIvaPct = 75,
+  retencionIvaBs = 0,
+  aplicaRetencionIslr,
+  retencionIslrPct = 2,
+  retencionIslrBs = 0,
+  totalNetoBs,
 }: FacturaFiscalProps) => {
   return (
     <Document title={`Factura Fiscal - ${numeroFactura}`}>
@@ -160,6 +178,14 @@ export const FacturaFiscalDocument = ({
           <View style={S.resumenLeft}>
             <Text>ESTE DOCUMENTO VA SIN TACHADURA NI ENMIENDA</Text>
             <Text style={{ marginTop: 10 }}>Tasa oficial de cambio BCV del día: {tasaBcv.toLocaleString("es-VE")} Bs/USD</Text>
+            {Boolean(aplicaRetencionIva || aplicaRetencionIslr) && (
+              <View style={{ marginTop: 8, padding: 4, backgroundColor: "#f8fafc", borderRadius: 3, border: "0.5 solid #cbd5e1" }}>
+                <Text style={{ fontSize: 7, fontWeight: 700, color: "#334155" }}>SUJETO A RETENCIÓN FISCAL (CONTRIBUYENTE ESPECIAL)</Text>
+                <Text style={{ fontSize: 6.5, color: "#64748b", marginTop: 1 }}>
+                  El cliente retiene impuestos según normativa SENIAT y emite comprobante de retención.
+                </Text>
+              </View>
+            )}
           </View>
           <View style={S.resumenRight}>
             <View style={S.resumenRow}>
@@ -167,12 +193,12 @@ export const FacturaFiscalDocument = ({
               <Text style={S.resumenVal}>{formatBs(subtotalBs)}</Text>
             </View>
             <View style={S.resumenRow}>
-              <Text style={S.resumenLabel}>IVA ({ivaBs > 0 ? "16%" : "0%"}):</Text>
+              <Text style={S.resumenLabel}>IVA ({ivaBs > 0 ? `${ivaPct}%` : "0%"}):</Text>
               <Text style={S.resumenVal}>{formatBs(ivaBs)}</Text>
             </View>
-            {aplicaIgtf && (
+            {aplicaIgtf && igtfBs > 0 && (
               <View style={S.resumenRow}>
-                <Text style={S.resumenLabel}>IGTF (3%):</Text>
+                <Text style={S.resumenLabel}>IGTF ({igtfPct}%):</Text>
                 <Text style={S.resumenVal}>{formatBs(igtfBs)}</Text>
               </View>
             )}
@@ -180,6 +206,26 @@ export const FacturaFiscalDocument = ({
               <Text style={S.resumenTotalLabel}>TOTAL A PAGAR:</Text>
               <Text style={S.resumenTotalVal}>{formatBs(totalBs)}</Text>
             </View>
+            {Boolean(aplicaRetencionIva && retencionIvaBs > 0) && (
+              <View style={[S.resumenRow, { marginTop: 4 }]}>
+                <Text style={{ fontSize: 8, color: "#c9242b" }}>(-) RET. IVA ({retencionIvaPct}%):</Text>
+                <Text style={{ fontSize: 8, fontWeight: 700, color: "#c9242b" }}>-{formatBs(retencionIvaBs)}</Text>
+              </View>
+            )}
+            {Boolean(aplicaRetencionIslr && retencionIslrBs > 0) && (
+              <View style={S.resumenRow}>
+                <Text style={{ fontSize: 8, color: "#c9242b" }}>(-) RET. ISLR ({retencionIslrPct}%):</Text>
+                <Text style={{ fontSize: 8, fontWeight: 700, color: "#c9242b" }}>-{formatBs(retencionIslrBs)}</Text>
+              </View>
+            )}
+            {Boolean((aplicaRetencionIva && retencionIvaBs > 0) || (aplicaRetencionIslr && retencionIslrBs > 0)) && (
+              <View style={[S.resumenTotalRow, { borderTop: "1 solid #166534", marginTop: 4, paddingTop: 4, backgroundColor: "#f0fdf4" }]}>
+                <Text style={[S.resumenTotalLabel, { color: "#166534", fontSize: 9 }]}>TOTAL NETO A COBRAR:</Text>
+                <Text style={[S.resumenTotalVal, { color: "#166534", fontSize: 9 }]}>
+                  {formatBs(totalNetoBs ?? (totalBs - (retencionIvaBs || 0) - (retencionIslrBs || 0)))}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
