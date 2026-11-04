@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   Search, FileText, CheckCircle2, AlertCircle,
   RefreshCw, ShoppingCart, Plus, Minus, Trash2,
-  ArrowRight, Package, Building2,
+  ArrowRight, Package, Building2, Info,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, tempId } from "@/lib/utils";
@@ -113,6 +113,8 @@ export default function FacturadorWizard() {
   const [error, setError]                 = useState<string | null>(null);
   const [generando, setGenerando]         = useState(false);
   const [facturaGenerada, setFacturaGenerada] = useState<string | null>(null);
+  const [moneda, setMoneda]               = useState<"USD" | "VES">("USD");
+  const [mostrarNotaBcv, setMostrarNotaBcv] = useState<boolean>(false);
   const [tasaBcv, setTasaBcv]             = useState<number>(0);
   const [cargandoTasa, setCargandoTasa]   = useState(false);
   const [metodoPago, setMetodoPago]       = useState<"bs_transferencia" | "usd_efectivo" | "zelle" | "binance">("bs_transferencia");
@@ -267,14 +269,27 @@ export default function FacturadorWizard() {
     setAplicaIgtf(esDivisa);
   }, [metodoPago]);
 
-  // ── Cálculos fiscales comunes ──
+  // ── Cálculos fiscales comunes (Bimoneda USD / VES) ──
   const subtotalUsd  = modo === "desde_cotizacion" ? (cotizacion?.total || 0) : totalDirecto;
-  const subtotalBs   = subtotalUsd * tasaBcv;
+  const factorTasa   = tasaBcv > 0 ? tasaBcv : 1;
+  const subtotalBs   = subtotalUsd * factorTasa;
+
+  // Impuestos en USD
+  const ivaUsd       = aplicaIva ? subtotalUsd * (ivaPct / 100) : 0;
+  const igtfUsd      = aplicaIgtf ? subtotalUsd * (igtfPct / 100) : 0;
+  const totalUsd     = subtotalUsd + ivaUsd + igtfUsd;
+
+  // Impuestos en Bs
   const ivaBs        = aplicaIva ? subtotalBs * (ivaPct / 100) : 0;
   const igtfBs       = aplicaIgtf ? subtotalBs * (igtfPct / 100) : 0;
   const totalBs      = subtotalBs + ivaBs + igtfBs;
 
-  // ── Retenciones ──
+  // ── Retenciones USD ──
+  const retencionIvaUsd  = (aplicaIva && aplicaRetencionIva) ? (ivaUsd * (retencionIvaPct / 100)) : 0;
+  const retencionIslrUsd = aplicaRetencionIslr ? (subtotalUsd * (retencionIslrPct / 100)) : 0;
+  const totalNetoUsd     = Math.max(0, totalUsd - retencionIvaUsd - retencionIslrUsd);
+
+  // ── Retenciones Bs ──
   const retencionIvaBs  = (aplicaIva && aplicaRetencionIva) ? (ivaBs * (retencionIvaPct / 100)) : 0;
   const retencionIslrBs = aplicaRetencionIslr ? (subtotalBs * (retencionIslrPct / 100)) : 0;
   const totalNetoBs     = Math.max(0, totalBs - retencionIvaBs - retencionIslrBs);
@@ -307,7 +322,11 @@ export default function FacturadorWizard() {
 
   // ── Generar factura desde cotización ──
   const generarDesdeCotizacion = async () => {
-    if (!cotizacion || tasaBcv <= 0) return;
+    if (!cotizacion) return;
+    if (moneda === "VES" && tasaBcv <= 0) {
+      alert("Por favor ingresa la tasa de cambio para emitir la factura en Bolívares.");
+      return;
+    }
     setGenerando(true);
     setError(null);
 
@@ -316,15 +335,32 @@ export default function FacturadorWizard() {
       if (rpcErr) throw new Error("Error al generar número de factura: " + rpcErr.message);
 
       const infoRetenciones = [
-        aplicaRetencionIva && retencionIvaBs > 0 ? `Ret. IVA ${retencionIvaPct}% (-Bs. ${retencionIvaBs.toFixed(2)})` : null,
-        aplicaRetencionIslr && retencionIslrBs > 0 ? `Ret. ISLR ${retencionIslrPct}% (-Bs. ${retencionIslrBs.toFixed(2)})` : null,
-        (aplicaRetencionIva || aplicaRetencionIslr) ? `Neto a Cobrar: Bs. ${totalNetoBs.toFixed(2)}` : null
+        aplicaRetencionIva && (moneda === "USD" ? retencionIvaUsd > 0 : retencionIvaBs > 0)
+          ? `Ret. IVA ${retencionIvaPct}% (-${moneda === "USD" ? formatUSD(retencionIvaUsd) : "Bs. " + retencionIvaBs.toFixed(2)})`
+          : null,
+        aplicaRetencionIslr && (moneda === "USD" ? retencionIslrUsd > 0 : retencionIslrBs > 0)
+          ? `Ret. ISLR ${retencionIslrPct}% (-${moneda === "USD" ? formatUSD(retencionIslrUsd) : "Bs. " + retencionIslrBs.toFixed(2)})`
+          : null,
+        (aplicaRetencionIva || aplicaRetencionIslr)
+          ? `Neto: ${moneda === "USD" ? formatUSD(totalNetoUsd) : "Bs. " + totalNetoBs.toFixed(2)}`
+          : null
       ].filter(Boolean).join(" | ");
+
+      const tagsMoneda = [
+        `[MONEDA:${moneda}]`,
+        !mostrarNotaBcv ? `[SIN_NOTA_BCV]` : null,
+      ].filter(Boolean).join(" ");
+
+      const notasFinales = [
+        tagsMoneda,
+        infoRetenciones,
+        cotizacion.notas || ""
+      ].filter(Boolean).join(" | ").trim();
 
       const facturaPayload: any = {
         cotizacion_id: cotizacion.id,
         numero_factura: numFactura,
-        tasa_bcv:       tasaBcv,
+        tasa_bcv:       tasaBcv || 0,
         metodo_pago:    metodoPago,
         aplica_igtf:    aplicaIgtf,
         aplica_iva:     aplicaIva,
@@ -340,7 +376,7 @@ export default function FacturadorWizard() {
         retencion_islr_pct: retencionIslrPct,
         retencion_islr_bs: retencionIslrBs,
         total_neto_bs: totalNetoBs,
-        notas: infoRetenciones ? `${cotizacion.notas || ""} [${infoRetenciones}]`.trim() : cotizacion.notas,
+        notas: notasFinales,
       };
 
       let factData = null;
@@ -352,7 +388,7 @@ export default function FacturadorWizard() {
         const fallbackPayload = {
           cotizacion_id: cotizacion.id,
           numero_factura: numFactura,
-          tasa_bcv:       tasaBcv,
+          tasa_bcv:       tasaBcv || 0,
           metodo_pago:    metodoPago,
           aplica_igtf:    aplicaIgtf,
           aplica_iva:     aplicaIva,
@@ -361,7 +397,7 @@ export default function FacturadorWizard() {
           iva_bs:         ivaBs,
           igtf_bs:        igtfBs,
           total_bs:       totalBs,
-          notas: infoRetenciones ? `${cotizacion.notas || ""} [${infoRetenciones}]`.trim() : cotizacion.notas,
+          notas: notasFinales,
         };
         const { data: fallbackData, error: fbErr } = await supabase.from("facturas").insert([fallbackPayload]).select().single();
         if (fbErr) throw new Error("Error al guardar factura: " + fbErr.message);
@@ -402,21 +438,30 @@ export default function FacturadorWizard() {
         fecha:          new Date(),
         cliente:        cotizacion.clientes,
         lineas:         cotizacion.cotizacion_detalles,
-        tasaBcv,
+        moneda,
+        mostrarNotaBcv,
+        tasaBcv:        tasaBcv || 1,
         subtotalBs,
         ivaBs,
         ivaPct,
         igtfBs,
         igtfPct,
         totalBs,
+        subtotalUsd,
+        ivaUsd,
+        igtfUsd,
+        totalUsd,
         aplicaIgtf,
         aplicaRetencionIva,
         retencionIvaPct,
         retencionIvaBs,
+        retencionIvaUsd,
         aplicaRetencionIslr,
         retencionIslrPct,
         retencionIslrBs,
+        retencionIslrUsd,
         totalNetoBs,
+        totalNetoUsd,
       });
 
     } catch (err: any) {
@@ -428,7 +473,11 @@ export default function FacturadorWizard() {
 
   // ── Generar factura directa ──
   const generarFacturaDirecta = async () => {
-    if (lineasDirectas.length === 0 || tasaBcv <= 0) return;
+    if (lineasDirectas.length === 0) return;
+    if (moneda === "VES" && tasaBcv <= 0) {
+      alert("Por favor ingresa la tasa de cambio para emitir la factura en Bolívares.");
+      return;
+    }
     setGenerando(true);
     setError(null);
 
@@ -440,15 +489,31 @@ export default function FacturadorWizard() {
       const rifCliente    = clienteDirecto?.rif_cedula || "";
 
       const infoRetenciones = [
-        aplicaRetencionIva && retencionIvaBs > 0 ? `Ret. IVA ${retencionIvaPct}% (-Bs. ${retencionIvaBs.toFixed(2)})` : null,
-        aplicaRetencionIslr && retencionIslrBs > 0 ? `Ret. ISLR ${retencionIslrPct}% (-Bs. ${retencionIslrBs.toFixed(2)})` : null,
-        (aplicaRetencionIva || aplicaRetencionIslr) ? `Neto a Cobrar: Bs. ${totalNetoBs.toFixed(2)}` : null
+        aplicaRetencionIva && (moneda === "USD" ? retencionIvaUsd > 0 : retencionIvaBs > 0)
+          ? `Ret. IVA ${retencionIvaPct}% (-${moneda === "USD" ? formatUSD(retencionIvaUsd) : "Bs. " + retencionIvaBs.toFixed(2)})`
+          : null,
+        aplicaRetencionIslr && (moneda === "USD" ? retencionIslrUsd > 0 : retencionIslrBs > 0)
+          ? `Ret. ISLR ${retencionIslrPct}% (-${moneda === "USD" ? formatUSD(retencionIslrUsd) : "Bs. " + retencionIslrBs.toFixed(2)})`
+          : null,
+        (aplicaRetencionIva || aplicaRetencionIslr)
+          ? `Neto: ${moneda === "USD" ? formatUSD(totalNetoUsd) : "Bs. " + totalNetoBs.toFixed(2)}`
+          : null
       ].filter(Boolean).join(" | ");
+
+      const tagsMoneda = [
+        `[MONEDA:${moneda}]`,
+        !mostrarNotaBcv ? `[SIN_NOTA_BCV]` : null,
+      ].filter(Boolean).join(" ");
+
+      const notasFinales = [
+        tagsMoneda,
+        infoRetenciones ? `Venta directa [${infoRetenciones}]` : "Venta directa sin cotización previa"
+      ].filter(Boolean).join(" | ").trim();
 
       const directPayload: any = {
         cotizacion_id:  null,
         numero_factura: numFactura,
-        tasa_bcv:       tasaBcv,
+        tasa_bcv:       tasaBcv || 0,
         metodo_pago:    metodoPago,
         aplica_igtf:    aplicaIgtf,
         aplica_iva:     aplicaIva,
@@ -466,7 +531,7 @@ export default function FacturadorWizard() {
         retencion_islr_pct: retencionIslrPct,
         retencion_islr_bs: retencionIslrBs,
         total_neto_bs: totalNetoBs,
-        notas: infoRetenciones ? `Venta directa [${infoRetenciones}]` : "Venta directa sin cotización previa",
+        notas: notasFinales,
       };
 
       let factData = null;
@@ -477,7 +542,7 @@ export default function FacturadorWizard() {
         const fbPayload = {
           cotizacion_id:  null,
           numero_factura: numFactura,
-          tasa_bcv:       tasaBcv,
+          tasa_bcv:       tasaBcv || 0,
           metodo_pago:    metodoPago,
           aplica_igtf:    aplicaIgtf,
           aplica_iva:     aplicaIva,
@@ -488,7 +553,7 @@ export default function FacturadorWizard() {
           total_bs:       totalBs,
           cliente_nombre: nombreCliente,
           cliente_rif:    rifCliente,
-          notas: infoRetenciones ? `Venta directa [${infoRetenciones}]` : "Venta directa sin cotización previa",
+          notas: notasFinales,
         };
         const { data: fbData, error: fbErr } = await supabase.from("facturas").insert([fbPayload]).select().single();
         if (fbErr) throw new Error("Error al guardar factura: " + fbErr.message);
@@ -540,21 +605,30 @@ export default function FacturadorWizard() {
           subtotal:        l.subtotal,
           tipo_item:       "producto",
         })),
-        tasaBcv,
+        moneda,
+        mostrarNotaBcv,
+        tasaBcv:        tasaBcv || 1,
         subtotalBs,
         ivaBs,
         ivaPct,
         igtfBs,
         igtfPct,
         totalBs,
+        subtotalUsd,
+        ivaUsd,
+        igtfUsd,
+        totalUsd,
         aplicaIgtf,
         aplicaRetencionIva,
         retencionIvaPct,
         retencionIvaBs,
+        retencionIvaUsd,
         aplicaRetencionIslr,
         retencionIslrPct,
         retencionIslrBs,
+        retencionIslrUsd,
         totalNetoBs,
+        totalNetoUsd,
       });
 
     } catch (err: any) {
@@ -586,20 +660,90 @@ export default function FacturadorWizard() {
   // ── Formulario fiscal (compartido entre ambos modos) ──
   const FormularioFiscal = ({ onGenerar, disabled }: { onGenerar: () => void; disabled: boolean }) => (
     <div className="p-6 space-y-6">
-      <h4 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
-        Configuración Fiscal (Providencia 00071)
-      </h4>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--ts-border)] pb-3">
+        <h4 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
+          Configuración Fiscal y Moneda de Emisión
+        </h4>
+        <span className="text-xs font-medium text-[var(--ts-text-muted)]">
+          Providencia SENIAT SNAT/2011/00071
+        </span>
+      </div>
+
+      {/* ── Selector de Moneda de Emisión ── */}
+      <div className="space-y-2">
+        <label className="block text-xs font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
+          Moneda de Emisión de la Factura
+        </label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setMoneda("USD")}
+            className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
+              moneda === "USD"
+                ? "border-[var(--ts-red)] bg-[var(--ts-red)]/10 ring-1 ring-[var(--ts-red)]"
+                : "border-[var(--ts-border)] bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)]"
+            }`}
+          >
+            <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+              moneda === "USD" ? "border-[var(--ts-red)]" : "border-[var(--ts-border)]"
+            }`}>
+              {moneda === "USD" && <div className="w-2 h-2 rounded-full bg-[var(--ts-red)]" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-sm font-bold text-[var(--ts-text-primary)]">Dólares ($ / USD)</span>
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                  Recomendado para divisas
+                </span>
+              </div>
+              <p className="text-xs text-[var(--ts-text-muted)] mt-1">
+                Expresada en USD. <strong>NO incluye</strong> la cláusula de cobro obligatorio a tasa BCV (ideal para pagos en efectivo o a tasas pactadas).
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMoneda("VES")}
+            className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
+              moneda === "VES"
+                ? "border-[var(--ts-red)] bg-[var(--ts-red)]/10 ring-1 ring-[var(--ts-red)]"
+                : "border-[var(--ts-border)] bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)]"
+            }`}
+          >
+            <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+              moneda === "VES" ? "border-[var(--ts-red)]" : "border-[var(--ts-border)]"
+            }`}>
+              {moneda === "VES" && <div className="w-2 h-2 rounded-full bg-[var(--ts-red)]" />}
+            </div>
+            <div>
+              <span className="text-sm font-bold text-[var(--ts-text-primary)]">Bolívares (Bs. / VES)</span>
+              <p className="text-xs text-[var(--ts-text-muted)] mt-1">
+                Expresada en Bolívares convertidos según la tasa de cambio establecida.
+              </p>
+            </div>
+          </button>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {/* Tasa BCV */}
         <div>
-          <label className="block text-xs font-semibold text-[var(--ts-text-muted)] mb-1">Tasa de Cambio (BCV)</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-semibold text-[var(--ts-text-muted)]">
+              {moneda === "USD" ? "Tasa de Cambio Referencial (Opcional)" : "Tasa de Cambio BCV (Requerida)"}
+            </label>
+            {moneda === "USD" && (
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Opcional en USD</span>
+            )}
+          </div>
           <div className="relative">
             <input
               type="number" step="0.01"
+              placeholder={moneda === "USD" ? "Opcional (no afecta montos USD)" : "Ingrese tasa de cambio..."}
               value={tasaBcv || ""}
               onChange={e => setTasaBcv(parseFloat(e.target.value) || 0)}
-              className="w-full pl-3 pr-10 py-2 border border-[var(--ts-border)] rounded-lg text-sm focus:outline-none focus:border-[var(--ts-red)]"
+              className="w-full pl-3 pr-10 py-2 border border-[var(--ts-border)] rounded-lg text-sm focus:outline-none focus:border-[var(--ts-red)] bg-[var(--ts-surface)]"
             />
             <button
               type="button" onClick={fetchBCVRate} disabled={cargandoTasa}
@@ -609,7 +753,11 @@ export default function FacturadorWizard() {
               <RefreshCw className={`w-4 h-4 ${cargandoTasa ? "animate-spin" : ""}`} />
             </button>
           </div>
-          <p className="text-[10px] text-[var(--ts-text-muted)] mt-1">Se obtiene automáticamente de DolarAPI.</p>
+          <p className="text-[10px] text-[var(--ts-text-muted)] mt-1">
+            {moneda === "USD"
+              ? "En facturas en USD los cálculos se efectúan directamente en dólares."
+              : "Se obtiene automáticamente de DolarAPI o puede ingresarse manualmente."}
+          </p>
         </div>
 
         {/* Método de pago */}
@@ -628,6 +776,38 @@ export default function FacturadorWizard() {
           <p className="text-[10px] text-[var(--ts-text-muted)] mt-1">
             {aplicaIgtf ? `Aplica recargo del ${igtfPct}% por IGTF.` : "No aplica IGTF."}
           </p>
+        </div>
+
+        {/* Aviso de leyenda BCV / Opciones según moneda */}
+        <div className="md:col-span-2">
+          {moneda === "USD" ? (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300">
+              <Info className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+              <div>
+                <strong>Aviso Legal BCV Excluido:</strong> Al facturar en Dólares ($), el PDF no incluirá la leyenda de cobro obligatorio a tasa oficial BCV. Esto evita inconsistencias con clientes que paguen en efectivo o a tasas pactadas previamente.
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2.5 p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg">
+              <input
+                id="check-nota-bcv"
+                type="checkbox"
+                checked={mostrarNotaBcv}
+                onChange={e => setMostrarNotaBcv(e.target.checked)}
+                className="mt-0.5 rounded border-[var(--ts-border)] text-[var(--ts-red)] focus:ring-[var(--ts-red)] w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor="check-nota-bcv" className="cursor-pointer">
+                <span className="text-xs font-bold text-[var(--ts-text-primary)] block">
+                  Imprimir leyenda legal de Tasa Oficial BCV en el PDF
+                </span>
+                <span className="text-[11px] text-[var(--ts-text-muted)]">
+                  {mostrarNotaBcv
+                    ? "Se imprimirá la cláusula: «Tasa oficial de cambio BCV del día: XX Bs/USD...»"
+                    : "No se imprimirá la leyenda de cobro obligatorio a tasa BCV (útil si utilizas una tasa acordada diferente)."}
+                </span>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* ── Impuestos y Retenciones Fiscales ── */}
@@ -719,7 +899,7 @@ export default function FacturadorWizard() {
                   </div>
                 </label>
                 <span className="text-xs font-bold text-[var(--ts-text-primary)]">
-                  {aplicaIva ? formatBs(ivaBs) : "Bs. 0,00"}
+                  {aplicaIva ? (moneda === "USD" ? formatUSD(ivaUsd) : formatBs(ivaBs)) : (moneda === "USD" ? "$0.00" : "Bs. 0,00")}
                 </span>
               </div>
 
@@ -787,7 +967,7 @@ export default function FacturadorWizard() {
                   </div>
                 </label>
                 <span className="text-xs font-bold text-[var(--ts-text-primary)]">
-                  {aplicaIgtf ? formatBs(igtfBs) : "Bs. 0,00"}
+                  {aplicaIgtf ? (moneda === "USD" ? formatUSD(igtfUsd) : formatBs(igtfBs)) : (moneda === "USD" ? "$0.00" : "Bs. 0,00")}
                 </span>
               </div>
 
@@ -854,7 +1034,7 @@ export default function FacturadorWizard() {
                 </label>
                 {aplicaRetencionIva && aplicaIva && (
                   <span className="text-xs font-bold text-[var(--ts-red)]">
-                    -{formatBs(retencionIvaBs)}
+                    -{moneda === "USD" ? formatUSD(retencionIvaUsd) : formatBs(retencionIvaBs)}
                   </span>
                 )}
               </div>
@@ -924,7 +1104,7 @@ export default function FacturadorWizard() {
                 </label>
                 {aplicaRetencionIslr && (
                   <span className="text-xs font-bold text-[var(--ts-red)]">
-                    -{formatBs(retencionIslrBs)}
+                    -{moneda === "USD" ? formatUSD(retencionIslrUsd) : formatBs(retencionIslrBs)}
                   </span>
                 )}
               </div>
@@ -969,56 +1149,112 @@ export default function FacturadorWizard() {
 
       {/* Resumen fiscal */}
       <div className="bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg p-5">
-        <h5 className="text-xs font-bold text-[var(--ts-text-primary)] uppercase tracking-wide mb-3 border-b border-[var(--ts-border)] pb-2">
-          Resumen a Facturar en Bolívares
-        </h5>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-[var(--ts-text-muted)]">Base Imponible (USD)</span>
-            <span className="font-medium">{formatUSD(subtotalUsd)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[var(--ts-text-muted)]">Base Imponible (Bs)</span>
-            <span className="font-medium">{formatBs(subtotalBs)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-[var(--ts-text-muted)]">IVA ({aplicaIva ? `${ivaPct}%` : "0%"})</span>
-            <span className="font-medium">{formatBs(ivaBs)}</span>
-          </div>
-          {aplicaIgtf && (
-            <div className="flex justify-between">
-              <span className="text-[var(--ts-text-muted)]">IGTF ({igtfPct}%)</span>
-              <span className="font-medium text-[var(--ts-red)]">{formatBs(igtfBs)}</span>
-            </div>
-          )}
-          <div className="flex justify-between border-t border-[var(--ts-border)] pt-2 mt-2">
-            <span className="font-bold text-[var(--ts-text-primary)] text-sm">TOTAL FACTURA FISCAL</span>
-            <span className="font-bold text-[var(--ts-text-primary)] text-sm">{formatBs(totalBs)}</span>
-          </div>
+        <div className="flex items-center justify-between border-b border-[var(--ts-border)] pb-2 mb-3">
+          <h5 className="text-xs font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
+            Resumen a Facturar en {moneda === "USD" ? "Dólares ($)" : "Bolívares (Bs.)"}
+          </h5>
+          <span className="text-[11px] px-2 py-0.5 rounded font-bold bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-primary)]">
+            {moneda === "USD" ? "Factura en Divisas (USD)" : `Tasa: ${tasaBcv > 0 ? formatBs(tasaBcv) : "Sin definir"}`}
+          </span>
+        </div>
 
-          {/* Deducciones por Retenciones */}
-          {Boolean((aplicaRetencionIva && retencionIvaBs > 0) || (aplicaRetencionIslr && retencionIslrBs > 0)) && (
-            <div className="border-t border-dashed border-[var(--ts-border)] pt-2 space-y-1.5">
-              {Boolean(aplicaRetencionIva && retencionIvaBs > 0) && (
-                <div className="flex justify-between text-xs text-[var(--ts-red)]">
-                  <span>(-) Retención IVA ({retencionIvaPct}%)</span>
-                  <span className="font-bold">-{formatBs(retencionIvaBs)}</span>
-                </div>
-              )}
-              {Boolean(aplicaRetencionIslr && retencionIslrBs > 0) && (
-                <div className="flex justify-between text-xs text-[var(--ts-red)]">
-                  <span>(-) Retención ISLR ({retencionIslrPct}%)</span>
-                  <span className="font-bold">-{formatBs(retencionIslrBs)}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-2.5 rounded-lg mt-2">
-                <div>
-                  <span className="block font-extrabold text-emerald-800 dark:text-emerald-300 text-sm">TOTAL NETO A COBRAR</span>
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-400">Monto a pagar por el cliente</span>
-                </div>
-                <span className="font-extrabold text-emerald-700 dark:text-emerald-300 text-lg">{formatBs(totalNetoBs)}</span>
+        <div className="space-y-2 text-sm">
+          {moneda === "USD" ? (
+            <>
+              <div className="flex justify-between">
+                <span className="text-[var(--ts-text-muted)]">Base Imponible (USD)</span>
+                <span className="font-medium">{formatUSD(subtotalUsd)}</span>
               </div>
-            </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--ts-text-muted)]">IVA ({aplicaIva ? `${ivaPct}%` : "0%"})</span>
+                <span className="font-medium">{formatUSD(ivaUsd)}</span>
+              </div>
+              {aplicaIgtf && (
+                <div className="flex justify-between">
+                  <span className="text-[var(--ts-text-muted)]">IGTF ({igtfPct}%)</span>
+                  <span className="font-medium text-[var(--ts-red)]">{formatUSD(igtfUsd)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-[var(--ts-border)] pt-2 mt-2">
+                <span className="font-bold text-[var(--ts-text-primary)] text-sm">TOTAL FACTURA FISCAL</span>
+                <span className="font-bold text-[var(--ts-text-primary)] text-sm">{formatUSD(totalUsd)}</span>
+              </div>
+
+              {/* Deducciones por Retenciones en USD */}
+              {Boolean((aplicaRetencionIva && retencionIvaUsd > 0) || (aplicaRetencionIslr && retencionIslrUsd > 0)) && (
+                <div className="border-t border-dashed border-[var(--ts-border)] pt-2 space-y-1.5">
+                  {Boolean(aplicaRetencionIva && retencionIvaUsd > 0) && (
+                    <div className="flex justify-between text-xs text-[var(--ts-red)]">
+                      <span>(-) Retención IVA ({retencionIvaPct}%)</span>
+                      <span className="font-bold">-{formatUSD(retencionIvaUsd)}</span>
+                    </div>
+                  )}
+                  {Boolean(aplicaRetencionIslr && retencionIslrUsd > 0) && (
+                    <div className="flex justify-between text-xs text-[var(--ts-red)]">
+                      <span>(-) Retención ISLR ({retencionIslrPct}%)</span>
+                      <span className="font-bold">-{formatUSD(retencionIslrUsd)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-2.5 rounded-lg mt-2">
+                    <div>
+                      <span className="block font-extrabold text-emerald-800 dark:text-emerald-300 text-sm">TOTAL NETO A COBRAR</span>
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400">Monto en dólares a cobrar al cliente</span>
+                    </div>
+                    <span className="font-extrabold text-emerald-700 dark:text-emerald-300 text-lg">{formatUSD(totalNetoUsd)}</span>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between">
+                <span className="text-[var(--ts-text-muted)]">Base Imponible (USD)</span>
+                <span className="font-medium">{formatUSD(subtotalUsd)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--ts-text-muted)]">Base Imponible (Bs)</span>
+                <span className="font-medium">{formatBs(subtotalBs)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[var(--ts-text-muted)]">IVA ({aplicaIva ? `${ivaPct}%` : "0%"})</span>
+                <span className="font-medium">{formatBs(ivaBs)}</span>
+              </div>
+              {aplicaIgtf && (
+                <div className="flex justify-between">
+                  <span className="text-[var(--ts-text-muted)]">IGTF ({igtfPct}%)</span>
+                  <span className="font-medium text-[var(--ts-red)]">{formatBs(igtfBs)}</span>
+                </div>
+              )}
+              <div className="flex justify-between border-t border-[var(--ts-border)] pt-2 mt-2">
+                <span className="font-bold text-[var(--ts-text-primary)] text-sm">TOTAL FACTURA FISCAL</span>
+                <span className="font-bold text-[var(--ts-text-primary)] text-sm">{formatBs(totalBs)}</span>
+              </div>
+
+              {/* Deducciones por Retenciones en Bs */}
+              {Boolean((aplicaRetencionIva && retencionIvaBs > 0) || (aplicaRetencionIslr && retencionIslrBs > 0)) && (
+                <div className="border-t border-dashed border-[var(--ts-border)] pt-2 space-y-1.5">
+                  {Boolean(aplicaRetencionIva && retencionIvaBs > 0) && (
+                    <div className="flex justify-between text-xs text-[var(--ts-red)]">
+                      <span>(-) Retención IVA ({retencionIvaPct}%)</span>
+                      <span className="font-bold">-{formatBs(retencionIvaBs)}</span>
+                    </div>
+                  )}
+                  {Boolean(aplicaRetencionIslr && retencionIslrBs > 0) && (
+                    <div className="flex justify-between text-xs text-[var(--ts-red)]">
+                      <span>(-) Retención ISLR ({retencionIslrPct}%)</span>
+                      <span className="font-bold">-{formatBs(retencionIslrBs)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 p-2.5 rounded-lg mt-2">
+                    <div>
+                      <span className="block font-extrabold text-emerald-800 dark:text-emerald-300 text-sm">TOTAL NETO A COBRAR</span>
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400">Monto a pagar por el cliente</span>
+                    </div>
+                    <span className="font-extrabold text-emerald-700 dark:text-emerald-300 text-lg">{formatBs(totalNetoBs)}</span>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1031,14 +1267,14 @@ export default function FacturadorWizard() {
 
       <button
         onClick={onGenerar}
-        disabled={disabled || generando || tasaBcv <= 0}
-        className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 disabled:opacity-50 text-[var(--ts-text-primary)] font-bold text-base py-4 rounded-xl transition-colors shadow-lg shadow-red-900/30"
+        disabled={disabled || generando || (moneda === "VES" && tasaBcv <= 0)}
+        className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 disabled:opacity-50 text-white font-bold text-base py-4 rounded-xl transition-colors shadow-lg shadow-red-900/30"
       >
         {generando
           ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
           : <FileText className="w-5 h-5" />
         }
-        Emitir Factura Fiscal
+        Emitir Factura Fiscal {moneda === "USD" ? "en Dólares ($)" : "en Bolívares (Bs)"}
       </button>
     </div>
   );

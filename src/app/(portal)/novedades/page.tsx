@@ -19,6 +19,18 @@ interface Version {
 
 const CHANGELOG: Version[] = [
   {
+    version: "3.3",
+    fecha: "04 Nov 2026",
+    titulo: "Facturación Bimonetaria (Dólares / Bolívares) & Supresión de Leyenda BCV",
+    entradas: [
+      { tipo: "importante", texto: "Facturación Directa en Dólares ($ / USD): selector de moneda de emisión que permite generar y descargar facturas fiscales expresadas íntegramente en USD, sin requerir conversión obligatoria a Bolívares." },
+      { tipo: "importante", texto: "Supresión Automática del Aviso de Tasa Oficial BCV: cuando la factura se emite en Dólares ($), se elimina por completo el aviso legal de cobro a tasa BCV del PDF para evitar discrepancias y reclamos con clientes que cancelan en divisas o a tasas pactadas." },
+      { tipo: "nueva", texto: "Control Flexible de Leyenda BCV en Bolívares (VES): al facturar en Bolívares, se incluye una casilla de verificación opcional para decidir si imprimir o no la nota oficial del BCV en el PDF, ideal al aplicar tasas acordadas distintas a la tasa oficial." },
+      { tipo: "nueva", texto: "Desglose Fiscal Dinámico y Deducciones en Divisas: el resumen fiscal y la estimación de retenciones (IVA e ISLR) calculan y presentan los montos automáticamente en USD o en Bs. según la moneda elegida." },
+      { tipo: "mejora", texto: "Historial de Facturas con Distintivo de Moneda: listado de facturas y panel lateral de detalle con badges visuales distintivos (USD $ en verde esmeralda y VES Bs en azul) y re-descarga fiel del PDF con la moneda y configuración original." },
+    ],
+  },
+  {
     version: "3.2",
     fecha: "03 Nov 2026",
     titulo: "Identidad Visual Oficial (Sin Vercel) & Experiencia de Navegación Móvil Integral",

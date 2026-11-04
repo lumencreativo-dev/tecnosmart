@@ -141,7 +141,35 @@ export default function HistorialFacturas() {
     setRegenerando(true);
     try {
       const cliente = f.cotizaciones?.clientes || {};
-      const lineas = detalles.length > 0 ? detalles : [];
+      let lineas = detalles;
+      if (lineas.length === 0 || selected?.id !== f.id) {
+        const { data: dts } = await supabase
+          .from("factura_detalles")
+          .select("*")
+          .eq("factura_id", f.id)
+          .order("orden");
+        if (dts) lineas = dts;
+      }
+
+      const esUSD = f.moneda === "USD" || f.notas?.includes("[MONEDA:USD]");
+      const sinNotaBcv = f.notas?.includes("[SIN_NOTA_BCV]") || esUSD;
+      const mostrarNotaBcv = !sinNotaBcv;
+
+      const tasa = Number(f.tasa_bcv || 0);
+      const subtotalUsd = Number(f.subtotal_usd || f.cotizaciones?.subtotal || f.cotizaciones?.total || 0);
+      const ivaBs = Number(f.iva_bs || 0);
+      const ivaUsd = tasa > 0 ? ivaBs / tasa : (f.aplica_iva !== false ? subtotalUsd * 0.16 : 0);
+      const igtfBs = Number(f.igtf_bs || 0);
+      const igtfUsd = tasa > 0 ? igtfBs / tasa : (f.aplica_igtf ? subtotalUsd * 0.03 : 0);
+      const totalBs = Number(f.total_bs || 0);
+      const totalUsd = tasa > 0 ? totalBs / tasa : subtotalUsd + ivaUsd + igtfUsd;
+
+      const retencionIvaBs = Number(f.retencion_iva_bs || 0);
+      const retencionIvaUsd = tasa > 0 ? retencionIvaBs / tasa : 0;
+      const retencionIslrBs = Number(f.retencion_islr_bs || 0);
+      const retencionIslrUsd = tasa > 0 ? retencionIslrBs / tasa : 0;
+      const totalNetoBs = Number(f.total_neto_bs || f.total_bs || 0);
+      const totalNetoUsd = tasa > 0 ? totalNetoBs / tasa : totalUsd - retencionIvaUsd - retencionIslrUsd;
 
       const { exportarFacturaFiscalPDF } = await import("@/components/pdf/FacturaFiscalPDF");
       await exportarFacturaFiscalPDF({
@@ -150,19 +178,28 @@ export default function HistorialFacturas() {
         fecha:          new Date(f.fecha || f.created_at),
         cliente,
         lineas,
-        tasaBcv:        Number(f.tasa_bcv || 0),
+        moneda:         esUSD ? "USD" : "VES",
+        mostrarNotaBcv,
+        tasaBcv:        tasa,
         subtotalBs:     Number(f.subtotal_bs || 0),
-        ivaBs:          Number(f.iva_bs || 0),
-        igtfBs:         Number(f.igtf_bs || 0),
-        totalBs:        Number(f.total_bs || 0),
+        subtotalUsd,
+        ivaBs,
+        ivaUsd,
+        igtfBs,
+        igtfUsd,
+        totalBs,
+        totalUsd,
         aplicaIgtf:     Boolean(f.aplica_igtf),
         aplicaRetencionIva: Boolean(f.aplica_retencion_iva),
         retencionIvaPct:    Number(f.retencion_iva_pct || 75),
-        retencionIvaBs:     Number(f.retencion_iva_bs || 0),
+        retencionIvaBs,
+        retencionIvaUsd,
         aplicaRetencionIslr:Boolean(f.aplica_retencion_islr),
         retencionIslrPct:   Number(f.retencion_islr_pct || 2),
-        retencionIslrBs:    Number(f.retencion_islr_bs || 0),
-        totalNetoBs:        Number(f.total_neto_bs || f.total_bs || 0),
+        retencionIslrBs,
+        retencionIslrUsd,
+        totalNetoBs,
+        totalNetoUsd,
       });
     } catch (e) {
       console.error("Error al re-generar PDF:", e);
@@ -241,38 +278,63 @@ export default function HistorialFacturas() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--ts-border-2)]">
-                {facturasFiltradas.map(f => (
-                  <tr
-                    key={f.id}
-                    className={`hover:bg-[var(--ts-surface-2)] transition-colors cursor-pointer group ${f.estado === "anulada" ? "opacity-60" : ""}`}
-                    onClick={() => abrirDetalle(f)}
-                  >
-                    <td className="px-5 py-3">
-                      <span className="text-sm font-bold text-[var(--ts-red)]">{f.numero_factura}</span>
-                    </td>
-                    <td className="px-5 py-3 text-xs text-[var(--ts-text-muted)]">{formatFecha(f.fecha || f.created_at)}</td>
-                    <td className="px-5 py-3">
-                      <p className="text-sm font-semibold text-[var(--ts-text-primary)]">
-                        {f.cotizaciones?.clientes?.empresa || f.cotizaciones?.clientes?.contacto || f.cliente_nombre || "—"}
-                      </p>
-                    </td>
-                    <td className="px-5 py-3 text-sm font-bold text-[var(--ts-text-primary)] text-right">
-                      {formatUSD(Number(f.subtotal_usd || f.cotizaciones?.total || 0))}
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <EstadoBadge estado={f.estado || "activa"} />
-                    </td>
-                    <td className="px-5 py-3 text-center">
-                      <button
-                        onClick={e => { e.stopPropagation(); setDeletingId(f.id); setPassword(""); setPwError(false); }}
-                        className="text-[#d9d9d9] group-hover:text-[var(--ts-red)] transition-colors p-1"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-4 h-4 mx-auto" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {facturasFiltradas.map(f => {
+                  const esUSD = f.moneda === "USD" || f.notas?.includes("[MONEDA:USD]");
+                  return (
+                    <tr
+                      key={f.id}
+                      className={`hover:bg-[var(--ts-surface-2)] transition-colors cursor-pointer group ${f.estado === "anulada" ? "opacity-60" : ""}`}
+                      onClick={() => abrirDetalle(f)}
+                    >
+                      <td className="px-5 py-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-bold text-[var(--ts-red)]">{f.numero_factura}</span>
+                          {esUSD ? (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                              USD ($)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                              VES (Bs)
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-[var(--ts-text-muted)]">{formatFecha(f.fecha || f.created_at)}</td>
+                      <td className="px-5 py-3">
+                        <p className="text-sm font-semibold text-[var(--ts-text-primary)]">
+                          {f.cotizaciones?.clientes?.empresa || f.cotizaciones?.clientes?.contacto || f.cliente_nombre || "—"}
+                        </p>
+                      </td>
+                      <td className="px-5 py-3 text-sm font-bold text-[var(--ts-text-primary)] text-right">
+                        {esUSD ? (
+                          <div>
+                            <span>{formatUSD(Number(f.subtotal_usd || f.cotizaciones?.total || 0))}</span>
+                          </div>
+                        ) : (
+                          <div>
+                            <div>Bs. {Number(f.total_bs || 0).toLocaleString("es-VE", { minimumFractionDigits: 2 })}</div>
+                            <div className="text-[10px] font-normal text-[var(--ts-text-muted)]">
+                              {formatUSD(Number(f.subtotal_usd || f.cotizaciones?.total || 0))}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <EstadoBadge estado={f.estado || "activa"} />
+                      </td>
+                      <td className="px-5 py-3 text-center">
+                        <button
+                          onClick={e => { e.stopPropagation(); setDeletingId(f.id); setPassword(""); setPwError(false); }}
+                          className="text-[#d9d9d9] group-hover:text-[var(--ts-red)] transition-colors p-1"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-4 h-4 mx-auto" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -289,9 +351,18 @@ export default function HistorialFacturas() {
             <div className={`px-6 py-5 border-b border-[var(--ts-border)] ${selected.estado === "anulada" ? "bg-red-50" : "bg-[var(--ts-surface-2)]"}`}>
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h2 className="text-xl font-extrabold text-[var(--ts-red)]">{selected.numero_factura}</h2>
                     <EstadoBadge estado={selected.estado || "activa"} />
+                    {selected.moneda === "USD" || selected.notas?.includes("[MONEDA:USD]") ? (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                        USD ($)
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                        VES (Bs)
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-[var(--ts-text-muted)]">
                     Emitida: {formatFecha(selected.fecha || selected.created_at)}
@@ -372,27 +443,55 @@ export default function HistorialFacturas() {
                 <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">Resumen Fiscal</h3>
                 <div className="bg-[var(--ts-surface-2)] rounded-lg p-4 border border-[var(--ts-border)] space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-[var(--ts-text-muted)]">Subtotal</span>
+                    <span className="text-[var(--ts-text-muted)]">Moneda</span>
+                    <span className="font-semibold">
+                      {selected.moneda === "USD" || selected.notas?.includes("[MONEDA:USD]") ? "Dólares Americanos (USD)" : "Bolívares (VES)"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[var(--ts-text-muted)]">Subtotal (USD)</span>
                     <span className="font-semibold">{formatUSD(Number(selected.subtotal_usd || selected.cotizaciones?.subtotal || 0))}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[var(--ts-text-muted)]">IVA ({selected.iva_bs > 0 ? "16%" : "0%"}) en Bs.</span>
-                    <span className="font-semibold">Bs. {Number(selected.iva_bs || 0).toLocaleString("es-VE", { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  {selected.aplica_igtf && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-[var(--ts-text-muted)]">IGTF (3%) en Bs.</span>
-                      <span className="font-semibold">Bs. {Number(selected.igtf_bs || 0).toLocaleString("es-VE", { minimumFractionDigits: 2 })}</span>
-                    </div>
+                  {!(selected.moneda === "USD" || selected.notas?.includes("[MONEDA:USD]")) && (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[var(--ts-text-muted)]">Subtotal (Bs.)</span>
+                        <span className="font-semibold">Bs. {Number(selected.subtotal_bs || 0).toLocaleString("es-VE", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[var(--ts-text-muted)]">IVA ({selected.iva_bs > 0 ? "16%" : "0%"}) en Bs.</span>
+                        <span className="font-semibold">Bs. {Number(selected.iva_bs || 0).toLocaleString("es-VE", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      {selected.aplica_igtf && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-[var(--ts-text-muted)]">IGTF (3%) en Bs.</span>
+                          <span className="font-semibold">Bs. {Number(selected.igtf_bs || 0).toLocaleString("es-VE", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-sm border-t border-[var(--ts-border)] pt-2">
+                        <span className="text-[var(--ts-text-muted)]">Total en Bs.</span>
+                        <span className="font-extrabold text-[var(--ts-text-primary)]">Bs. {Number(selected.total_bs || 0).toLocaleString("es-VE", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[var(--ts-text-muted)]">Tasa BCV</span>
+                        <span className="font-semibold text-[var(--ts-text-muted)]">Bs. {Number(selected.tasa_bcv || 0).toFixed(2)} / USD</span>
+                      </div>
+                    </>
                   )}
-                  <div className="flex justify-between text-sm border-t border-[var(--ts-border)] pt-2">
-                    <span className="text-[var(--ts-text-muted)]">Total en Bs.</span>
-                    <span className="font-extrabold text-[var(--ts-text-primary)]">Bs. {Number(selected.total_bs || 0).toLocaleString("es-VE", { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[var(--ts-text-muted)]">Tasa BCV</span>
-                    <span className="font-semibold text-[var(--ts-text-muted)]">Bs. {Number(selected.tasa_bcv || 0).toFixed(2)} / USD</span>
-                  </div>
+                  {(selected.moneda === "USD" || selected.notas?.includes("[MONEDA:USD]")) && (
+                    <>
+                      <div className="flex justify-between text-sm border-t border-[var(--ts-border)] pt-2">
+                        <span className="text-[var(--ts-text-muted)]">Total en USD</span>
+                        <span className="font-extrabold text-[var(--ts-text-primary)]">
+                          {formatUSD(Number(selected.subtotal_usd || selected.cotizaciones?.subtotal || selected.cotizaciones?.total || 0))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-xs text-amber-700 dark:text-amber-400 bg-amber-500/10 p-2 rounded">
+                        <span>Aviso Legal BCV:</span>
+                        <span className="font-bold">Omitido en PDF (Divisas)</span>
+                      </div>
+                    </>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span className="text-[var(--ts-text-muted)]">Método de pago</span>
                     <span className="font-semibold capitalize">{selected.metodo_pago || "—"}</span>
