@@ -6,7 +6,8 @@ import Link from "next/link";
 import {
   FileEdit, Receipt, History, Kanban, Users,
   Package, UploadCloud, Sparkles, Settings,
-  LogOut, ChevronRight, BarChart2, LayoutDashboard, Repeat
+  LogOut, ChevronRight, BarChart2, LayoutDashboard, Repeat,
+  Wrench, HardHat, Boxes, Calendar, ClipboardCheck, Globe, Shield
 } from "lucide-react";
 
 import { useUsuario } from "@/hooks/useUsuario";
@@ -15,30 +16,40 @@ import { tienePermiso } from "@/lib/permissions";
 // ── Secciones del Menú (estilo Rial) ─────────────────────────
 const SECCIONES = [
   {
-    titulo: "Comercial",
+    titulo: "Comercial & Ventas",
     items: [
       { href: "/nueva",             icon: FileEdit,        label: "Cotizar",    desc: "Nueva cotización",   permiso: "ventas.cotizar" },
       { href: "/facturacion",        icon: Receipt,         label: "Facturar",   desc: "Emitir factura",     permiso: "ventas.facturar" },
-      { href: "/historial-facturas", icon: History,         label: "Facturas",   desc: "Historial",          permiso: "ventas.ver_global" },
-      { href: "/crm",               icon: Kanban,          label: "CRM",        desc: "Pipeline de ventas",  permiso: "ventas.crm" },
+      { href: "/historial-facturas", icon: History,         label: "Facturas",   desc: "Historial emitidas", permiso: "ventas.ver_global" },
+      { href: "/crm",               icon: Kanban,          label: "CRM",        desc: "Pipeline de ventas", permiso: "ventas.crm" },
+      { href: "/clientes",          icon: Users,           label: "Clientes",   desc: "Directorio VIP",     permiso: "ventas.clientes" },
     ],
   },
   {
-    titulo: "Gestión",
+    titulo: "Inventario & Recurrentes",
     items: [
-      { href: "/clientes",      icon: Users,       label: "Clientes",   desc: "Directorio VIP",      permiso: "ventas.clientes" },
-      { href: "/suscripciones", icon: Repeat,      label: "Suscribir",  desc: "Suscripciones y cobros", permiso: "inventario.suscripciones" },
-      { href: "/inventario",    icon: Package,     label: "Inventario", desc: "Stock y productos",   permiso: "inventario.ver" },
-      { href: "/importar",      icon: UploadCloud, label: "Importar",   desc: "Carga masiva CSV",    permiso: "inventario.importar" },
-      { href: "/dashboard",     icon: BarChart2,   label: "Dashboard",  desc: "Métricas" },
+      { href: "/suscripciones", icon: Repeat,      label: "Bóveda & MRR", desc: "Suscripciones y claves", permiso: "inventario.suscripciones" },
+      { href: "/inventario",    icon: Package,     label: "Inventario",   desc: "Stock de equipos",        permiso: "inventario.ver" },
+      { href: "/importar",      icon: UploadCloud, label: "Importar",     desc: "Carga masiva CSV",        permiso: "inventario.importar" },
+      { href: "/dashboard",     icon: BarChart2,   label: "Dashboard",    desc: "Métricas y KPIs" },
     ],
   },
   {
-    titulo: "Sistema",
+    titulo: "Proyectos & Operaciones",
     items: [
-      { href: "/perfil",        icon: Users,        label: "Mi Perfil",  desc: "Datos de usuario" },
-      { href: "/equipo",        icon: Settings,     label: "Equipo",     desc: "Gestión de personal", permiso: "administracion.roles" },
-      { href: "/novedades",     icon: Sparkles,     label: "Novedades",  desc: "Actualizaciones del sistema" },
+      { href: "/ordenes",    icon: Wrench,         label: "Órdenes OT", desc: "Misiones en campo",     permiso: "proyectos.ver_propias" },
+      { href: "/cuadrillas", icon: HardHat,        label: "Cuadrillas", desc: "Técnicos asignados",    permiso: "proyectos.asignar_cuadrillas" },
+      { href: "/materiales", icon: Boxes,          label: "Materiales", desc: "Requisición e insumos", permiso: "proyectos.materiales" },
+      { href: "/agenda",     icon: Calendar,       label: "Agenda",     desc: "Calendario de obras",   permiso: "proyectos.agenda" },
+      { href: "/actas",      icon: ClipboardCheck, label: "Actas",      desc: "Entrega y firmas",      permiso: "proyectos.actas" },
+    ],
+  },
+  {
+    titulo: "Sistema & Equipo",
+    items: [
+      { href: "/perfil",    icon: Users,    label: "Mi Perfil", desc: "Datos de usuario" },
+      { href: "/equipo",    icon: Shield,   label: "Equipo",    desc: "Gestión de roles", permiso: "administracion.roles" },
+      { href: "/novedades", icon: Sparkles, label: "Novedades", desc: "Changelog v3.2" },
     ],
   },
 ];
@@ -173,10 +184,10 @@ export default function MenuPage() {
 
         {/* ── Footer branding ── */}
         <div className="text-center mt-8">
-          <p className="text-[10px] text-[#c0c0c0] font-medium">
+          <p className="text-[10px] text-[var(--ts-text-muted)] font-medium">
             TecnoSmart VZL C.A · RIF J-50701960-8
           </p>
-          <p className="text-[9px] text-[#d0d0d0] mt-0.5">Portal Interno v1.7</p>
+          <p className="text-[9px] text-[var(--ts-text-muted)]/70 mt-0.5">Portal Interno v3.2</p>
         </div>
 
       </div>

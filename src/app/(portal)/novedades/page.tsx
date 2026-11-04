@@ -19,6 +19,19 @@ interface Version {
 
 const CHANGELOG: Version[] = [
   {
+    version: "3.2",
+    fecha: "03 Nov 2026",
+    titulo: "Identidad Visual Oficial (Sin Vercel) & Experiencia de Navegación Móvil Integral",
+    entradas: [
+      { tipo: "importante", texto: "Unificación de Identidad de Marca: sustitución total del favicon por defecto de Vercel por el Isotipo Oficial rojo TecnoSmart (1080x1080 px) en formato .ico, icon.png y apple-touch-icon para navegadores de escritorio, móviles y PWA." },
+      { tipo: "importante", texto: "Header Superior Móvil (Sticky): cabecera táctil en smartphones con botón hamburguesa para abrir el menú completo, isotipo institucional, alternador rápido de Modo Claro/Oscuro y acceso directo al perfil." },
+      { tipo: "nueva", texto: "Drawer Lateral Móvil Deslizable: menú lateral completo estilo ERP accesible con 1 toque desde cualquier pantalla, con navegación agrupada por permisos, acceso a cotizaciones, operaciones y cierre de sesión." },
+      { tipo: "nueva", texto: "Integración de Operaciones en Menú Móvil (/menu): incorporación de los 5 módulos de campo (Órdenes de Trabajo, Cuadrillas, Materiales, Calendario de Obras y Actas de Entrega) para técnicos y líderes de cuadrilla." },
+      { tipo: "nueva", texto: "Bottom Nav Inteligente y Contextual por Rol: la barra inferior se adapta automáticamente al usuario; para roles técnicos muestra acceso directo a Órdenes de Trabajo, FAB central de Misiones y Agenda de Obras." },
+      { tipo: "mejora", texto: "Normalización de Activos de Marca: biblioteca public/brands completamente estandarizada (isologo, isologo-variante, isotipo y logotipo) con metadatos OpenGraph y Twitter Cards en alta resolución." },
+    ],
+  },
+  {
     version: "3.1",
     fecha: "31 Oct 2026",
     titulo: "Bóveda de Cuentas Starlink/Servicios, Modalidad Acompañamiento VIP & Cohortes de Activación",

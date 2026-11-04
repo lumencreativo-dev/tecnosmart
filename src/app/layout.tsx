@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
@@ -9,8 +9,17 @@ const inter = Inter({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#c9242b",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: "TecnoSmart VZL | Tu seguridad es nuestra prioridad",
+  title: {
+    default: "TecnoSmart VZL | Tu seguridad es nuestra prioridad",
+    template: "%s | TecnoSmart VZL",
+  },
   description:
     "Instalaciones de seguridad realizadas por técnicos certificados, limpias y según normas internacionales, por una empresa familiar en la que puedes confiar. Videovigilancia CCTV/IP, Starlink, domótica, redes y automatizaciones en Venezuela.",
   keywords: [
@@ -24,19 +33,26 @@ export const metadata: Metadata = {
     siteName: "TecnoSmart VZL",
     type: "website",
     locale: "es_VE",
-    images: [{ url: "/isologo-rojo.png", width: 512, height: 512 }],
+    images: [{ url: "/brands/isologo/isologo-rojo.png", width: 1080, height: 762, alt: "TecnoSmart VZL" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TecnoSmart VZL | Tu seguridad es nuestra prioridad",
+    description: "Instalaciones de seguridad y soluciones tecnológicas en Venezuela realizadas por técnicos certificados.",
+    images: ["/brands/isologo/isologo-rojo.png"],
   },
   icons: {
     icon: [
-      { url: "/isotipo-rojo.png", type: "image/png" },
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/brands/isotipo/isotipo-rojo.png", type: "image/png", sizes: "1080x1080" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
     ],
     apple: [
-      { url: "/apple-touch-icon.png?v=2", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
-    shortcut: "/isotipo-rojo.png",
+    shortcut: "/brands/isotipo/isotipo-rojo.png",
   },
   manifest: "/manifest.json",
-  themeColor: "#c9242b",
   appleWebApp: {
     capable: true,
     title: "TecnoSmart",

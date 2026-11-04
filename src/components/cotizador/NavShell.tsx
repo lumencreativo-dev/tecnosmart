@@ -10,7 +10,7 @@ import {
   Kanban, Users, Package, UploadCloud,
   Sparkles, Globe, Plus, LayoutGrid,
   Settings, LogOut, ChevronDown, Sun, Moon, Monitor,
-  Repeat, Wrench, Wallet, BarChart3, Clock, UserCheck, X,
+  Repeat, Wrench, Wallet, BarChart3, Clock, UserCheck, X, Menu,
   Calendar, ClipboardCheck, HardHat, Boxes, User as UserIcon
 } from "lucide-react";
 import { useUsuario } from "@/hooks/useUsuario";
@@ -171,6 +171,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   const { usuario } = useUsuario();
   const [mounted, setMounted] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const [activePlaceholder, setActivePlaceholder] = useState<PlaceholderInfo | null>(null);
 
@@ -181,6 +182,11 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Cerrar Drawer móvil automáticamente al cambiar de ruta
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
 
   // Cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -230,7 +236,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
             {/* Header del Sidebar: Logo */}
             <div className="p-5 flex items-center justify-between border-b border-[var(--ts-border)]">
               <Link href="/dashboard" className="flex items-center gap-2.5">
-                <Image src="/isotipo-rojo.png" alt="TecnoSmart" width={32} height={32} className="h-7 w-auto object-contain" />
+                <Image src="/brands/isotipo/isotipo-rojo.png" alt="TecnoSmart" width={32} height={32} className="h-7 w-auto object-contain" />
                 <span className="font-black text-sm tracking-tight text-[var(--ts-text-primary)]">
                   Tecno<span className="text-[var(--ts-red)]">Smart</span>
                 </span>
@@ -378,11 +384,69 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
           </aside>
 
           {/* ══════════════════════════════════════════════
-              CONTENIDO CENTRAL CON HEADER SUPERIOR
+              CONTENIDO CENTRAL CON HEADERS (DESKTOP & MÓVIL)
           ══════════════════════════════════════════════ */}
           <div className="flex-1 md:pl-64 flex flex-col min-w-0">
             
-            {/* Header Superior Minimalista */}
+            {/* Header Móvil Superior (Sticky) */}
+            <header className="flex md:hidden h-14 bg-[var(--ts-surface)] border-b border-[var(--ts-border)] px-3 items-center justify-between sticky top-0 z-30 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  className="p-2 -ml-1 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-xl transition-colors active:scale-95"
+                  aria-label="Abrir menú de navegación"
+                >
+                  <Menu className="w-5 h-5" />
+                </button>
+                <Link href="/dashboard" className="flex items-center gap-2">
+                  <Image
+                    src="/brands/isotipo/isotipo-rojo.png"
+                    alt="TecnoSmart"
+                    width={28}
+                    height={28}
+                    className="h-6 w-auto object-contain"
+                    priority
+                  />
+                  <span className="font-black text-sm tracking-tight text-[var(--ts-text-primary)]">
+                    Tecno<span className="text-[var(--ts-red)]">Smart</span>
+                  </span>
+                  <span className="bg-[var(--ts-red-subtle)] text-[var(--ts-red)] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">
+                    ERP
+                  </span>
+                </Link>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                {/* Theme Toggle rápido móvil */}
+                <button
+                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                  className="p-2 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-xl transition-colors"
+                  title="Alternar tema"
+                >
+                  {mounted ? (
+                    theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />
+                  ) : (
+                    <div className="w-4 h-4" />
+                  )}
+                </button>
+
+                {/* Avatar Perfil Móvil */}
+                <Link
+                  href="/perfil"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0 overflow-hidden shadow-2xs border border-[var(--ts-border)]"
+                  style={{ backgroundColor: usuario?.roles?.color || "var(--ts-red)" }}
+                  title="Mi Perfil"
+                >
+                  {usuario?.avatar_url ? (
+                    <img src={usuario.avatar_url} alt={usuario.nombre} className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : "TS"}</span>
+                  )}
+                </Link>
+              </div>
+            </header>
+
+            {/* Header Desktop Minimalista */}
             <header className="hidden md:flex h-14 bg-[var(--ts-surface)] border-b border-[var(--ts-border)] px-6 items-center justify-between sticky top-0 z-30 shadow-xs">
               <div className="flex items-center gap-2 text-xs text-[var(--ts-text-muted)] font-medium">
                 <span>TecnoSmart Portal</span>
@@ -439,64 +503,284 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ══════════════════════════════════════════════
-          BOTTOM NAV MÓVIL (ESTILO RIAL CON FAB)
+          DRAWER LATERAL MÓVIL DESLIZABLE (SIDEBAR ERP MÓVIL)
       ══════════════════════════════════════════════ */}
-      {!isLoginPage && (
-        <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[var(--ts-surface)] border-t border-[var(--ts-border)] z-50 shadow-[var(--ts-shadow)]">
-          <div className="flex items-end justify-around h-16 px-2">
+      {drawerOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop oscurecido con desenfoque */}
+          <div
+            onClick={() => setDrawerOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+          />
 
-            {/* Izquierda: tabs visibles */}
-            {MOBILE_NAV.slice(0, 2).map(({ href, icon: Icon, label, permiso }: any) => {
-              if (permiso && !tienePermiso(permisosUsuario, permiso)) return null;
-              const active = isActive(href);
-              return (
-                <Link key={href} href={href}
-                  className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
-                >
-                  <div className={`p-1.5 rounded-xl transition-all ${active ? "bg-[var(--ts-red-subtle)]" : ""}`}>
-                    <Icon className={`w-5 h-5 transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
-                  </div>
-                  <span className={`text-[9px] font-bold transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
-                    {label}
-                  </span>
-                </Link>
-              );
-            })}
+          {/* Panel Deslizable */}
+          <div className="relative w-72 max-w-[84vw] bg-[var(--ts-surface)] border-r border-[var(--ts-border)] z-50 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-250">
+            
+            {/* Header del Drawer Móvil */}
+            <div className="p-4 flex items-center justify-between border-b border-[var(--ts-border)] bg-[var(--ts-surface)]">
+              <Link href="/dashboard" onClick={() => setDrawerOpen(false)} className="flex items-center gap-2">
+                <Image
+                  src="/brands/isotipo/isotipo-rojo.png"
+                  alt="TecnoSmart"
+                  width={28}
+                  height={28}
+                  className="h-6 w-auto object-contain"
+                />
+                <span className="font-black text-sm tracking-tight text-[var(--ts-text-primary)]">
+                  Tecno<span className="text-[var(--ts-red)]">Smart</span>
+                </span>
+                <span className="bg-[var(--ts-red-subtle)] text-[var(--ts-red)] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">
+                  ERP
+                </span>
+              </Link>
+              <button
+                onClick={() => setDrawerOpen(false)}
+                className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
+                aria-label="Cerrar menú"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            {/* FAB Central (Solo con facultad de cotizar) */}
-            {tienePermiso(permisosUsuario, "ventas.cotizar") ? (
-              <div className="flex flex-col items-center justify-end flex-1 h-full pb-2.5">
-                <Link href="/nueva"
-                  className="w-[52px] h-[52px] bg-[var(--ts-red)] rounded-full flex items-center justify-center shadow-[var(--ts-shadow-lg)] hover:opacity-90 transition-all active:scale-95 -mt-5"
-                  aria-label="Nueva Cotización"
+            {/* CTA Nueva Cotización en Drawer */}
+            {tienePermiso(permisosUsuario, "ventas.cotizar") && (
+              <div className="p-3 pb-1">
+                <Link
+                  href="/nueva"
+                  onClick={() => setDrawerOpen(false)}
+                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl transition-all shadow-md active:scale-95"
                 >
-                  <Plus className="w-6 h-6 text-white" />
+                  <Plus className="w-4 h-4" />
+                  <span>Nueva Cotización</span>
                 </Link>
-                <span className="text-[9px] font-bold text-[var(--ts-red)] mt-0.5">Nueva</span>
               </div>
-            ) : null}
+            )}
 
-            {/* Derecha: tabs visibles */}
-            {MOBILE_NAV.slice(2).map(({ href, icon: Icon, label, permiso }: any) => {
-              if (permiso && !tienePermiso(permisosUsuario, permiso)) return null;
-              const active = isActive(href);
-              return (
-                <Link key={href} href={href}
-                  className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
-                >
-                  <div className={`p-1.5 rounded-xl transition-all ${active ? "bg-[var(--ts-red-subtle)]" : ""}`}>
-                    <Icon className={`w-5 h-5 transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
+            {/* Lista scrolleable de módulos ERP */}
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4 scrollbar-thin">
+              {SIDEBAR_SECTIONS.map((section, idx) => {
+                const itemsVisibles = section.items.filter((item) => {
+                  if (!item.permiso) return true;
+                  return tienePermiso(permisosUsuario, item.permiso);
+                });
+
+                if (itemsVisibles.length === 0) return null;
+
+                return (
+                  <div key={idx}>
+                    <p className="px-3 text-[10px] font-black tracking-wider text-[var(--ts-text-muted)] uppercase mb-1 opacity-70">
+                      {section.title}
+                    </p>
+                    <div className="space-y-0.5">
+                      {itemsVisibles.map((item: any, itemIdx) => {
+                        const Icon = item.icon;
+                        const isPlaceholder = Boolean(item.isPlaceholder);
+                        const active = !isPlaceholder && isActive(item.href);
+
+                        if (isPlaceholder) {
+                          return (
+                            <button
+                              key={itemIdx}
+                              onClick={() => {
+                                setDrawerOpen(false);
+                                setActivePlaceholder(item.placeholder || null);
+                              }}
+                              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)] transition-all text-left group"
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <Icon className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity" />
+                                <span>{item.label}</span>
+                              </div>
+                              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-[var(--ts-border)] text-[var(--ts-text-muted)]">
+                                Próx
+                              </span>
+                            </button>
+                          );
+                        }
+
+                        const isBetaSection = section.permisoGrupo === "proyectos";
+                        return (
+                          <Link
+                            key={itemIdx}
+                            href={item.href}
+                            onClick={() => setDrawerOpen(false)}
+                            className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                              active
+                                ? "bg-[var(--ts-red-subtle)] text-[var(--ts-red)] font-bold shadow-xs"
+                                : "text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              <Icon className={`w-4 h-4 ${active ? "text-[var(--ts-red)]" : "opacity-70"}`} />
+                              <span>{item.label}</span>
+                            </div>
+                            {isBetaSection && (
+                              <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 tracking-widest shrink-0">
+                                BETA
+                              </span>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <span className={`text-[9px] font-bold transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
-                    {label}
-                  </span>
+                );
+              })}
+            </div>
+
+            {/* Footer del Drawer */}
+            <div className="p-3 border-t border-[var(--ts-border)] bg-[var(--ts-surface-2)]">
+              <div className="flex items-center justify-between">
+                <Link
+                  href="/perfil"
+                  onClick={() => setDrawerOpen(false)}
+                  className="flex items-center gap-2.5 min-w-0 p-1 rounded-xl hover:bg-[var(--ts-surface)] transition-all flex-1 group"
+                >
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0 overflow-hidden shadow-2xs"
+                    style={{ backgroundColor: usuario?.roles?.color || "var(--ts-red)" }}
+                  >
+                    {usuario?.avatar_url ? (
+                      <img src={usuario.avatar_url} alt={usuario.nombre} className="w-full h-full object-cover" />
+                    ) : (
+                      <span>{usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : "TS"}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-[var(--ts-text-primary)] truncate group-hover:text-[var(--ts-red)] transition-colors">
+                      {usuario?.nombre || "admintecno"}
+                    </p>
+                    <p className="text-[10px] text-[var(--ts-text-muted)] truncate flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span>{usuario?.roles?.nombre || "Usuario"}</span>
+                    </p>
+                  </div>
                 </Link>
-              );
-            })}
+
+                <button
+                  onClick={handleLogout}
+                  className="p-2 rounded-lg text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] hover:bg-[var(--ts-surface)] transition-colors"
+                  title="Cerrar sesión"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
 
           </div>
-        </nav>
+        </div>
       )}
+
+      {/* ══════════════════════════════════════════════
+          BOTTOM NAV MÓVIL ADAPTATIVO CON FAB INTELIGENTE
+      ══════════════════════════════════════════════ */}
+      {!isLoginPage && (() => {
+        const esTecnico = usuario?.rol_id === "tecnico" || (!tienePermiso(permisosUsuario, "ventas.cotizar") && tienePermiso(permisosUsuario, "proyectos.ver_propias"));
+
+        const itemsIzquierda = esTecnico
+          ? [
+              { href: "/dashboard", icon: LayoutDashboard, label: "Inicio" },
+              { href: "/ordenes",   icon: Wrench,          label: "Órdenes" },
+            ]
+          : [
+              { href: "/dashboard", icon: LayoutDashboard, label: "Inicio" },
+              { href: "/crm",       icon: Kanban,          label: "CRM", permiso: "ventas.crm" },
+            ];
+
+        const itemsDerecha = esTecnico
+          ? [
+              { href: "/agenda",    icon: Calendar,        label: "Agenda" },
+              { href: "/menu",      icon: LayoutGrid,      label: "Menú" },
+            ]
+          : [
+              { href: "/inventario",icon: Package,         label: "Stock", permiso: "inventario.ver" },
+              { href: "/menu",      icon: LayoutGrid,      label: "Menú" },
+            ];
+
+        return (
+          <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[var(--ts-surface)] border-t border-[var(--ts-border)] z-40 shadow-[var(--ts-shadow)]">
+            <div className="flex items-end justify-around h-16 px-2">
+
+              {/* Izquierda: 2 tabs */}
+              {itemsIzquierda.map(({ href, icon: Icon, label, permiso }: any) => {
+                if (permiso && !tienePermiso(permisosUsuario, permiso)) return null;
+                const active = isActive(href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
+                  >
+                    <div className={`p-1.5 rounded-xl transition-all ${active ? "bg-[var(--ts-red-subtle)]" : ""}`}>
+                      <Icon className={`w-5 h-5 transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
+                    </div>
+                    <span className={`text-[9px] font-bold transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
+                      {label}
+                    </span>
+                  </Link>
+                );
+              })}
+
+              {/* FAB Central Inteligente */}
+              {esTecnico ? (
+                <div className="flex flex-col items-center justify-end flex-1 h-full pb-2.5">
+                  <Link
+                    href="/ordenes"
+                    className="w-[52px] h-[52px] bg-amber-500 rounded-full flex items-center justify-center shadow-[var(--ts-shadow-lg)] hover:opacity-90 transition-all active:scale-95 -mt-5"
+                    aria-label="Órdenes de Trabajo"
+                  >
+                    <Wrench className="w-6 h-6 text-white" />
+                  </Link>
+                  <span className="text-[9px] font-bold text-amber-500 mt-0.5">Misiones</span>
+                </div>
+              ) : tienePermiso(permisosUsuario, "ventas.cotizar") ? (
+                <div className="flex flex-col items-center justify-end flex-1 h-full pb-2.5">
+                  <Link
+                    href="/nueva"
+                    className="w-[52px] h-[52px] bg-[var(--ts-red)] rounded-full flex items-center justify-center shadow-[var(--ts-shadow-lg)] hover:opacity-90 transition-all active:scale-95 -mt-5"
+                    aria-label="Nueva Cotización"
+                  >
+                    <Plus className="w-6 h-6 text-white" />
+                  </Link>
+                  <span className="text-[9px] font-bold text-[var(--ts-red)] mt-0.5">Nueva</span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-end flex-1 h-full pb-2.5">
+                  <button
+                    onClick={() => setDrawerOpen(true)}
+                    className="w-[52px] h-[52px] bg-[var(--ts-red)] rounded-full flex items-center justify-center shadow-[var(--ts-shadow-lg)] hover:opacity-90 transition-all active:scale-95 -mt-5 text-white"
+                    aria-label="Abrir Menú"
+                  >
+                    <LayoutGrid className="w-6 h-6 text-white" />
+                  </button>
+                  <span className="text-[9px] font-bold text-[var(--ts-red)] mt-0.5">Explorar</span>
+                </div>
+              )}
+
+              {/* Derecha: 2 tabs */}
+              {itemsDerecha.map(({ href, icon: Icon, label, permiso }: any) => {
+                if (permiso && !tienePermiso(permisosUsuario, permiso)) return null;
+                const active = isActive(href);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
+                  >
+                    <div className={`p-1.5 rounded-xl transition-all ${active ? "bg-[var(--ts-red-subtle)]" : ""}`}>
+                      <Icon className={`w-5 h-5 transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
+                    </div>
+                    <span className={`text-[9px] font-bold transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
+                      {label}
+                    </span>
+                  </Link>
+                );
+              })}
+
+            </div>
+          </nav>
+        );
+      })()}
 
       {/* ══════════════════════════════════════════════
           MODAL ESTILO RIAL: MÓDULO EN DESARROLLO
