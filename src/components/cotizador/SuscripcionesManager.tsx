@@ -51,7 +51,23 @@ import {
   Handshake,
   Shield,
   Sparkles,
+  Satellite,
+  Crown,
+  Wifi,
+  Key,
+  Pause,
+  Play,
+  Ban,
 } from "lucide-react";
+import StarlinkFleetView from "./starlink/StarlinkFleetView";
+import StarlinkOnboardingModal from "./starlink/StarlinkOnboardingModal";
+import { exportarStarlinkFichaPDF } from "@/components/pdf/StarlinkFichaPDF";
+import {
+  isStarlinkSubscription,
+  extractStarlinkData,
+  packStarlinkData,
+  StarlinkMetadata,
+} from "@/lib/types";
 
 // ─────────────────────────────────────────────────────────────
 // TIPOS Y CONSTANTES
@@ -231,7 +247,9 @@ export default function SuscripcionesManager() {
   const [servicios, setServicios] = useState<ServicioRecurrente[]>([]);
   const [perfilesEquipo, setPerfilesEquipo] = useState<PerfilEquipo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"activas" | "cobranzas" | "catalogo">("activas");
+  const [activeTab, setActiveTab] = useState<"starlink" | "activas" | "cobranzas" | "analitica" | "catalogo">("starlink");
+  const [showStarlinkModal, setShowStarlinkModal] = useState(false);
+  const [starlinkEditSub, setStarlinkEditSub] = useState<Suscripcion | null>(null);
   const [filtroSocio, setFiltroSocio] = useState<string>("todos");
   const [filtroServicio, setFiltroServicio] = useState<string>("todos");
   const [filtroModalidad, setFiltroModalidad] = useState<"todas" | "gestionada" | "acompanamiento">("todas");
@@ -256,6 +274,8 @@ export default function SuscripcionesManager() {
   const [showModal, setShowModal] = useState(false);
   const [formType, setFormType] = useState<"suscripcion" | "servicio">("suscripcion");
   const [editId, setEditId] = useState<string | null>(null);
+  const [suscripcionParaEliminar, setSuscripcionParaEliminar] = useState<Suscripcion | null>(null);
+  const [eliminandoSub, setEliminandoSub] = useState(false);
 
   // Formulario Suscripción
   const [selectedCliente, setSelectedCliente] = useState<any>(null);
@@ -793,6 +813,46 @@ export default function SuscripcionesManager() {
   // ─────────────────────────────────────────────────────────────
   // ACCIONES CRUD
   // ─────────────────────────────────────────────────────────────
+  const openNewStarlink = () => {
+    setStarlinkEditSub(null);
+    setShowStarlinkModal(true);
+  };
+
+  const descargarFichaPDF = async (s: Suscripcion) => {
+    try {
+      const meta = extractStarlinkData(s);
+      const clienteNombre = s.clientes?.empresa || s.clientes?.contacto || "Cliente";
+      const montoNum = Number(s.monto || 0);
+      const costoBase = Number(
+        s.costo_base || (meta.fee_soporte ? montoNum - meta.fee_soporte : meta.es_vip ? montoNum : Math.max(0, montoNum - 10))
+      );
+
+      await exportarStarlinkFichaPDF({
+        clienteNombre,
+        clienteTelefono: s.clientes?.telefono,
+        clienteEmail: s.clientes?.email,
+        clienteRif: s.clientes?.rif_cedula,
+        direccionInstalacion: meta.direccion_instalacion || s.clientes?.direccion || "Venezuela",
+        correoStarlink: meta.correo_starlink || s.credenciales_usuario || "",
+        claveStarlink: meta.clave_starlink || s.credenciales_clave || "",
+        wifiSsid: meta.wifi_ssid || "Starlink",
+        wifiPassword: meta.wifi_password || "Configurado en sitio",
+        planNombre: meta.plan_starlink || s.servicios_recurrentes?.nombre || "Starlink Residencial Venezuela",
+        estado: s.estado,
+        mensualidadUSD: montoNum,
+        costoBaseUSD: costoBase,
+        feeSoporteUSD: meta.fee_soporte !== undefined ? meta.fee_soporte : meta.es_vip ? 0 : 10,
+        esVip: meta.es_vip || false,
+        diaCorte: meta.dia_corte,
+        kitSerial: meta.kit_serial || s.equipo_serial || "",
+        fechaEmision: new Date(),
+      });
+    } catch (err: any) {
+      console.error("Error al generar PDF:", err);
+      alert("Error al generar el PDF de Starlink: " + err.message);
+    }
+  };
+
   const openNewSuscripcion = () => {
     setEditId(null);
     setSelectedCliente(null);
@@ -817,6 +877,11 @@ export default function SuscripcionesManager() {
   };
 
   const openEditSuscripcion = (s: Suscripcion) => {
+    if (isStarlinkSubscription(s)) {
+      setStarlinkEditSub(s);
+      setShowStarlinkModal(true);
+      return;
+    }
     setEditId(s.id);
     setSelectedCliente(s.clientes ? { id: s.cliente_id, ...s.clientes } : null);
 
@@ -971,26 +1036,73 @@ export default function SuscripcionesManager() {
     }
   };
 
-  const handleDeleteSuscripcion = async () => {
-    if (!editId) return;
-    if (
-      !confirm(
-        "¿Estás seguro de que deseas eliminar esta suscripción por completo? Esto también eliminará su historial de pagos."
-      )
-    )
-      return;
-
+  // ─────────────────────────────────────────────────────────────
+  // GESTIÓN DE ESTADOS: PAUSAR, CANCELAR, REACTIVAR
+  // ─────────────────────────────────────────────────────────────
+  const handleCambiarEstadoSuscripcion = async (
+    subId: string,
+    nuevoEstado: "Activo" | "Suspendido" | "Cancelado"
+  ) => {
     try {
-      const { error } = await supabase.from("suscripciones").delete().eq("id", editId);
+      const { error } = await supabase
+        .from("suscripciones")
+        .update({ estado: nuevoEstado })
+        .eq("id", subId);
+
       if (error) throw error;
 
+      // Actualizar estado local inmediatamente
+      setSuscripciones((prev) =>
+        prev.map((s) => (s.id === subId ? { ...s, estado: nuevoEstado } : s))
+      );
+
+      if (selected && selected.id === subId) {
+        setSelected((prev) => (prev ? { ...prev, estado: nuevoEstado } : null));
+      }
+
       await fetchData();
-      setShowModal(false);
-      if (selected && selected.id === editId) setSelected(null);
-      alert("Suscripción eliminada exitosamente.");
+    } catch (err: any) {
+      console.error("Error al actualizar estado:", err);
+      alert("Error al cambiar estado de la suscripción: " + err.message);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────
+  // ELIMINAR SUSCRIPCIÓN CON CONFIRMACIÓN DE SEGURIDAD
+  // ─────────────────────────────────────────────────────────────
+  const confirmarEliminarSuscripcion = async () => {
+    if (!suscripcionParaEliminar) return;
+    setEliminandoSub(true);
+    try {
+      const subId = suscripcionParaEliminar.id;
+      // 1. Borrar pagos asociados para evitar errores de clave foránea
+      await supabase.from("suscripciones_pagos").delete().eq("suscripcion_id", subId);
+
+      // 2. Borrar la suscripción
+      const { error } = await supabase.from("suscripciones").delete().eq("id", subId);
+      if (error) throw error;
+
+      // 3. Limpiar estado local
+      setSuscripciones((prev) => prev.filter((s) => s.id !== subId));
+      if (selected && selected.id === subId) {
+        setSelected(null);
+      }
+      setSuscripcionParaEliminar(null);
+      await fetchData();
     } catch (e: any) {
       console.error(e);
       alert("Error al eliminar la suscripción: " + e.message);
+    } finally {
+      setEliminandoSub(false);
+    }
+  };
+
+  const handleDeleteSuscripcion = async () => {
+    if (!editId) return;
+    const sub = suscripciones.find((s) => s.id === editId);
+    if (sub) {
+      setShowModal(false);
+      setSuscripcionParaEliminar(sub);
     }
   };
 
@@ -1135,8 +1247,151 @@ export default function SuscripcionesManager() {
   return (
     <div className="flex flex-col gap-6">
 
-      {/* ── 1. PARTNER FILTER BAR ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl shadow-sm">
+      {/* ── 1. NAVEGACIÓN PRINCIPAL (TABS SUPERIORES) ── */}
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+        {/* Pestañas Principales */}
+        <div className="flex bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl p-1 shadow-sm overflow-x-auto">
+          <button
+            onClick={() => setActiveTab("starlink")}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === "starlink"
+                ? "bg-[var(--ts-red)] text-white shadow-sm"
+                : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+            }`}
+          >
+            <Satellite className="w-3.5 h-3.5" />
+            <span>Flota Starlink</span>
+            <span
+              className={`text-[9px] font-black px-1.5 py-0.2 rounded-full ${
+                activeTab === "starlink" ? "bg-white/20 text-white" : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)]"
+              }`}
+            >
+              {suscripciones.filter((s) => isStarlinkSubscription(s)).length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("activas")}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all shrink-0 ${
+              activeTab === "activas"
+                ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] shadow-sm"
+                : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+            }`}
+          >
+            Otras Suscripciones
+          </button>
+
+          <button
+            onClick={() => setActiveTab("cobranzas")}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === "cobranzas"
+                ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] shadow-sm"
+                : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+            }`}
+          >
+            <span>Cobranzas</span>
+            {cobranzasCategorizadas.vencidas.length > 0 && (
+              <span className="bg-[var(--ts-red)] text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                {cobranzasCategorizadas.vencidas.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("analitica")}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 shrink-0 ${
+              activeTab === "analitica"
+                ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] shadow-sm"
+                : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+            }`}
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Analítica & Socios</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("catalogo")}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all shrink-0 ${
+              activeTab === "catalogo"
+                ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] shadow-sm"
+                : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+            }`}
+          >
+            Catálogo de Servicios
+          </button>
+        </div>
+
+        {/* Buscador y botones de acción */}
+        <div className="flex items-center gap-2">
+          {activeTab !== "catalogo" && activeTab !== "starlink" && activeTab !== "analitica" && (
+            <div className="relative flex-1 sm:w-80">
+              <Search className="w-4 h-4 text-[var(--ts-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Buscar cliente, RIF, correo o serial..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)] transition-colors"
+              />
+              {busqueda && (
+                <button
+                  onClick={() => setBusqueda("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {activeTab === "catalogo" && (
+            <button
+              onClick={() => {
+                setFormType("servicio");
+                setEditId(null);
+                setServicioData({ nombre: "", descripcion: "", precio_sugerido: "", mensaje_whatsapp: "" });
+                setShowModal(true);
+              }}
+              className="flex items-center gap-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm"
+            >
+              <Plus className="w-4 h-4 text-[var(--ts-red)]" /> Nuevo Servicio
+            </button>
+          )}
+
+          {activeTab === "activas" && (
+            <button
+              onClick={openNewSuscripcion}
+              className="flex items-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm shrink-0"
+            >
+              <Plus className="w-4 h-4" /> Nueva Suscripción
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── FLOTA STARLINK ── */}
+      {activeTab === "starlink" && (
+        <StarlinkFleetView
+          suscripciones={suscripciones}
+          servicios={servicios}
+          onOpenNewStarlink={openNewStarlink}
+          onSelectSuscripcion={(sub) => abrirDetalle(sub)}
+          onEditSuscripcion={(sub) => {
+            setStarlinkEditSub(sub);
+            setShowStarlinkModal(true);
+          }}
+          onRefresh={fetchData}
+          onCambiarEstado={handleCambiarEstadoSuscripcion}
+          onEliminarSuscripcion={(sub) => setSuscripcionParaEliminar(sub)}
+        />
+      )}
+
+      {/* ── TAB ANALÍTICA & RENDIMIENTO DE SOCIOS ── */}
+      {activeTab === "analitica" && (
+        <div className="space-y-6">
+
+          {/* ── 1. PARTNER FILTER BAR ── */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl shadow-sm">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)] px-2">
             Filtrar por Socio:
@@ -1544,95 +1799,8 @@ export default function SuscripcionesManager() {
           )}
         </div>
       </div>
-
-      {/* ── 4. TABS, BUSCADOR Y BOTONES DE ACCIÓN ── */}
-      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
-        {/* Pestañas */}
-        <div className="flex bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl p-1 shadow-sm">
-          <button
-            onClick={() => setActiveTab("activas")}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-              activeTab === "activas"
-                ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] shadow-sm"
-                : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
-            }`}
-          >
-            Suscripciones Activas
-          </button>
-
-          <button
-            onClick={() => setActiveTab("cobranzas")}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all flex items-center gap-2 ${
-              activeTab === "cobranzas"
-                ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] shadow-sm"
-                : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
-            }`}
-          >
-            <span>Cobranzas</span>
-            {cobranzasCategorizadas.vencidas.length > 0 && (
-              <span className="bg-[var(--ts-red)] text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
-                {cobranzasCategorizadas.vencidas.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("catalogo")}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-              activeTab === "catalogo"
-                ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] shadow-sm"
-                : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
-            }`}
-          >
-            Catálogo de Servicios
-          </button>
         </div>
-
-        {/* Buscador y botones de acción */}
-        <div className="flex items-center gap-2">
-          {activeTab !== "catalogo" && (
-            <div className="relative flex-1 sm:w-80">
-              <Search className="w-4 h-4 text-[var(--ts-text-muted)] absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Buscar cliente, RIF, correo Starlink o serial KIT..."
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl pl-9 pr-3 py-2 text-xs focus:outline-none focus:border-[var(--ts-red)] text-[var(--ts-text-primary)] transition-colors"
-              />
-              {busqueda && (
-                <button
-                  onClick={() => setBusqueda("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          )}
-
-          {activeTab === "catalogo" ? (
-            <button
-              onClick={() => {
-                setFormType("servicio");
-                setEditId(null);
-                setServicioData({ nombre: "", descripcion: "", precio_sugerido: "", mensaje_whatsapp: "" });
-                setShowModal(true);
-              }}
-              className="flex items-center gap-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm"
-            >
-              <Plus className="w-4 h-4 text-[var(--ts-red)]" /> Nuevo Servicio
-            </button>
-          ) : (
-            <button
-              onClick={openNewSuscripcion}
-              className="flex items-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm shrink-0"
-            >
-              <Plus className="w-4 h-4" /> Nueva Suscripción
-            </button>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* ── 5. TAB 1: SUSCRIPCIONES ACTIVAS (FILTROS POR SERVICIO, MODALIDAD Y TABLAS) ── */}
       {activeTab === "activas" && (
@@ -1962,12 +2130,36 @@ export default function SuscripcionesManager() {
                               {/* Acciones */}
                               <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
                                 <div className="flex items-center justify-end gap-1">
+                                  {s.estado === "Activo" ? (
+                                    <button
+                                      onClick={() => handleCambiarEstadoSuscripcion(s.id, "Suspendido")}
+                                      title="Pausar por este mes"
+                                      className="p-1.5 text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                                    >
+                                      <Pause className="w-3.5 h-3.5" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleCambiarEstadoSuscripcion(s.id, "Activo")}
+                                      title="Reactivar servicio"
+                                      className="p-1.5 text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                                    >
+                                      <Play className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                   <button
                                     onClick={() => openEditSuscripcion(s)}
                                     title="Editar cuenta"
                                     className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
                                   >
                                     <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => setSuscripcionParaEliminar(s)}
+                                    title="Eliminar suscripción definitivamente"
+                                    className="p-1.5 text-[var(--ts-text-muted)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={() => abrirDetalle(s)}
@@ -2198,12 +2390,49 @@ export default function SuscripcionesManager() {
                                     </>
                                   )}
 
+                                  {/* Cambiar Estado Rápido: Pausar / Reactivar */}
+                                  {s.estado === "Activo" ? (
+                                    <button
+                                      onClick={() => handleCambiarEstadoSuscripcion(s.id, "Suspendido")}
+                                      title="Pausar por este mes"
+                                      className="p-1.5 text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors"
+                                    >
+                                      <Pause className="w-4 h-4" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleCambiarEstadoSuscripcion(s.id, "Activo")}
+                                      title="Reactivar servicio"
+                                      className="p-1.5 text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                                    >
+                                      <Play className="w-4 h-4" />
+                                    </button>
+                                  )}
+
+                                  {s.estado !== "Cancelado" && (
+                                    <button
+                                      onClick={() => handleCambiarEstadoSuscripcion(s.id, "Cancelado")}
+                                      title="Cancelar suscripción"
+                                      className="p-1.5 text-[var(--ts-text-muted)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                    >
+                                      <Ban className="w-4 h-4" />
+                                    </button>
+                                  )}
+
                                   <button
                                     onClick={() => openEditSuscripcion(s)}
                                     title="Editar"
                                     className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
                                   >
                                     <Edit className="w-4 h-4" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => setSuscripcionParaEliminar(s)}
+                                    title="Eliminar suscripción definitivamente"
+                                    className="p-1.5 text-[var(--ts-text-muted)] hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 </div>
                               </td>
@@ -2679,6 +2908,61 @@ export default function SuscripcionesManager() {
                       {formatFecha(selected.proximo_pago)}
                     </span>
                   </p>
+
+                  {/* Acciones Rápidas de Estado (Pausar / Cancelar / Reactivar) */}
+                  <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-[var(--ts-border)] flex-wrap">
+                    <span className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">
+                      Estado:
+                    </span>
+                    {selected.estado === "Activo" ? (
+                      <>
+                        <button
+                          onClick={() => handleCambiarEstadoSuscripcion(selected.id, "Suspendido")}
+                          className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                          title="Pausar o suspender servicio por este mes"
+                        >
+                          <Pause className="w-3 h-3" />
+                          <span>Pausar (Mes)</span>
+                        </button>
+                        <button
+                          onClick={() => handleCambiarEstadoSuscripcion(selected.id, "Cancelado")}
+                          className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                          title="Cancelar suscripción"
+                        >
+                          <Ban className="w-3 h-3" />
+                          <span>Cancelar</span>
+                        </button>
+                      </>
+                    ) : selected.estado === "Suspendido" ? (
+                      <>
+                        <button
+                          onClick={() => handleCambiarEstadoSuscripcion(selected.id, "Activo")}
+                          className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                          title="Reactivar suscripción"
+                        >
+                          <Play className="w-3 h-3" />
+                          <span>Reactivar Servicio</span>
+                        </button>
+                        <button
+                          onClick={() => handleCambiarEstadoSuscripcion(selected.id, "Cancelado")}
+                          className="px-2.5 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                          title="Cancelar suscripción"
+                        >
+                          <Ban className="w-3 h-3" />
+                          <span>Cancelar</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => handleCambiarEstadoSuscripcion(selected.id, "Activo")}
+                        className="px-2.5 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                        title="Reactivar suscripción"
+                      >
+                        <Play className="w-3 h-3" />
+                        <span>Reactivar Suscripción</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setSelected(null)}
@@ -2691,6 +2975,40 @@ export default function SuscripcionesManager() {
 
             {/* Contenido scrolleable del Drawer */}
             <div className="flex-1 p-6 space-y-6">
+
+              {/* Starlink Banner Especial con 1-Click PDF */}
+              {isStarlinkSubscription(selected) && (
+                <div className="bg-gradient-to-r from-[var(--ts-red)]/15 via-[var(--ts-surface-2)] to-transparent border border-[var(--ts-red)]/30 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-[var(--ts-red)] text-white flex items-center justify-center shadow-md shrink-0">
+                      <Satellite className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-black text-[var(--ts-text-primary)] uppercase tracking-wider">
+                          Antena Starlink Oficial
+                        </h4>
+                        {extractStarlinkData(selected).es_vip && (
+                          <span className="text-[9px] font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.2 rounded-full">
+                            👑 VIP ($0)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-[var(--ts-text-muted)] mt-0.5">
+                        Ficha técnica y custodia de acceso TecnoSmart VZL
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => descargarFichaPDF(selected)}
+                    className="px-3.5 py-2 bg-[var(--ts-red)] hover:bg-red-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-all shrink-0"
+                    title="Descargar Ficha PDF para el Cliente"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Ficha PDF</span>
+                  </button>
+                </div>
+              )}
 
               {/* A. Info del Cliente */}
               <div>
@@ -2972,7 +3290,80 @@ export default function SuscripcionesManager() {
                   </div>
 
                   {/* Serial del Equipo / Notas */}
-                  {(selected.equipo_serial || selected.credenciales_notas) && (
+                  {isStarlinkSubscription(selected) ? (
+                    <div className="border-t border-[var(--ts-border)] pt-2.5 space-y-2.5">
+                      {extractStarlinkData(selected).wifi_ssid && (
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider flex items-center gap-1">
+                              <Wifi className="w-3 h-3 text-cyan-400" /> Red WiFi (SSID)
+                            </p>
+                            <p className="text-xs font-mono font-bold text-[var(--ts-text-primary)] mt-0.5">
+                              {extractStarlinkData(selected).wifi_ssid}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleCopiar(extractStarlinkData(selected).wifi_ssid!, "wifi-ssid")}
+                            className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg transition-colors"
+                            title="Copiar SSID"
+                          >
+                            {copiado === "wifi-ssid" ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      )}
+
+                      {extractStarlinkData(selected).wifi_password && (
+                        <div className="flex items-center justify-between border-t border-[var(--ts-border)] pt-2">
+                          <div>
+                            <p className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider flex items-center gap-1">
+                              <Key className="w-3 h-3 text-amber-400" /> Clave WiFi
+                            </p>
+                            <p className="text-xs font-mono font-semibold text-[var(--ts-text-primary)] mt-0.5">
+                              {showPassword ? extractStarlinkData(selected).wifi_password : "••••••••••••"}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleCopiar(extractStarlinkData(selected).wifi_password!, "wifi-pass")}
+                            className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg transition-colors"
+                            title="Copiar clave WiFi"
+                          >
+                            {copiado === "wifi-pass" ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      )}
+
+                      {extractStarlinkData(selected).kit_serial && (
+                        <div className="flex items-center justify-between border-t border-[var(--ts-border)] pt-2">
+                          <div>
+                            <p className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">
+                              Serial del KIT Starlink
+                            </p>
+                            <p className="text-xs font-mono text-slate-300 bg-slate-900/60 px-2 py-0.5 rounded border border-slate-700 mt-0.5 inline-block">
+                              {extractStarlinkData(selected).kit_serial}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleCopiar(extractStarlinkData(selected).kit_serial!, "kit-sn")}
+                            className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg transition-colors"
+                            title="Copiar Serial KIT"
+                          >
+                            {copiado === "kit-sn" ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      )}
+
+                      {extractStarlinkData(selected).direccion_instalacion && (
+                        <div className="border-t border-[var(--ts-border)] pt-2">
+                          <p className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">
+                            Dirección de Instalación
+                          </p>
+                          <p className="text-xs text-[var(--ts-text-primary)] mt-0.5">
+                            {extractStarlinkData(selected).direccion_instalacion}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (selected.equipo_serial || selected.credenciales_notas) ? (
                     <div className="border-t border-[var(--ts-border)] pt-2.5 space-y-2">
                       {selected.equipo_serial && (
                         <div>
@@ -2995,7 +3386,7 @@ export default function SuscripcionesManager() {
                         </div>
                       )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
 
@@ -3003,6 +3394,16 @@ export default function SuscripcionesManager() {
 
             {/* Acciones al fondo del Drawer */}
             <div className="p-5 border-t border-[var(--ts-border)] bg-[var(--ts-surface)] space-y-2 sticky bottom-0">
+              {isStarlinkSubscription(selected) && (
+                <button
+                  onClick={() => descargarFichaPDF(selected)}
+                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-red)] text-[var(--ts-text-primary)] hover:text-white border border-[var(--ts-border)] hover:border-[var(--ts-red)] text-xs font-bold py-2.5 rounded-xl transition-all shadow-sm"
+                >
+                  <Download className="w-4 h-4 text-[var(--ts-red)]" />
+                  <span>📄 Descargar Ficha PDF para el Cliente</span>
+                </button>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => openRenovarModal(selected)}
@@ -3034,6 +3435,16 @@ export default function SuscripcionesManager() {
                   <Edit className="w-4 h-4" /> Editar
                 </button>
               </div>
+
+              {/* Botón de Eliminación Segura de la Suscripción */}
+              <button
+                onClick={() => setSuscripcionParaEliminar(selected)}
+                className="w-full flex items-center justify-center gap-1.5 text-red-400 hover:text-white bg-red-500/10 hover:bg-red-600 border border-red-500/20 hover:border-red-600 text-xs font-bold py-2 rounded-xl transition-all"
+                title="Eliminar esta suscripción definitivamente del sistema"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Eliminar Suscripción Definitivamente</span>
+              </button>
             </div>
 
           </div>
@@ -3766,6 +4177,78 @@ export default function SuscripcionesManager() {
                   Confirmar Renovación
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Onboarding y Edición de Starlink */}
+      <StarlinkOnboardingModal
+        isOpen={showStarlinkModal}
+        onClose={() => {
+          setShowStarlinkModal(false);
+          setStarlinkEditSub(null);
+        }}
+        onSaved={async () => {
+          await fetchData();
+          setShowStarlinkModal(false);
+          setStarlinkEditSub(null);
+          if (selected) {
+            abrirDetalle(selected);
+          }
+        }}
+        suscripcionEditar={starlinkEditSub}
+        servicios={servicios}
+      />
+
+      {/* ── MODAL DE CONFIRMACIÓN DE SEGURIDAD PARA ELIMINAR SUSCRIPCIÓN ── */}
+      {suscripcionParaEliminar && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-[var(--ts-surface)] border border-red-500/30 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-red-500/15 rounded-2xl border border-red-500/30 text-red-500 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-[var(--ts-text-primary)]">
+                  ¿Eliminar Suscripción Definitivamente?
+                </h3>
+                <p className="text-xs text-[var(--ts-text-muted)]">
+                  Acción de seguridad irreversible
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-red-500/10 border border-red-500/20 rounded-2xl text-xs space-y-1.5">
+              <p className="font-bold text-white text-sm">
+                {suscripcionParaEliminar.clientes?.empresa || suscripcionParaEliminar.clientes?.contacto || "Cliente sin nombre"}
+              </p>
+              <p className="text-slate-300">
+                Servicio: <strong className="text-white">{suscripcionParaEliminar.servicios_recurrentes?.nombre || "Suscripción"}</strong>
+              </p>
+              <p className="text-[11px] text-red-300 pt-1 border-t border-red-500/20">
+                ⚠️ Esta suscripción y todo su historial de cobros asociados se eliminarán de la base de datos permanentemente.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setSuscripcionParaEliminar(null)}
+                disabled={eliminandoSub}
+                className="px-4 py-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-border)] text-[var(--ts-text-primary)] rounded-xl text-xs font-bold transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarEliminarSuscripcion}
+                disabled={eliminandoSub}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-600/30 transition-all flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>{eliminandoSub ? "Eliminando..." : "Sí, Eliminar Definitivamente"}</span>
+              </button>
             </div>
           </div>
         </div>
