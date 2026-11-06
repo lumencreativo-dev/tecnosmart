@@ -11,6 +11,7 @@ import {
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD } from "@/lib/utils";
 import ProtectedView from "@/components/cotizador/ProtectedView";
+import { inferirMarcaPorSKU } from "@/lib/skuMatcher";
 
 // ─────────────────────────────────────────────────────────────
 // TIPOS DE DATOS
@@ -56,9 +57,10 @@ export type ModoImportacion = "completo" | "solo_cambios" | "solo_nuevos";
 // LISTAS DE MARCAS Y CATEGORÍAS
 // ─────────────────────────────────────────────────────────────
 const MARCAS_PREDETERMINADAS = [
-  "Huawei", "Hikvision", "CDP", "EZVIZ", "Cablix", "STC", "LinkedPro",
-  "Hiksemi", "Adata", "Acer", "Dahua", "HiLook", "Tapo", "TP-Link",
-  "ZKTeco", "Must", "Starlink", "Western Digital", "Seagate", "Genérico", "Otra"
+  "EZVIZ", "Hikvision", "HiLook", "Dahua", "CDP", "MikroTik", "Grandstream",
+  "Reyee", "Ubiquiti", "Starlink", "Huawei", "Cablix", "STC", "LinkedPro",
+  "Hiksemi", "Adata", "Acer", "Tapo", "TP-Link", "Nexxt",
+  "ZKTeco", "Must", "Western Digital", "Seagate", "Genérico", "Otra"
 ];
 
 const CATEGORIAS_PREDETERMINADAS = [
@@ -365,197 +367,249 @@ export default function ImportarPage() {
       const itemsExtraidos: ProductoStaging[] = [];
       const skusEnEsteArchivo = new Set<string>();
 
-      let marcaActual = "Huawei";
-      let categoriaActual = "Accesorios y Varios";
-
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         const page = await pdfDoc.getPage(pageNum);
         const textContent = await page.getTextContent();
         const rawItems = (textContent.items as any[])
-          .map(it => ({ str: String(it.str || "").trim(), x: it.transform[4], y: it.transform[5] }))
+          .map(it => ({ str: String(it.str || "").trim(), x: Math.round(it.transform[4]), y: Math.round(it.transform[5]) }))
           .filter(it => it.str.length > 0);
 
         if (rawItems.length === 0) continue;
 
-        // Ordenar: Y descendente (arriba a abajo), luego X ascendente (izquierda a derecha)
-        rawItems.sort((a, b) => b.y - a.y || a.x - b.x);
+        // 1. Detección Inteligente de Cabeceras de Columnas
+        const skuHeader = rawItems.find(it => it.y > 600 && /(SKU|MODELO|CODIGO|CÓDIGO|PART NUMBER)/i.test(it.str));
+        const descHeader = rawItems.find(it => it.y > 600 && /(NOMBRE|DESCRIPCI[OÓ]N|DETALLE|PRODUCTO)/i.test(it.str));
+        const costHeader = rawItems.find(it => it.y > 600 && /(COSTO|PRECIO|PVP|VALOR)/i.test(it.str));
+        const estadoHeader = rawItems.find(it => it.y > 600 && /(ESTADO|CONCILIA|ESTATUS|STATUS)/i.test(it.str));
 
-        // Agrupar en filas horizontales (tolerancia Y = 6)
-        const filas: { str: string; x: number; y: number }[][] = [];
-        let filaActual: { str: string; x: number; y: number }[] = [rawItems[0]];
-        let yActual = rawItems[0].y;
+        const tieneCabeceraColumnar = !!(skuHeader && (descHeader || costHeader));
 
-        for (let i = 1; i < rawItems.length; i++) {
-          const item = rawItems[i];
-          if (Math.abs(item.y - yActual) <= 6) {
-            filaActual.push(item);
-          } else {
-            filas.push([...filaActual].sort((a, b) => a.x - b.x));
-            filaActual = [item];
-            yActual = item.y;
-          }
+        let skuLeft = 55;
+        let skuRight = 230;
+        let descRight = 410;
+        let headerYCutoff = 800;
+
+        if (tieneCabeceraColumnar && skuHeader) {
+          headerYCutoff = Math.min(
+            skuHeader.y,
+            descHeader ? descHeader.y : skuHeader.y,
+            costHeader ? costHeader.y : skuHeader.y
+          ) - 4;
+
+          const xSku = skuHeader.x;
+          const xDesc = descHeader ? descHeader.x : (costHeader ? (xSku + costHeader.x) / 2 : xSku + 150);
+          const xCost = costHeader ? costHeader.x : xDesc + 140;
+          const xEstado = estadoHeader ? estadoHeader.x : 0;
+
+          skuLeft = xEstado > 0 && xEstado < xSku ? (xEstado + xSku) / 2 : Math.max(0, xSku - 70);
+          skuRight = (xSku + xDesc) / 2;
+          descRight = (xDesc + xCost) / 2;
         }
-        if (filaActual.length > 0) filas.push([...filaActual].sort((a, b) => a.x - b.x));
 
-        // Inspeccionar filas
-        for (const fila of filas) {
-          const lineaTexto = fila.map(f => f.str).join(" ").trim();
-          const lineaUp = lineaTexto.toUpperCase();
+        const bodyItems = rawItems.filter(it => it.y < headerYCutoff);
 
-          // Detección de Banners de Categoría / Sección
-          const esBanner = [
-            "REGULADOR DE VOLTAJE", "ENTRY LEVEL UPS", "SMART UPS", "UPS ON-LINE",
-            "UPS DE TORRE", "UPS RACK", "SOLUCIONES EN DATA CENTER", "INVERSORES",
-            "MINI UPS", "PROTECTORES DE PICO", "CARGADOR INTELIGENTE", "BATERÍAS", "BATERIAS",
-            "ACCESORIOS", "CONECTIVIDAD", "CAJAS DE EMPALME", "CARRETES DE FIBRA",
-            "HERRAJES", "HERRAMIENTAS", "FTTH", "STORAGE", "IDEAHUB", "ENTERPRISE ROUTER",
-            "CLOUDENGINE", "DISCO DURO", "MEMORIA RAM", "MICRO SD", "PENDRIVE", "EZVIZ"
-          ].find(b => lineaUp.includes(b));
+        // Detectar ítems de SKU en la banda vertical
+        const skuItems = bodyItems
+          .filter(it => it.x >= skuLeft && it.x < skuRight)
+          .sort((a, b) => b.y - a.y);
 
-          if (esBanner && fila.length <= 4) {
-            categoriaActual = inferirCategoria(lineaUp, "");
-            continue;
-          }
+        if (skuItems.length > 0) {
+          // ── MODO 1: EXTRACCIÓN GEOMÉTRICA POR BANDAS DE COLUMNA (Ultra-Preciso) ──
+          // Resistente a textos centrados, alineados a la izquierda o derecha
+          const descItems = bodyItems.filter(it => it.x >= skuRight && it.x < descRight);
+          const costItems = bodyItems.filter(it => it.x >= descRight);
+          const estadoItems = bodyItems.filter(it => it.x < skuLeft);
 
-          // Detección de marcas en el margen izquierdo
-          const posibleMarca = fila.find(f => f.x < 150 && MARCAS_PREDETERMINADAS.some(m => m.toUpperCase() === f.str.toUpperCase()));
-          if (posibleMarca) {
-            const mMatch = MARCAS_PREDETERMINADAS.find(m => m.toUpperCase() === posibleMarca.str.toUpperCase());
-            if (mMatch) marcaActual = mMatch;
-          }
+          skuItems.forEach((sku, idx) => {
+            const cleanSku = sku.str.trim();
+            if (!cleanSku || SPANISH_STOPWORDS.has(cleanSku.toUpperCase())) return;
 
-          // Buscar candidato a precio
-          // Buscamos elementos numéricos con formato de precio
-          let precioEncontrado: number | null = null;
-          let idxPrecio = -1;
+            // Rango vertical de esta fila
+            const prevY = idx > 0 ? skuItems[idx - 1].y : headerYCutoff;
+            const nextY = idx < skuItems.length - 1 ? skuItems[idx + 1].y : 0;
+            const topBound = (sku.y + prevY) / 2;
+            const bottomBound = (sku.y + nextY) / 2;
 
-          for (let fi = fila.length - 1; fi >= 0; fi--) {
-            const token = fila[fi].str;
-            const p = parsearNumeroMoneda(token);
-            if (p !== null && p >= 0 && !SPANISH_STOPWORDS.has(token.toUpperCase())) {
-              // Validar que no sea un número de puerto o voltaje común (ej. 24, 48, 120, 220, 1000) a menos que esté a la derecha
-              if (fila[fi].x > 500 || token.includes(",") || token.includes(".")) {
-                precioEncontrado = p;
-                idxPrecio = fi;
-                break;
+            // Extraer descripción perteneciente a este rango Y (unir múltiples líneas si aplica)
+            const matchingDescs = descItems
+              .filter(d => d.y <= topBound && d.y > bottomBound)
+              .sort((a, b) => b.y - a.y);
+            const descTexto = matchingDescs.map(d => d.str).join(" ").trim();
+            const nombreLimpio = descTexto || cleanSku;
+
+            // Extraer costo de proveedor en este rango Y
+            const matchingCosts = costItems
+              .filter(c => c.y <= topBound && c.y > bottomBound)
+              .sort((a, b) => b.y - a.y);
+            let costoProv = 0;
+            if (matchingCosts.length > 0) {
+              for (const cItem of matchingCosts) {
+                const parsed = parsearNumeroMoneda(cItem.str);
+                if (parsed !== null && parsed >= 0) {
+                  costoProv = parsed;
+                  break;
+                }
               }
             }
+
+            // Extraer estado / disponibilidad
+            const matchingEstados = estadoItems.filter(e => e.y <= topBound && e.y > bottomBound);
+            let estatus = "DISPONIBLE";
+            matchingEstados.forEach(e => {
+              const eUp = e.str.toUpperCase();
+              if (eUp.includes("TRANSIT")) estatus = "EN TRANSITO";
+              else if (eUp.includes("NO DISPON")) estatus = "NO DISPONIBLE";
+            });
+
+            // Inteligencia de Marca y Categoría:
+            // 1. Primero consultar si ya existe en Supabase y tiene marca asignada
+            const skuKey = cleanSku.toUpperCase().replace(/\s+/g, "");
+            const prodExistente = dbIndexMap.get(skuKey);
+
+            let marcaFinal = "";
+            let catFinal = "";
+
+            if (prodExistente && prodExistente.marca && prodExistente.marca !== "Otra" && prodExistente.marca !== "Huawei") {
+              marcaFinal = prodExistente.marca;
+              catFinal = prodExistente.categoria || "Accesorios y Varios";
+            } else {
+              // 2. Inferir mediante el motor inteligente skuMatcher
+              const inferencia = inferirMarcaPorSKU(cleanSku, nombreLimpio);
+              marcaFinal = inferencia.marca;
+              catFinal = inferencia.categoria;
+            }
+
+            // Conciliación con BD
+            const conciliacion = conciliarProducto(cleanSku, costoProv, dbIndexMap, skusEnEsteArchivo);
+            skusEnEsteArchivo.add(skuKey);
+
+            // Cálculos con margen
+            const calcs = calcularPrecios(
+              costoProv,
+              margenConfig.tipo,
+              margenConfig.porcentaje,
+              margenConfig.descuentoTecnicoPct
+            );
+
+            itemsExtraidos.push({
+              id: `stag-${Date.now()}-${itemsExtraidos.length}`,
+              codigo_sku: cleanSku.toUpperCase(),
+              nombre: nombreLimpio,
+              descripcion: descTexto || nombreLimpio,
+              marca: marcaFinal,
+              categoria: catFinal,
+              precio_costo: costoProv,
+              precio_venta: calcs.precioVenta,
+              precio_tecnico: calcs.precioTecnico,
+              estatus_proveedor: estatus,
+              cantidad_proveedor: null,
+              estado_conciliacion: conciliacion.estado,
+              db_producto_id: conciliacion.dbProd?.id,
+              costo_anterior: conciliacion.costoAnterior,
+              precio_venta_anterior: conciliacion.precioVentaAnterior,
+              variacion_costo_pct: conciliacion.variacionPct,
+              seleccionado: true,
+            });
+          });
+        } else {
+          // ── MODO 2: FALLBACK POR FILAS HORIZONTALES PARA FORMATOS NO COLUMNAR ──
+          rawItems.sort((a, b) => b.y - a.y || a.x - b.x);
+          const filas: { str: string; x: number; y: number }[][] = [];
+          let filaActual: { str: string; x: number; y: number }[] = [rawItems[0]];
+          let yActual = rawItems[0].y;
+
+          for (let i = 1; i < rawItems.length; i++) {
+            const item = rawItems[i];
+            if (Math.abs(item.y - yActual) <= 6) {
+              filaActual.push(item);
+            } else {
+              filas.push([...filaActual].sort((a, b) => a.x - b.x));
+              filaActual = [item];
+              yActual = item.y;
+            }
           }
+          if (filaActual.length > 0) filas.push([...filaActual].sort((a, b) => a.x - b.x));
 
-          // Si no hay precio en la fila, pasar a la siguiente (no es un producto cotizado)
-          if (precioEncontrado === null) continue;
+          for (const fila of filas) {
+            const lineaTexto = fila.map(f => f.str).join(" ").trim();
+            const lineaUp = lineaTexto.toUpperCase();
 
-          // Buscar candidato a SKU / Modelo
-          // El SKU suele estar entre x=60 y x=350, antes de la descripción larga
-          let modeloEncontrado = "";
-          let idxModelo = -1;
+            // Buscar costo
+            let precioEncontrado: number = 0;
+            let idxPrecio = -1;
+            for (let fi = fila.length - 1; fi >= 0; fi--) {
+              const token = fila[fi].str;
+              const p = parsearNumeroMoneda(token);
+              if (p !== null && p >= 0 && !SPANISH_STOPWORDS.has(token.toUpperCase())) {
+                if (fila[fi].x > 450 || token.includes(",") || token.includes(".")) {
+                  precioEncontrado = p;
+                  idxPrecio = fi;
+                  break;
+                }
+              }
+            }
 
-          for (let fi = 0; fi < fila.length; fi++) {
-            if (fi === idxPrecio) continue;
-            const token = fila[fi].str;
-            const tUp = token.toUpperCase();
-
-            if (SPANISH_STOPWORDS.has(tUp)) continue;
-            if (MARCAS_PREDETERMINADAS.some(m => m.toUpperCase() === tUp)) continue;
-            if (tUp === "DISPONIBLE" || tUp === "TRANSITO" || tUp === "EN TRANSITO" || tUp === "NO DISPONIBLE") continue;
-
-            // Longitud típica de SKU entre 3 y 45 chars
-            if (token.length >= 3 && token.length <= 45) {
-              const hasLetter = /[A-Za-z]/.test(token);
-              const hasDigit = /[0-9]/.test(token);
-              const hasSymbol = /[\-_.\/]/.test(token);
-
-              if (hasLetter && (hasDigit || hasSymbol)) {
+            // Buscar SKU / Modelo
+            let modeloEncontrado = "";
+            let idxModelo = -1;
+            for (let fi = 0; fi < fila.length; fi++) {
+              if (fi === idxPrecio) continue;
+              const token = fila[fi].str;
+              const tUp = token.toUpperCase();
+              if (SPANISH_STOPWORDS.has(tUp)) continue;
+              if (token.length >= 2 && token.length <= 45) {
                 modeloEncontrado = token;
                 idxModelo = fi;
                 break;
               }
             }
+
+            if (!modeloEncontrado) continue;
+
+            const partesDesc = fila
+              .filter((_, idx) => idx !== idxModelo && idx !== idxPrecio)
+              .map(f => f.str)
+              .join(" ")
+              .trim();
+
+            const nombreLimpio = partesDesc || modeloEncontrado;
+            const inferencia = inferirMarcaPorSKU(modeloEncontrado, nombreLimpio);
+
+            const conciliacion = conciliarProducto(
+              modeloEncontrado,
+              precioEncontrado,
+              dbIndexMap,
+              skusEnEsteArchivo
+            );
+            skusEnEsteArchivo.add(modeloEncontrado.trim().toUpperCase().replace(/\s+/g, ""));
+
+            const calculos = calcularPrecios(
+              precioEncontrado,
+              margenConfig.tipo,
+              margenConfig.porcentaje,
+              margenConfig.descuentoTecnicoPct
+            );
+
+            itemsExtraidos.push({
+              id: `stag-${Date.now()}-${itemsExtraidos.length}`,
+              codigo_sku: modeloEncontrado.toUpperCase().trim(),
+              nombre: nombreLimpio,
+              descripcion: partesDesc || nombreLimpio,
+              marca: inferencia.marca,
+              categoria: inferencia.categoria,
+              precio_costo: precioEncontrado,
+              precio_venta: calculos.precioVenta,
+              precio_tecnico: calculos.precioTecnico,
+              estatus_proveedor: "DISPONIBLE",
+              cantidad_proveedor: null,
+              estado_conciliacion: conciliacion.estado,
+              db_producto_id: conciliacion.dbProd?.id,
+              costo_anterior: conciliacion.costoAnterior,
+              precio_venta_anterior: conciliacion.precioVentaAnterior,
+              variacion_costo_pct: conciliacion.variacionPct,
+              seleccionado: true,
+            });
           }
-
-          // Si no encontramos SKU formal con números, tomar el primer token no stopwords ni marca
-          if (!modeloEncontrado) {
-            for (let fi = 0; fi < fila.length; fi++) {
-              if (fi === idxPrecio) continue;
-              const token = fila[fi].str;
-              const tUp = token.toUpperCase();
-              if (!SPANISH_STOPWORDS.has(tUp) && !MARCAS_PREDETERMINADAS.some(m => m.toUpperCase() === tUp)) {
-                if (token.length >= 3 && token.length <= 40) {
-                  modeloEncontrado = token;
-                  idxModelo = fi;
-                  break;
-                }
-              }
-            }
-          }
-
-          if (!modeloEncontrado) continue;
-
-          // Buscar estatus / cantidad
-          let estatus = "DISPONIBLE";
-          let cantidad: number | null = null;
-          for (const it of fila) {
-            const itUp = it.str.toUpperCase();
-            if (itUp.includes("TRANSIT")) estatus = "EN TRANSITO";
-            else if (itUp.includes("NO DISPON")) estatus = "NO DISPONIBLE";
-            else if (itUp.includes("DISPONIB")) estatus = "DISPONIBLE";
-            else if (it.x > 750 && !isNaN(parseInt(it.str)) && parseInt(it.str) > 0) {
-              cantidad = parseInt(it.str);
-            }
-          }
-
-          // Reconstruir descripción / nombre
-          const partesDesc = fila
-            .filter((_, idx) => idx !== idxModelo && idx !== idxPrecio)
-            .map(f => f.str)
-            .filter(t => !["DISPONIBLE", "TRANSITO", "EN TRANSITO", "NO DISPONIBLE", marcaActual].includes(t.toUpperCase()))
-            .join(" ")
-            .trim();
-
-          const nombreLimpio = partesDesc.length > 5
-            ? partesDesc.substring(0, 140)
-            : `${modeloEncontrado} - ${marcaActual}`;
-
-          // Categoría inferida para este producto
-          const categoriaFinal = inferirCategoria(`${lineaTexto} ${categoriaActual}`, categoriaActual);
-
-          // Conciliación con la base de datos existente
-          const conciliacion = conciliarProducto(
-            modeloEncontrado,
-            precioEncontrado,
-            dbIndexMap,
-            skusEnEsteArchivo
-          );
-
-          skusEnEsteArchivo.add(modeloEncontrado.trim().toUpperCase().replace(/\s+/g, ""));
-
-          // Calcular precios de venta y técnico con el margen activo (28% utilidad)
-          const calculos = calcularPrecios(
-            precioEncontrado,
-            margenConfig.tipo,
-            margenConfig.porcentaje,
-            margenConfig.descuentoTecnicoPct
-          );
-
-          itemsExtraidos.push({
-            id: `stag-${Date.now()}-${itemsExtraidos.length}`,
-            codigo_sku: modeloEncontrado.toUpperCase().trim(),
-            nombre: nombreLimpio,
-            descripcion: partesDesc || nombreLimpio,
-            marca: marcaActual,
-            categoria: categoriaFinal,
-            precio_costo: precioEncontrado,
-            precio_venta: calculos.precioVenta,
-            precio_tecnico: calculos.precioTecnico,
-            estatus_proveedor: estatus,
-            cantidad_proveedor: cantidad,
-            estado_conciliacion: conciliacion.estado,
-            db_producto_id: conciliacion.dbProd?.id,
-            costo_anterior: conciliacion.costoAnterior,
-            precio_venta_anterior: conciliacion.precioVentaAnterior,
-            variacion_costo_pct: conciliacion.variacionPct,
-            seleccionado: true,
-          });
         }
       }
 
@@ -1271,8 +1325,15 @@ export default function ImportarPage() {
                                     precio_tecnico: calcs.precioTecnico,
                                   } : it));
                                 }}
-                                className="w-20 text-right bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-2 py-1 text-xs text-white font-mono font-bold"
+                                className={`w-20 text-right bg-[var(--ts-surface-2)] border rounded-lg px-2 py-1 text-xs font-mono font-bold ${
+                                  item.precio_costo === 0 ? "border-amber-500/60 text-amber-300" : "border-[var(--ts-border)] text-white"
+                                }`}
                               />
+                              {item.precio_costo === 0 && (
+                                <p className="text-[9px] text-amber-400 font-sans font-medium mt-0.5 text-right">
+                                  Sin costo en PDF
+                                </p>
+                              )}
                             </td>
 
                             {/* Precio Venta */}
