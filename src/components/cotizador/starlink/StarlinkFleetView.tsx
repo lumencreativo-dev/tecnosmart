@@ -38,6 +38,7 @@ import {
   Play,
   Ban,
   Trash2,
+  Cloud,
 } from "lucide-react";
 import { formatUSD, formatFecha } from "@/lib/utils";
 import {
@@ -48,8 +49,10 @@ import {
 } from "@/lib/types";
 import { exportarStarlinkFichaPDF } from "@/components/pdf/StarlinkFichaPDF";
 import { obtenerSolicitudesStarlink } from "@/lib/starlinkSolicitudes";
+import { obtenerPoolAlias } from "@/lib/starlinkEmailPool";
 import StarlinkSolicitudAsistidaModal from "./StarlinkSolicitudAsistidaModal";
 import StarlinkCockpitActivacionModal from "./StarlinkCockpitActivacionModal";
+import StarlinkEmailPoolModal from "./StarlinkEmailPoolModal";
 import type { Suscripcion, ServicioRecurrente } from "../SuscripcionesManager";
 
 interface StarlinkFleetViewProps {
@@ -89,6 +92,8 @@ export default function StarlinkFleetView({
   const [cargandoSolicitudes, setCargandoSolicitudes] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAsistidaModal, setShowAsistidaModal] = useState(false);
+  const [showPoolModal, setShowPoolModal] = useState(false);
+  const [poolDisponiblesCount, setPoolDisponiblesCount] = useState<number>(0);
   const [solicitudCockpit, setSolicitudCockpit] = useState<SolicitudStarlink | null>(null);
 
   // Cargar solicitudes de onboarding
@@ -104,8 +109,18 @@ export default function StarlinkFleetView({
     }
   };
 
+  const fetchPoolStats = async () => {
+    try {
+      const res = await obtenerPoolAlias();
+      setPoolDisponiblesCount(res.disponiblesCount);
+    } catch (err) {
+      console.warn("Error leyendo estadísticas de pool:", err);
+    }
+  };
+
   useEffect(() => {
     fetchSolicitudes();
+    fetchPoolStats();
   }, []);
 
   const solicitudesPendientes = useMemo(() => {
@@ -334,6 +349,15 @@ export default function StarlinkFleetView({
 
         {/* Botones de Onboarding & Activación */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setShowPoolModal(true)}
+            className="px-3.5 py-2 bg-blue-600/10 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+            title="Gestionar Pool de Correos Cloudflare (Inventario de alias disponibles)"
+          >
+            <Cloud className="w-3.5 h-3.5" />
+            <span>⚡ Pool Cloudflare ({poolDisponiblesCount})</span>
+          </button>
+
           <button
             onClick={() => setShowShareModal(true)}
             className="px-3.5 py-2 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
@@ -1318,10 +1342,20 @@ export default function StarlinkFleetView({
         onClose={() => setSolicitudCockpit(null)}
         onActivated={async () => {
           await fetchSolicitudes();
+          await fetchPoolStats();
           if (onRefresh) onRefresh();
           setSubTab("flota");
         }}
         servicios={servicios}
+      />
+
+      {/* ── MODAL 4: GESTIÓN DE POOL DE ALIAS CLOUDFLARE ── */}
+      <StarlinkEmailPoolModal
+        isOpen={showPoolModal}
+        onClose={() => setShowPoolModal(false)}
+        onPoolUpdated={async () => {
+          await fetchPoolStats();
+        }}
       />
     </div>
   );

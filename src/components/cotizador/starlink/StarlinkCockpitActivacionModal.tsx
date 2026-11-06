@@ -33,6 +33,7 @@ import type { SolicitudStarlink } from "@/lib/types";
 import { packStarlinkData, StarlinkMetadata } from "@/lib/types";
 import { exportarStarlinkFichaPDF } from "@/components/pdf/StarlinkFichaPDF";
 import { actualizarEstadoSolicitud, actualizarDatosSolicitud } from "@/lib/starlinkSolicitudes";
+import { obtenerPoolAlias, marcarAliasAsignado, StarlinkEmailAlias } from "@/lib/starlinkEmailPool";
 import type { ServicioRecurrente } from "../SuscripcionesManager";
 
 interface Props {
@@ -76,6 +77,9 @@ export default function StarlinkCockpitActivacionModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [fotoZoom, setFotoZoom] = useState<string | null>(null);
 
+  // Pool de Alias Cloudflare
+  const [poolDisponibles, setPoolDisponibles] = useState<StarlinkEmailAlias[]>([]);
+
   // Inicializar y sincronizar campos cuando se abre o cambia la solicitud
   useEffect(() => {
     if (solicitud && isOpen) {
@@ -88,15 +92,20 @@ export default function StarlinkCockpitActivacionModal({
 
       const serial = solicitud.kit_serial || (solicitud.notas && solicitud.notas.length < 35 ? solicitud.notas.trim() : "");
       setKitSerial(serial || "");
-      setCorreoStarlink(solicitud.email || "");
+      // Correo y clave de la cuenta Starlink inician 100% vacíos para ingresar el alias de Cloudflare
+      setCorreoStarlink("");
+      setClaveStarlink("");
       setWifiSsid(solicitud.wifi_ssid_preferido || `Starlink-${(solicitud.nombre_completo || "").split(" ")[0]}`);
       setWifiPassword(solicitud.wifi_password_preferido || "Tecno2026*");
-      if (!claveStarlink) {
-        setClaveStarlink("TecnoSmart" + new Date().getFullYear() + "*");
-      }
       setModoEdicion(false);
       setErrorMsg(null);
       setMensajeGuardado(null);
+
+      // Cargar correos disponibles del pool
+      obtenerPoolAlias().then((res) => {
+        const libres = res.pool.filter((p) => p.estado === "disponible");
+        setPoolDisponibles(libres);
+      });
     }
   }, [solicitud, isOpen]);
 
@@ -289,7 +298,18 @@ export default function StarlinkCockpitActivacionModal({
         await actualizarEstadoSolicitud(solicitud.id, "activada");
       }
 
-      // 6. Generar y descargar inmediatamente la Ficha PDF formal con los datos corregidos
+      // 6. Marcar el correo como asignado en el Pool de Cloudflare
+      try {
+        await marcarAliasAsignado(correoStarlink.trim(), {
+          cliente_nombre: nombreCompleto.trim(),
+          kit_serial: kitSerial.trim(),
+          suscripcion_id: nuevaSub?.id,
+        });
+      } catch (poolErr) {
+        console.warn("No se pudo actualizar pool de alias:", poolErr);
+      }
+
+      // 7. Generar y descargar inmediatamente la Ficha PDF formal con los datos corregidos
       await exportarStarlinkFichaPDF({
         clienteNombre: nombreCompleto.trim(),
         clienteTelefono: telefono.trim(),
@@ -745,13 +765,62 @@ export default function StarlinkCockpitActivacionModal({
                       Correo Cuenta Starlink *
                     </label>
                     <input
-                      type="email"
+                      type="text"
+                      name="starlink_cloudflare_alias_email"
+                      id="starlink_cloudflare_alias_email"
+                      autoComplete="off"
+                      data-lpignore="true"
+                      data-form-type="other"
                       required
-                      placeholder="starlink.410@somostecnosmart.com"
+                      placeholder="ej. cliente@somostecnosmart.com"
                       value={correoStarlink}
                       onChange={(e) => setCorreoStarlink(e.target.value)}
                       className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl px-3.5 py-2 text-xs font-mono text-[var(--ts-text-primary)] focus:outline-none focus:border-[var(--ts-red)]"
                     />
+
+                    {/* Selector Asistido desde el Pool de Cloudflare */}
+                    {poolDisponibles.length > 0 ? (
+                      <div className="mt-1.5 p-2 bg-blue-500/10 border border-blue-500/25 rounded-xl space-y-1.5">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[11px] text-blue-300 truncate flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-blue-400 shrink-0" />
+                            Siguiente libre: <strong className="font-mono text-white">{poolDisponibles[0].email}</strong>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setCorreoStarlink(poolDisponibles[0].email)}
+                            className="px-2 py-0.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-[10px] font-bold shrink-0 transition-colors shadow-xs"
+                          >
+                            Usar este
+                          </button>
+                        </div>
+
+                        {poolDisponibles.length > 1 && (
+                          <div className="relative">
+                            <select
+                              onChange={(e) => {
+                                if (e.target.value) setCorreoStarlink(e.target.value);
+                              }}
+                              defaultValue=""
+                              className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[11px] text-[var(--ts-text-muted)] focus:text-white rounded-lg px-2 py-1 appearance-none cursor-pointer focus:outline-none"
+                            >
+                              <option value="" disabled>
+                                O elegir otro del Pool ({poolDisponibles.length} libres)...
+                              </option>
+                              {poolDisponibles.map((p) => (
+                                <option key={p.id} value={p.email} className="bg-[#18181b] text-white font-mono">
+                                  {p.email}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-[var(--ts-text-muted)] mt-0.5 block">
+                        Alias Cloudflare que creaste para este cliente
+                      </span>
+                    )}
                   </div>
 
                   <div>
@@ -761,7 +830,12 @@ export default function StarlinkCockpitActivacionModal({
                     <div className="relative">
                       <input
                         type={mostrarClaveStarlink ? "text" : "password"}
-                        placeholder="Contraseña"
+                        name="starlink_cloudflare_alias_pass"
+                        id="starlink_cloudflare_alias_pass"
+                        autoComplete="new-password"
+                        data-lpignore="true"
+                        data-form-type="other"
+                        placeholder="Contraseña de la cuenta"
                         value={claveStarlink}
                         onChange={(e) => setClaveStarlink(e.target.value)}
                         className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl px-3.5 py-2 pr-8 text-xs font-mono text-[var(--ts-text-primary)] focus:outline-none focus:border-[var(--ts-red)]"
@@ -774,6 +848,9 @@ export default function StarlinkCockpitActivacionModal({
                         {mostrarClaveStarlink ? "👁️" : "🙈"}
                       </button>
                     </div>
+                    <span className="text-[10px] text-[var(--ts-text-muted)] mt-0.5 block">
+                      Clave registrada en Starlink.com
+                    </span>
                   </div>
                 </div>
 

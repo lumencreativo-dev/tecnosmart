@@ -457,22 +457,22 @@ function StarlinkFichaDocument({
           <View style={S.soporteCard}>
             <Text style={S.soporteTitulo}>Soporte Técnico Especializado TecnoSmart VZL</Text>
             <Text style={S.soporteText}>
-              Tu servicio se factura automáticamente de forma mensual. Ante cualquier duda con respecto a tu fecha de corte,
-              requerimiento de cambio de contraseña, reubicación de equipo o asistencia técnica con tu conexión, comunícate
-              directamente con nuestro equipo de atención:
+              Tu servicio satelital Starlink es gestionado y monitoreado activamente por TecnoSmart VZL. Ante cualquier requerimiento
+              técnico, cambio de configuración WiFi, reubicación de equipo o consulta sobre tu ciclo de facturación mensual, comunícate
+              directamente con nuestro equipo a través de soporte@somostecnosmart.com o al WhatsApp Oficial de TecnoSmart Venezuela:
             </Text>
             <View style={S.soporteChannels}>
-              <View>
-                <Text style={S.channelItem}>WhatsApp / Emergencias:</Text>
+              <View style={{ flex: 1.15 }}>
+                <Text style={S.channelItem}>Soporte Técnico Especializado:</Text>
+                <Text style={S.channelSub}>soporte@somostecnosmart.com</Text>
+                <Text style={[S.channelItem, { marginTop: 3 }]}>Contacto & Facturación:</Text>
+                <Text style={S.channelSub}>contacto@somostecnosmart.com</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={S.channelItem}>WhatsApp Oficial TecnoSmart:</Text>
                 <Text style={S.channelSub}>0412-2789273  ·  0414-4141887</Text>
-              </View>
-              <View>
-                <Text style={S.channelItem}>Instagram Oficial:</Text>
-                <Text style={S.channelSub}>@tecnosmartvzl</Text>
-              </View>
-              <View>
-                <Text style={S.channelItem}>Correo Central:</Text>
-                <Text style={S.channelSub}>tecnosmartvzla@gmail.com</Text>
+                <Text style={[S.channelItem, { marginTop: 3 }]}>Web & Redes Oficiales:</Text>
+                <Text style={S.channelSub}>www.somostecnosmart.com  ·  @tecnosmartvzl</Text>
               </View>
             </View>
           </View>
@@ -482,7 +482,7 @@ function StarlinkFichaDocument({
         {/* ── FOOTER INSTITUCIONAL ── */}
         <View style={S.footer} fixed>
           <Text style={S.footerText}>
-            TECNO SMART VZL C.A  ·  RIF: J-50701960-8  ·  Tienda Especializada en Tinaquillo, Cojedes
+            TECNO SMART VZL C.A  ·  RIF: J-50701960-8  ·  soporte@somostecnosmart.com  ·  Tinaquillo, Cojedes
           </Text>
           <Text style={S.footerText}>
             Documento de custodia privada del cliente  ·  Pág 1 de 1
