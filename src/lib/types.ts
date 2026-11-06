@@ -233,6 +233,7 @@ export interface SolicitudStarlink {
   direccion: string;
   coordenadas_gps?: string;
   plan_deseado: string;
+  kit_serial?: string;
   wifi_ssid_preferido?: string;
   wifi_password_preferido?: string;
   cedula_frontal_url?: string;

@@ -1,6 +1,19 @@
 import { supabase } from "@/lib/supabase/client";
 import type { SolicitudStarlink } from "@/lib/types";
 
+export function inferKitSerial(metaSerial?: string, rawNotes?: string): string {
+  if (metaSerial && metaSerial.trim()) return metaSerial.trim();
+  if (!rawNotes) return "";
+  const clean = rawNotes.trim();
+  // Si la nota en sí es corta y parece un serial (como 'CAa1921*0378' o 'KIT4M070688358RG' o 'SN:...')
+  if (clean.length > 0 && clean.length <= 35 && !clean.includes(" ") && !clean.includes("\n")) {
+    return clean;
+  }
+  const match = clean.match(/(KIT[0-9A-Z]+|SN[:\s-]*[0-9A-Za-z*]+)/i);
+  if (match) return match[1].trim();
+  return "";
+}
+
 /**
  * Guarda una nueva solicitud de onboarding Starlink.
  * Utiliza 'solicitudes_starlink' si la tabla existe; de lo contrario utiliza 'clientes' como fallback seguro.
@@ -21,6 +34,7 @@ export async function guardarSolicitudStarlink(
           direccion: solicitud.direccion,
           coordenadas_gps: solicitud.coordenadas_gps || null,
           plan_deseado: solicitud.plan_deseado || "Starlink Residencial",
+          kit_serial: solicitud.kit_serial || null,
           wifi_ssid_preferido: solicitud.wifi_ssid_preferido || null,
           wifi_password_preferido: solicitud.wifi_password_preferido || null,
           cedula_frontal_url: solicitud.cedula_frontal_url || null,
@@ -40,6 +54,7 @@ export async function guardarSolicitudStarlink(
     // 2. Si la tabla no existe aún en Supabase, guardar como fallback en 'clientes' con tag
     const metadata = {
       plan_deseado: solicitud.plan_deseado,
+      kit_serial: solicitud.kit_serial || null,
       coordenadas_gps: solicitud.coordenadas_gps,
       wifi_ssid_preferido: solicitud.wifi_ssid_preferido,
       wifi_password_preferido: solicitud.wifi_password_preferido,
@@ -91,7 +106,10 @@ export async function obtenerSolicitudesStarlink(): Promise<SolicitudStarlink[]>
       .order("created_at", { ascending: false });
 
     if (!solErr && solData) {
-      return solData as SolicitudStarlink[];
+      return (solData as any[]).map((s) => ({
+        ...s,
+        kit_serial: s.kit_serial || inferKitSerial(undefined, s.notas),
+      })) as SolicitudStarlink[];
     }
 
     // 2. Fallback: consultar clientes con tag 'starlink_onboarding_pendiente'
@@ -117,15 +135,18 @@ export async function obtenerSolicitudesStarlink(): Promise<SolicitudStarlink[]>
           .replace(/<!--STARLINK_ONBOARDING:[\s\S]*?-->/g, "")
           .trim();
 
+        const kitSerial = inferKitSerial(meta.kit_serial, notasLimpias);
+
         return {
           id: c.id,
           nombre_completo: c.contacto || c.empresa || "",
           cedula_rif: c.rif_cedula || "",
           telefono: c.telefono || "",
-          email: c.email || "",
+          email: c.email || meta.email || "",
           direccion: c.direccion || "",
           coordenadas_gps: meta.coordenadas_gps || "",
           plan_deseado: meta.plan_deseado || "Starlink Residencial",
+          kit_serial: kitSerial,
           wifi_ssid_preferido: meta.wifi_ssid_preferido || "",
           wifi_password_preferido: meta.wifi_password_preferido || "",
           cedula_frontal_url: meta.cedula_frontal_url || "",
@@ -185,5 +206,72 @@ export async function actualizarEstadoSolicitud(
         })
         .eq("id", id);
     }
+  }
+}
+
+/**
+ * Permite corregir o actualizar cualquier dato de la solicitud (Nombre, Cédula, Dirección, Serial, etc.)
+ */
+export async function actualizarDatosSolicitud(
+  id: string,
+  datos: Partial<SolicitudStarlink>
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // 1. Intentar en solicitudes_starlink
+    const updatePayload: any = { updated_at: new Date().toISOString() };
+    if (datos.nombre_completo !== undefined) updatePayload.nombre_completo = datos.nombre_completo;
+    if (datos.cedula_rif !== undefined) updatePayload.cedula_rif = datos.cedula_rif;
+    if (datos.telefono !== undefined) updatePayload.telefono = datos.telefono;
+    if (datos.email !== undefined) updatePayload.email = datos.email;
+    if (datos.direccion !== undefined) updatePayload.direccion = datos.direccion;
+    if (datos.kit_serial !== undefined) updatePayload.kit_serial = datos.kit_serial;
+    if (datos.plan_deseado !== undefined) updatePayload.plan_deseado = datos.plan_deseado;
+    if (datos.wifi_ssid_preferido !== undefined) updatePayload.wifi_ssid_preferido = datos.wifi_ssid_preferido;
+    if (datos.wifi_password_preferido !== undefined) updatePayload.wifi_password_preferido = datos.wifi_password_preferido;
+
+    const { error: solErr } = await supabase
+      .from("solicitudes_starlink")
+      .update(updatePayload)
+      .eq("id", id);
+
+    if (!solErr) return { success: true };
+
+    // 2. Fallback en clientes
+    const { data: c, error: cErr } = await supabase.from("clientes").select("*").eq("id", id).single();
+    if (cErr || !c) return { success: false, error: cErr?.message || "Solicitud no encontrada" };
+
+    let meta: any = {};
+    if (c.notas) {
+      const match = c.notas.match(/<!--STARLINK_ONBOARDING:([\s\S]*?)-->/);
+      if (match && match[1]) {
+        try { meta = JSON.parse(match[1]); } catch {}
+      }
+    }
+
+    if (datos.plan_deseado !== undefined) meta.plan_deseado = datos.plan_deseado;
+    if (datos.kit_serial !== undefined) meta.kit_serial = datos.kit_serial;
+    if (datos.wifi_ssid_preferido !== undefined) meta.wifi_ssid_preferido = datos.wifi_ssid_preferido;
+    if (datos.wifi_password_preferido !== undefined) meta.wifi_password_preferido = datos.wifi_password_preferido;
+
+    const cleanNotes = (c.notas || "").replace(/<!--STARLINK_ONBOARDING:[\s\S]*?-->/g, "").trim();
+    const updatedNotas = `${cleanNotes}\n\n<!--STARLINK_ONBOARDING:${JSON.stringify(meta)}-->`;
+
+    const { error: updErr } = await supabase
+      .from("clientes")
+      .update({
+        contacto: datos.nombre_completo ?? c.contacto,
+        empresa: datos.nombre_completo ?? c.empresa,
+        rif_cedula: datos.cedula_rif ?? c.rif_cedula,
+        telefono: datos.telefono ?? c.telefono,
+        email: datos.email !== undefined ? (datos.email || null) : c.email,
+        direccion: datos.direccion ?? c.direccion,
+        notas: updatedNotas,
+      })
+      .eq("id", id);
+
+    if (updErr) return { success: false, error: updErr.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Error al actualizar" };
   }
 }

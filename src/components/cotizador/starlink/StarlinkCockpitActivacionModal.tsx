@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X,
   Satellite,
@@ -22,13 +22,17 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  Mail,
+  Box,
+  Pencil,
+  Save,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD } from "@/lib/utils";
 import type { SolicitudStarlink } from "@/lib/types";
 import { packStarlinkData, StarlinkMetadata } from "@/lib/types";
 import { exportarStarlinkFichaPDF } from "@/components/pdf/StarlinkFichaPDF";
-import { actualizarEstadoSolicitud } from "@/lib/starlinkSolicitudes";
+import { actualizarEstadoSolicitud, actualizarDatosSolicitud } from "@/lib/starlinkSolicitudes";
 import type { ServicioRecurrente } from "../SuscripcionesManager";
 
 interface Props {
@@ -46,6 +50,17 @@ export default function StarlinkCockpitActivacionModal({
   onActivated,
   servicios,
 }: Props) {
+  // ── Estados editables de los datos del cliente ──
+  const [nombreCompleto, setNombreCompleto] = useState("");
+  const [cedulaRif, setCedulaRif] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [emailCliente, setEmailCliente] = useState("");
+  const [direccion, setDireccion] = useState("");
+  const [planDeseado, setPlanDeseado] = useState("Starlink Residencial");
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [mensajeGuardado, setMensajeGuardado] = useState<string | null>(null);
+
   // Estados para datos que llena TecnoSmart en la activación
   const [correoStarlink, setCorreoStarlink] = useState("");
   const [claveStarlink, setClaveStarlink] = useState("");
@@ -61,13 +76,29 @@ export default function StarlinkCockpitActivacionModal({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [fotoZoom, setFotoZoom] = useState<string | null>(null);
 
-  // Inicializar campos cuando se abre una solicitud
-  useState(() => {
-    if (solicitud) {
-      setWifiSsid(solicitud.wifi_ssid_preferido || `Starlink-${solicitud.nombre_completo.split(" ")[0]}`);
+  // Inicializar y sincronizar campos cuando se abre o cambia la solicitud
+  useEffect(() => {
+    if (solicitud && isOpen) {
+      setNombreCompleto(solicitud.nombre_completo || "");
+      setCedulaRif(solicitud.cedula_rif || "");
+      setTelefono(solicitud.telefono || "");
+      setEmailCliente(solicitud.email || "");
+      setDireccion(solicitud.direccion || "");
+      setPlanDeseado(solicitud.plan_deseado || "Starlink Residencial");
+
+      const serial = solicitud.kit_serial || (solicitud.notas && solicitud.notas.length < 35 ? solicitud.notas.trim() : "");
+      setKitSerial(serial || "");
+      setCorreoStarlink(solicitud.email || "");
+      setWifiSsid(solicitud.wifi_ssid_preferido || `Starlink-${(solicitud.nombre_completo || "").split(" ")[0]}`);
       setWifiPassword(solicitud.wifi_password_preferido || "Tecno2026*");
+      if (!claveStarlink) {
+        setClaveStarlink("TecnoSmart" + new Date().getFullYear() + "*");
+      }
+      setModoEdicion(false);
+      setErrorMsg(null);
+      setMensajeGuardado(null);
     }
-  });
+  }, [solicitud, isOpen]);
 
   if (!isOpen || !solicitud) return null;
 
@@ -78,8 +109,40 @@ export default function StarlinkCockpitActivacionModal({
     setTimeout(() => setCopiado(null), 2000);
   };
 
+  // Guardar correcciones en la base de datos
+  const handleGuardarCambiosCliente = async () => {
+    if (!solicitud?.id) return;
+    setGuardandoEdicion(true);
+    setErrorMsg(null);
+    try {
+      const res = await actualizarDatosSolicitud(solicitud.id, {
+        nombre_completo: nombreCompleto.trim(),
+        cedula_rif: cedulaRif.trim(),
+        telefono: telefono.trim(),
+        email: emailCliente.trim() || undefined,
+        direccion: direccion.trim(),
+        plan_deseado: planDeseado,
+        kit_serial: kitSerial.trim() || undefined,
+        wifi_ssid_preferido: wifiSsid.trim() || undefined,
+        wifi_password_preferido: wifiPassword.trim() || undefined,
+      });
+
+      if (res.success) {
+        setMensajeGuardado("Correcciones guardadas exitosamente.");
+        setModoEdicion(false);
+        setTimeout(() => setMensajeGuardado(null), 3000);
+      } else {
+        setErrorMsg(res.error || "Error al guardar corrección.");
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Error al actualizar");
+    } finally {
+      setGuardandoEdicion(false);
+    }
+  };
+
   // Calcular montos según el plan
-  const planNombre = solicitud.plan_deseado || "Starlink Residencial";
+  const planNombre = planDeseado || "Starlink Residencial";
   let costoBase = 40;
   if (planNombre.toLowerCase().includes("100gb")) costoBase = 60;
   else if (planNombre.toLowerCase().includes("ilimitado")) costoBase = 110;
@@ -101,40 +164,42 @@ export default function StarlinkCockpitActivacionModal({
       // 1. Crear o buscar el cliente en la tabla 'clientes' de TecnoSmart
       let clienteId: string | null = null;
 
-      // Buscar si ya existe por RIF o Cédula
+      // Buscar si ya existe por RIF o Cédula (o por el RIF corregido)
       const { data: existente } = await supabase
         .from("clientes")
         .select("id")
-        .eq("rif_cedula", solicitud.cedula_rif)
+        .eq("rif_cedula", cedulaRif.trim())
         .limit(1);
 
       if (existente && existente.length > 0) {
         clienteId = existente[0].id;
-        // Actualizar datos de contacto y dirección
+        // Actualizar datos de contacto y dirección con los valores corregidos
         await supabase
           .from("clientes")
           .update({
-            contacto: solicitud.nombre_completo,
-            telefono: solicitud.telefono,
-            email: solicitud.email || undefined,
-            direccion: solicitud.direccion,
+            contacto: nombreCompleto.trim(),
+            empresa: nombreCompleto.trim(),
+            rif_cedula: cedulaRif.trim(),
+            telefono: telefono.trim(),
+            email: emailCliente.trim() || null,
+            direccion: direccion.trim(),
             tipo: "cliente_normal",
           })
           .eq("id", clienteId);
       } else {
-        // Crear nuevo cliente
+        // Crear nuevo cliente con los datos limpios y corregidos
         const { data: nuevoCliente, error: errCli } = await supabase
           .from("clientes")
           .insert([
             {
-              contacto: solicitud.nombre_completo,
-              empresa: solicitud.nombre_completo,
-              rif_cedula: solicitud.cedula_rif,
-              telefono: solicitud.telefono,
-              email: solicitud.email || null,
-              direccion: solicitud.direccion,
+              contacto: nombreCompleto.trim(),
+              empresa: nombreCompleto.trim(),
+              rif_cedula: cedulaRif.trim(),
+              telefono: telefono.trim(),
+              email: emailCliente.trim() || null,
+              direccion: direccion.trim(),
               tipo: "cliente_normal",
-              notas: `Cliente activado vía Onboarding Starlink. Tel: ${solicitud.telefono}`,
+              notas: `Cliente activado vía Onboarding Starlink. Tel: ${telefono.trim()}`,
             },
           ])
           .select("id")
@@ -162,7 +227,7 @@ export default function StarlinkCockpitActivacionModal({
         clave_starlink: claveStarlink.trim(),
         plan_starlink: planNombre,
         dia_corte: diaCorte,
-        direccion_instalacion: solicitud.direccion,
+        direccion_instalacion: direccion.trim(),
         kit_serial: kitSerial.trim(),
         fee_soporte: feeSoporte,
         es_vip: esVip,
@@ -209,18 +274,28 @@ export default function StarlinkCockpitActivacionModal({
 
       if (subErr) throw subErr;
 
-      // 5. Marcar solicitud como 'activada'
+      // 5. Marcar solicitud como 'activada' y sincronizar datos corregidos
       if (solicitud.id) {
+        await actualizarDatosSolicitud(solicitud.id, {
+          nombre_completo: nombreCompleto.trim(),
+          cedula_rif: cedulaRif.trim(),
+          telefono: telefono.trim(),
+          email: emailCliente.trim() || undefined,
+          direccion: direccion.trim(),
+          plan_deseado: planDeseado,
+          kit_serial: kitSerial.trim() || undefined,
+          estado: "activada",
+        });
         await actualizarEstadoSolicitud(solicitud.id, "activada");
       }
 
-      // 6. Generar y descargar inmediatamente la Ficha PDF formal para el cliente
+      // 6. Generar y descargar inmediatamente la Ficha PDF formal con los datos corregidos
       await exportarStarlinkFichaPDF({
-        clienteNombre: solicitud.nombre_completo,
-        clienteTelefono: solicitud.telefono,
-        clienteEmail: solicitud.email,
-        clienteRif: solicitud.cedula_rif,
-        direccionInstalacion: solicitud.direccion,
+        clienteNombre: nombreCompleto.trim(),
+        clienteTelefono: telefono.trim(),
+        clienteEmail: emailCliente.trim() || undefined,
+        clienteRif: cedulaRif.trim(),
+        direccionInstalacion: direccion.trim(),
         correoStarlink: correoStarlink.trim(),
         claveStarlink: claveStarlink.trim(),
         wifiSsid: wifiSsid.trim() || "Starlink",
@@ -299,81 +374,297 @@ export default function StarlinkCockpitActivacionModal({
               <h3 className="text-xs font-black uppercase tracking-wider text-[var(--ts-text-muted)] flex items-center gap-1.5">
                 <User className="w-4 h-4 text-[var(--ts-red)]" /> 1. Datos para Registrar en Starlink.com
               </h3>
-              <span className="text-[10px] text-slate-400">Toca el botón para copiar</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setModoEdicion(!modoEdicion)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
+                    modoEdicion
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30"
+                      : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)] hover:text-white border border-[var(--ts-border)] hover:bg-[var(--ts-border)]"
+                  }`}
+                  title="Corregir errores de ortografía, cédula o dirección cometidos por el cliente"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>{modoEdicion ? "Finalizar Edición" : "Editar Datos"}</span>
+                </button>
+                {!modoEdicion && <span className="text-[10px] text-slate-400">Toca el botón para copiar</span>}
+              </div>
             </div>
 
-            {/* Tarjetas de copiado rápido */}
+            {/* Banner de Modo Edición */}
+            {modoEdicion && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300 flex items-center justify-between gap-3 animate-in fade-in duration-150">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span className="text-[11px]">
+                    Modifica cualquier dato erróneo del cliente. Las correcciones se guardarán y aparecerán en la Ficha PDF final.
+                  </span>
+                </div>
+                {solicitud.id && (
+                  <button
+                    type="button"
+                    onClick={handleGuardarCambiosCliente}
+                    disabled={guardandoEdicion}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow shrink-0"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{guardandoEdicion ? "Guardando..." : "Guardar Corrección"}</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Mensaje de éxito al guardar corrección */}
+            {mensajeGuardado && (
+              <div className="p-2.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center gap-2 animate-in fade-in">
+                <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{mensajeGuardado}</span>
+              </div>
+            )}
+
+            {/* Tarjetas de copiado rápido o campos editables */}
             <div className="space-y-2.5 text-xs">
               {/* Nombre */}
-              <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold">Nombre del Titular</span>
-                  <span className="font-bold text-[var(--ts-text-primary)] text-sm">{solicitud.nombre_completo}</span>
+              <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold mb-0.5">Nombre del Titular</span>
+                  {modoEdicion ? (
+                    <input
+                      type="text"
+                      value={nombreCompleto}
+                      onChange={(e) => setNombreCompleto(e.target.value)}
+                      className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-2.5 py-1 text-xs text-white font-bold focus:outline-none focus:border-[var(--ts-red)]"
+                      placeholder="Nombre y Apellido"
+                    />
+                  ) : (
+                    <span className="font-bold text-[var(--ts-text-primary)] text-sm">{nombreCompleto}</span>
+                  )}
                 </div>
-                <button
-                  onClick={() => handleCopiar(solicitud.nombre_completo, "nombre")}
-                  className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
-                >
-                  {copiado === "nombre" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiado === "nombre" ? "Copiado" : "Copiar"}</span>
-                </button>
+                {!modoEdicion && (
+                  <button
+                    onClick={() => handleCopiar(nombreCompleto, "nombre")}
+                    className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all shrink-0"
+                  >
+                    {copiado === "nombre" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiado === "nombre" ? "Copiado" : "Copiar"}</span>
+                  </button>
+                )}
               </div>
 
               {/* Cédula */}
-              <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold">Cédula / Documento</span>
-                  <span className="font-mono font-bold text-[var(--ts-text-primary)] text-sm">{solicitud.cedula_rif}</span>
+              <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold mb-0.5">Cédula / Documento</span>
+                  {modoEdicion ? (
+                    <input
+                      type="text"
+                      value={cedulaRif}
+                      onChange={(e) => setCedulaRif(e.target.value)}
+                      className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-2.5 py-1 text-xs font-mono text-white font-bold focus:outline-none focus:border-[var(--ts-red)]"
+                      placeholder="Ej: V-12.345.678"
+                    />
+                  ) : (
+                    <span className="font-mono font-bold text-[var(--ts-text-primary)] text-sm">{cedulaRif}</span>
+                  )}
                 </div>
-                <button
-                  onClick={() => handleCopiar(solicitud.cedula_rif, "cedula")}
-                  className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
-                >
-                  {copiado === "cedula" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiado === "cedula" ? "Copiado" : "Copiar"}</span>
-                </button>
+                {!modoEdicion && (
+                  <button
+                    onClick={() => handleCopiar(cedulaRif, "cedula")}
+                    className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all shrink-0"
+                  >
+                    {copiado === "cedula" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiado === "cedula" ? "Copiado" : "Copiar"}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Correo Electrónico del Cliente */}
+              <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold flex items-center gap-1 mb-0.5">
+                    <Mail className="w-3 h-3 text-blue-400" /> Correo Electrónico Enviado por Cliente
+                  </span>
+                  {modoEdicion ? (
+                    <input
+                      type="email"
+                      value={emailCliente}
+                      onChange={(e) => {
+                        setEmailCliente(e.target.value);
+                        if (!correoStarlink || correoStarlink === emailCliente) {
+                          setCorreoStarlink(e.target.value);
+                        }
+                      }}
+                      className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-2.5 py-1 text-xs font-mono text-white font-bold focus:outline-none focus:border-[var(--ts-red)]"
+                      placeholder="cliente@ejemplo.com"
+                    />
+                  ) : (
+                    <span className="font-mono font-bold text-[var(--ts-text-primary)] text-sm">
+                      {emailCliente || <span className="text-amber-400/80 font-normal italic">No especificado</span>}
+                    </span>
+                  )}
+                </div>
+                {!modoEdicion && emailCliente && (
+                  <button
+                    onClick={() => handleCopiar(emailCliente, "email")}
+                    className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all shrink-0"
+                  >
+                    {copiado === "email" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiado === "email" ? "Copiado" : "Copiar"}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Serial del KIT / Antena enviado por el cliente */}
+              <div className="p-3.5 bg-gradient-to-r from-emerald-950/40 to-emerald-900/20 border-2 border-emerald-500/50 rounded-xl flex items-center justify-between shadow-lg shadow-emerald-950/20 gap-2">
+                <div className="space-y-0.5 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <Box className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="text-[10px] text-emerald-400 uppercase font-black tracking-wider">
+                      Identificador / Serial Starlink (Etiqueta de la Caja)
+                    </span>
+                  </div>
+                  {modoEdicion ? (
+                    <input
+                      type="text"
+                      value={kitSerial}
+                      onChange={(e) => setKitSerial(e.target.value.toUpperCase())}
+                      className="w-full bg-slate-950 border border-emerald-500/60 rounded-lg px-2.5 py-1 text-xs font-mono font-black text-emerald-300 tracking-wider focus:outline-none focus:border-emerald-400"
+                      placeholder="KIT0000001234 o serial alfanumérico"
+                    />
+                  ) : (
+                    <span className="font-mono font-black text-emerald-300 text-sm tracking-wider block">
+                      {kitSerial || <span className="text-slate-400 font-normal italic text-xs">No indicado por el cliente</span>}
+                    </span>
+                  )}
+                </div>
+                {!modoEdicion && kitSerial && (
+                  <button
+                    onClick={() => handleCopiar(kitSerial, "serial_cliente")}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-md shrink-0"
+                  >
+                    {copiado === "serial_cliente" ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiado === "serial_cliente" ? "Copiado" : "Copiar Serial"}</span>
+                  </button>
+                )}
               </div>
 
               {/* Teléfono */}
-              <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold">Teléfono WhatsApp</span>
-                  <span className="font-mono font-bold text-[var(--ts-text-primary)]">{solicitud.telefono}</span>
+              <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold mb-0.5">Teléfono WhatsApp</span>
+                  {modoEdicion ? (
+                    <input
+                      type="tel"
+                      value={telefono}
+                      onChange={(e) => setTelefono(e.target.value)}
+                      className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-2.5 py-1 text-xs font-mono text-white font-bold focus:outline-none focus:border-[var(--ts-red)]"
+                      placeholder="0414-0000000"
+                    />
+                  ) : (
+                    <span className="font-mono font-bold text-[var(--ts-text-primary)]">{telefono}</span>
+                  )}
                 </div>
-                <button
-                  onClick={() => handleCopiar(solicitud.telefono, "telefono")}
-                  className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
-                >
-                  {copiado === "telefono" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiado === "telefono" ? "Copiado" : "Copiar"}</span>
-                </button>
+                {!modoEdicion && (
+                  <button
+                    onClick={() => handleCopiar(telefono, "telefono")}
+                    className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all shrink-0"
+                  >
+                    {copiado === "telefono" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiado === "telefono" ? "Copiado" : "Copiar"}</span>
+                  </button>
+                )}
               </div>
 
               {/* Dirección */}
               <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-start justify-between gap-2">
-                <div>
-                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold">Dirección de Instalación</span>
-                  <p className="text-[var(--ts-text-primary)] text-xs mt-0.5 leading-relaxed">{solicitud.direccion}</p>
-                  {solicitud.coordenadas_gps && (
-                    <a
-                      href={`https://maps.google.com/?q=${encodeURIComponent(solicitud.coordenadas_gps)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold mt-1.5 hover:underline"
-                    >
-                      <MapPin className="w-3 h-3" />
-                      <span>Ver coordenadas en Google Maps ({solicitud.coordenadas_gps})</span>
-                    </a>
+                <div className="flex-1">
+                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold mb-0.5">Dirección de Instalación</span>
+                  {modoEdicion ? (
+                    <textarea
+                      rows={2}
+                      value={direccion}
+                      onChange={(e) => setDireccion(e.target.value)}
+                      className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:border-[var(--ts-red)] resize-none"
+                      placeholder="Dirección detallada"
+                    />
+                  ) : (
+                    <>
+                      <p className="text-[var(--ts-text-primary)] text-xs mt-0.5 leading-relaxed">{direccion}</p>
+                      {solicitud.coordenadas_gps && (
+                        <a
+                          href={`https://maps.google.com/?q=${encodeURIComponent(solicitud.coordenadas_gps)}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold mt-1.5 hover:underline"
+                        >
+                          <MapPin className="w-3 h-3" />
+                          <span>Ver coordenadas en Google Maps ({solicitud.coordenadas_gps})</span>
+                        </a>
+                      )}
+                    </>
                   )}
                 </div>
-                <button
-                  onClick={() => handleCopiar(solicitud.direccion, "direccion")}
-                  className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all shrink-0"
-                >
-                  {copiado === "direccion" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiado === "direccion" ? "Copiado" : "Copiar"}</span>
-                </button>
+                {!modoEdicion && (
+                  <button
+                    onClick={() => handleCopiar(direccion, "direccion")}
+                    className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all shrink-0"
+                  >
+                    {copiado === "direccion" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiado === "direccion" ? "Copiado" : "Copiar"}</span>
+                  </button>
+                )}
               </div>
+
+              {/* Plan Solicitado (Editable) */}
+              <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between gap-2">
+                <div className="flex-1">
+                  <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold mb-0.5">Plan Contratado</span>
+                  {modoEdicion ? (
+                    <select
+                      value={planDeseado}
+                      onChange={(e) => setPlanDeseado(e.target.value)}
+                      className="w-full bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg px-2.5 py-1 text-xs text-white font-bold focus:outline-none focus:border-[var(--ts-red)]"
+                    >
+                      <option value="Starlink Residencial">Starlink Residencial ($50/mes)</option>
+                      <option value="Starlink Itinerante 100GB">Starlink Itinerante 100GB ($70/mes)</option>
+                      <option value="Starlink Itinerante Ilimitado">Starlink Itinerante Ilimitado ($120/mes)</option>
+                    </select>
+                  ) : (
+                    <span className="font-bold text-[var(--ts-text-primary)] text-xs bg-[var(--ts-surface)] px-2 py-0.5 rounded border border-[var(--ts-border)]">
+                      {planDeseado}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Preferencias WiFi enviadas por el cliente */}
+              {(solicitud.wifi_ssid_preferido || solicitud.wifi_password_preferido) && (
+                <div className="p-3 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold flex items-center gap-1">
+                      <Wifi className="w-3 h-3 text-cyan-400" /> WiFi Preferido por Cliente
+                    </span>
+                    <div className="font-mono text-xs text-[var(--ts-text-primary)] mt-0.5">
+                      SSID: <strong className="text-white">{solicitud.wifi_ssid_preferido || "Starlink"}</strong>
+                      {solicitud.wifi_password_preferido && (
+                        <span className="ml-2 text-cyan-300">
+                          | Clave: <strong>{solicitud.wifi_password_preferido}</strong>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {solicitud.wifi_password_preferido && (
+                    <button
+                      onClick={() => handleCopiar(solicitud.wifi_password_preferido!, "wifi_pass")}
+                      className="px-2.5 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                    >
+                      {copiado === "wifi_pass" ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiado === "wifi_pass" ? "Copiado" : "Copiar Clave"}</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Fotos de Cédula (Visor) */}

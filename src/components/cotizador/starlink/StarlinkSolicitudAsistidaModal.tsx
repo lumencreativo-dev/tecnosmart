@@ -33,6 +33,7 @@ export default function StarlinkSolicitudAsistidaModal({
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [direccion, setDireccion] = useState("");
+  const [kitSerial, setKitSerial] = useState("");
   const [planDeseado, setPlanDeseado] = useState("Starlink Residencial");
   const [wifiSsid, setWifiSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
@@ -76,6 +77,7 @@ export default function StarlinkSolicitudAsistidaModal({
       email: email.trim() || undefined,
       direccion: direccion.trim(),
       plan_deseado: planDeseado,
+      kit_serial: kitSerial.trim() || undefined,
       wifi_ssid_preferido: wifiSsid.trim() || undefined,
       wifi_password_preferido: wifiPassword.trim() || undefined,
       cedula_frontal_url: fotoFrontal || undefined,
@@ -186,6 +188,20 @@ export default function StarlinkSolicitudAsistidaModal({
                 value={direccion}
                 onChange={(e) => setDireccion(e.target.value)}
                 className="w-full bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl px-3.5 py-2 text-xs text-[var(--ts-text-primary)] focus:outline-none focus:border-[var(--ts-red)]"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-[11px] font-bold text-emerald-400 mb-1 flex items-center justify-between">
+                <span>Serial del KIT / Antena Starlink (Etiqueta de la Caja)</span>
+                <span className="text-[10px] text-[var(--ts-text-muted)] font-normal font-mono">KIT... o grabado en mástil</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ej: KIT0000001234 o CAa1921*0378"
+                value={kitSerial}
+                onChange={(e) => setKitSerial(e.target.value.toUpperCase())}
+                className="w-full bg-[var(--ts-surface-2)] border border-emerald-500/30 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-emerald-300 focus:outline-none focus:border-emerald-500"
               />
             </div>
 

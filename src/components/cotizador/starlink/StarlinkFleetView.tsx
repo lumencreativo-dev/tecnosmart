@@ -442,6 +442,20 @@ export default function StarlinkFleetView({
                         </a>
                       </div>
 
+                      {sol.email && (
+                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[var(--ts-border)]">
+                          <span className="text-[var(--ts-text-muted)]">Email:</span>
+                          <span className="font-mono text-[var(--ts-text-primary)] truncate max-w-[160px]">{sol.email}</span>
+                        </div>
+                      )}
+
+                      {sol.kit_serial && (
+                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[var(--ts-border)] bg-emerald-500/10 -mx-2.5 px-2.5 py-1">
+                          <span className="text-emerald-400 font-bold text-[10px] uppercase">Serial / KIT:</span>
+                          <span className="font-mono font-black text-emerald-300">{sol.kit_serial}</span>
+                        </div>
+                      )}
+
                       <div className="pt-1 border-t border-[var(--ts-border)]">
                         <span className="text-[10px] text-[var(--ts-text-muted)] block uppercase font-bold">Ubicación:</span>
                         <p className="text-[11px] text-[var(--ts-text-primary)] line-clamp-2 mt-0.5">{sol.direccion}</p>

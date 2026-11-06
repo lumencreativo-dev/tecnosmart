@@ -19,6 +19,7 @@ import {
   Sparkles,
   ArrowRight,
   Upload,
+  Box,
 } from "lucide-react";
 import { guardarSolicitudStarlink } from "@/lib/starlinkSolicitudes";
 
@@ -93,6 +94,7 @@ export default function StarlinkOnboardingPage() {
   const [coordenadasGps, setCoordenadasGps] = useState("");
   const [obteniendoGps, setObteniendoGps] = useState(false);
   const [planDeseado, setPlanDeseado] = useState(PLANES[0].nombre);
+  const [kitSerial, setKitSerial] = useState("");
   const [wifiSsid, setWifiSsid] = useState("");
   const [wifiPassword, setWifiPassword] = useState("");
   const [notas, setNotas] = useState("");
@@ -180,6 +182,7 @@ export default function StarlinkOnboardingPage() {
       direccion: direccion.trim(),
       coordenadas_gps: coordenadasGps || undefined,
       plan_deseado: planDeseado,
+      kit_serial: kitSerial.trim() || undefined,
       wifi_ssid_preferido: wifiSsid.trim() || undefined,
       wifi_password_preferido: wifiPassword.trim() || undefined,
       cedula_frontal_url: fotoFrontal || undefined,
@@ -465,12 +468,102 @@ export default function StarlinkOnboardingPage() {
               </div>
             </div>
 
-            {/* ── PASO 4: PLAN STARLINK ── */}
+            {/* ── PASO 4: IDENTIFICADOR DEL EQUIPO STARLINK (ETIQUETA DE LA CAJA) ── */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-lg">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
+                <Box className="w-4 h-4 text-emerald-400" />
+                <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                  4. Identificador de tu Starlink (Número de KIT o Serial)
+                </h3>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Introduce el código identificador de tu equipo para comenzar la activación oficial y registrar la antena a tu nombre.
+              </p>
+
+              {/* Guía Visual Estilo Starlink Oficial */}
+              <div className="bg-black/70 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                  {/* Ilustración Vectorial de la Caja Starlink */}
+                  <div className="md:col-span-7 bg-slate-950/90 border border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center relative overflow-hidden">
+                    <svg viewBox="0 0 340 170" className="w-full max-w-[300px] h-auto" fill="none" stroke="currentColor">
+                      {/* Fondo Caja en perspectiva isométrica */}
+                      <polygon points="50,75 170,30 290,75 170,120" stroke="#475569" strokeWidth="1.5" fill="#0f172a" />
+                      <polygon points="50,75 50,135 170,165 170,120" stroke="#475569" strokeWidth="1.5" fill="#090d16" />
+                      <polygon points="290,75 290,135 170,165 170,120" stroke="#334155" strokeWidth="1.5" fill="#020617" />
+                      
+                      {/* Texto STARLINK impreso en la caja */}
+                      <text x="65" y="112" fill="#cbd5e1" fontSize="11" fontWeight="900" letterSpacing="3" stroke="none">STARLINK</text>
+                      
+                      {/* Etiqueta 1: Tapa superior / Borde */}
+                      <rect x="140" y="62" width="60" height="15" rx="2" fill="#f8fafc" stroke="#94a3b8" strokeWidth="1" />
+                      <rect x="144" y="65" width="8" height="9" fill="#0f172a" />
+                      <line x1="156" y1="69" x2="194" y2="69" stroke="#0f172a" strokeWidth="2.5" />
+                      
+                      {/* Línea guía Zoom etiqueta superior */}
+                      <line x1="170" y1="62" x2="170" y2="22" stroke="#10b981" strokeWidth="1.5" strokeDasharray="3 3" />
+                      
+                      {/* Etiqueta 2: Lado posterior / Borde inferior */}
+                      <rect x="250" y="95" width="20" height="30" rx="2" fill="#f8fafc" stroke="#94a3b8" strokeWidth="1" />
+                      <rect x="254" y="99" width="12" height="10" fill="#0f172a" />
+                      <line x1="254" y1="114" x2="266" y2="114" stroke="#0f172a" strokeWidth="2" />
+
+                      {/* Línea guía Zoom etiqueta lateral */}
+                      <line x1="270" y1="110" x2="310" y2="110" stroke="#10b981" strokeWidth="1.5" strokeDasharray="3 3" />
+                    </svg>
+
+                    {/* Badge indicador flotante */}
+                    <div className="absolute top-2 left-2 bg-slate-900/90 border border-emerald-500/40 px-2 py-0.5 rounded text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1 shadow">
+                      <span>SN: KIT0000001234</span>
+                    </div>
+                  </div>
+
+                  {/* Explicación de ubicación */}
+                  <div className="md:col-span-5 space-y-2.5 text-xs">
+                    <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>¿Dónde encontrarlo?</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      Búscalo en la <strong>etiqueta adhesiva blanca</strong> ubicada en la caja de tu equipo. Comienza por las letras <strong className="text-white font-mono bg-slate-800 px-1.5 py-0.5 rounded">KIT...</strong> (ej: <span className="text-emerald-300 font-mono">KIT0000001234</span>) o por el código <strong className="text-white font-mono bg-slate-800 px-1.5 py-0.5 rounded">SN:...</strong>
+                    </p>
+                    <div className="border-t border-slate-800/80 pt-2 text-[10px] text-slate-400 leading-relaxed space-y-1">
+                      <p>
+                        💡 <strong>¿No tienes la caja?</strong>
+                      </p>
+                      <p className="text-slate-300">
+                        También lo encuentras grabado en la <strong>base del mástil metálico</strong> de la antena o en el código de tu orden.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Input de Identificador */}
+                <div className="pt-2">
+                  <label className="block text-xs font-bold text-slate-200 mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span>Número de KIT o Serial de la Antena *</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-normal">Obligatorio para activar</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej: KIT0000001234 o serial alfanumérico"
+                    value={kitSerial}
+                    onChange={(e) => setKitSerial(e.target.value.toUpperCase())}
+                    className="w-full bg-slate-950 border-2 border-emerald-500/40 focus:border-emerald-400 rounded-xl px-4 py-3 text-sm font-mono font-black text-emerald-300 placeholder-slate-600 focus:outline-none transition-colors tracking-widest shadow-inner"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* ── PASO 5: PLAN STARLINK ── */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-lg">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
                 <Satellite className="w-4 h-4 text-cyan-400" />
                 <h3 className="text-sm font-black uppercase tracking-wider text-white">
-                  4. Selecciona tu Plan Starlink
+                  5. Selecciona tu Plan Starlink
                 </h3>
               </div>
 
@@ -507,12 +600,12 @@ export default function StarlinkOnboardingPage() {
               </div>
             </div>
 
-            {/* ── PASO 5: RED WIFI PREFERIDA ── */}
+            {/* ── PASO 6: RED WIFI PREFERIDA ── */}
             <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 sm:p-6 space-y-4 shadow-lg">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
                 <Wifi className="w-4 h-4 text-cyan-400" />
                 <h3 className="text-sm font-black uppercase tracking-wider text-white">
-                  5. Configuración de tu Red WiFi (Opcional)
+                  6. Configuración de tu Red WiFi (Opcional)
                 </h3>
               </div>
 
