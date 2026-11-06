@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Search, Clock, LayoutGrid, List, Trash2,
   RotateCcw, AlertTriangle, Phone, MoreVertical,
-  X, Download, FileText, MessageCircle, Wrench
+  X, Download, FileText, MessageCircle, Wrench,
+  Edit, Copy, GitBranch, PenLine
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -186,78 +187,112 @@ export default function CRMManager() {
   const colsData = getColsData();
 
   // ── Tarjeta reutilizable ──────────────────────────────────
-  const TarjetaCot = ({ cot, showTrash = true }: { cot: CotizacionDB; showTrash?: boolean }) => (
-    <div
-      onClick={() => abrirDetalle(cot)}
-      className={`bg-[var(--ts-surface)] p-4 rounded-lg border border-[var(--ts-border)] shadow-sm hover:shadow-md hover:border-[var(--ts-red)]/30 transition-all relative group cursor-pointer ${updatingId === cot.id ? "opacity-50" : ""}`}
-    >
-      <div className="flex justify-between items-start mb-1">
-        <span className="text-xs font-bold text-[var(--ts-red)]">{cot.numero_cotizacion}</span>
-        <span className="text-[10px] text-[var(--ts-text-muted)] flex items-center gap-1">
-          <Clock className="w-3 h-3" /> {formatFecha(cot.created_at)}
-        </span>
-      </div>
+  const TarjetaCot = ({ cot, showTrash = true }: { cot: CotizacionDB; showTrash?: boolean }) => {
+    const esRevision = cot.numero_cotizacion?.includes("-R");
 
-      <h4 className="font-bold text-[var(--ts-text-primary)] leading-tight text-sm">
-        {cot.clientes?.empresa || cot.clientes?.contacto || "Cliente sin nombre"}
-      </h4>
-      {cot.clientes?.empresa && cot.clientes?.contacto && (
-        <p className="text-[10px] text-[var(--ts-text-muted)]">{cot.clientes.contacto}</p>
-      )}
+    return (
+      <div
+        onClick={() => abrirDetalle(cot)}
+        className={`bg-[var(--ts-surface)] p-4 rounded-xl border border-[var(--ts-border)] shadow-xs hover:shadow-md hover:border-[var(--ts-red)]/40 transition-all relative group cursor-pointer ${updatingId === cot.id ? "opacity-50" : ""}`}
+      >
+        <div className="flex justify-between items-start mb-1.5 gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-bold text-[var(--ts-red)]">{cot.numero_cotizacion}</span>
+            {esRevision && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded">
+                <GitBranch className="w-2.5 h-2.5" />
+                Rev.
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] text-[var(--ts-text-muted)] flex items-center gap-1 whitespace-nowrap">
+            <Clock className="w-3 h-3" /> {formatFecha(cot.created_at)}
+          </span>
+        </div>
 
-      <div className="flex justify-between items-center mt-3 pt-3 border-t border-[var(--ts-border-2)]">
-        <span className="text-sm font-extrabold text-[var(--ts-text-primary)]">{formatUSD(cot.total)}</span>
+        <h4 className="font-bold text-[var(--ts-text-primary)] leading-snug text-sm">
+          {cot.clientes?.empresa || cot.clientes?.contacto || "Cliente sin nombre"}
+        </h4>
+        {cot.clientes?.empresa && cot.clientes?.contacto && (
+          <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5">{cot.clientes.contacto}</p>
+        )}
 
-        <select
-          value={cot.estado}
-          onClick={e => e.stopPropagation()}
-          onChange={e => handleUpdateEstado(cot.id, e.target.value)}
-          disabled={updatingId === cot.id}
-          className={`appearance-none text-[10px] font-bold px-2.5 py-1 rounded-full cursor-pointer focus:outline-none ${ESTADOS_MAP[cot.estado]?.color || "bg-gray-100"}`}
-        >
-          {Object.entries(ESTADOS_MAP).map(([val, cfg]) => (
-            <option key={val} value={val}>{cfg.label}</option>
-          ))}
-        </select>
-      </div>
+        <div className="flex justify-between items-center mt-3 pt-2.5 border-t border-[var(--ts-border-2)]">
+          <span className="text-sm font-extrabold text-[var(--ts-text-primary)]">{formatUSD(cot.total)}</span>
 
-      {/* Botón rápido para cotizaciones aprobadas */}
-      {(["aprobada", "aprobadas", "Aprobada", "Aprobadas"].includes(cot.estado)) && (
-        <div className="mt-2.5 pt-2 border-t border-[var(--ts-border-2)]">
-          <a
-            href={`/ordenes?cotizacion_id=${cot.id}`}
+          <select
+            value={cot.estado}
             onClick={e => e.stopPropagation()}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/40 text-[var(--ts-red)] text-[11px] font-bold border border-red-200 dark:border-red-900/40 transition-colors shadow-xs"
+            onChange={e => handleUpdateEstado(cot.id, e.target.value)}
+            disabled={updatingId === cot.id}
+            className={`appearance-none text-[10px] font-bold px-2.5 py-1 rounded-full cursor-pointer focus:outline-none ${ESTADOS_MAP[cot.estado]?.color || "bg-gray-100"}`}
           >
-            <Wrench className="w-3 h-3" />
-            <span>Generar Orden de Trabajo</span>
+            {Object.entries(ESTADOS_MAP).map(([val, cfg]) => (
+              <option key={val} value={val}>{cfg.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Barra de Acciones Rápidas (Editar / Duplicar) */}
+        <div className="flex items-center gap-1.5 mt-2.5 pt-2 border-t border-[var(--ts-border-2)]">
+          <a
+            href={`/nueva?edit=${cot.id}`}
+            onClick={e => e.stopPropagation()}
+            className="flex-1 flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg bg-[var(--ts-surface-2)] hover:bg-red-500/10 hover:text-[var(--ts-red)] text-[var(--ts-text-primary)] text-[11px] font-semibold border border-[var(--ts-border)] hover:border-[var(--ts-red)]/30 transition-all"
+            title="Editar o generar nueva revisión de esta cotización"
+          >
+            <Edit className="w-3 h-3 text-[var(--ts-red)]" />
+            <span>Editar</span>
+          </a>
+          <a
+            href={`/nueva?duplicar=${cot.id}`}
+            onClick={e => e.stopPropagation()}
+            className="flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-lg bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface-3)] text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] text-[11px] font-medium border border-[var(--ts-border)] transition-colors"
+            title="Duplicar como nueva cotización independiente"
+          >
+            <Copy className="w-3 h-3" />
+            <span className="hidden sm:inline">Clonar</span>
           </a>
         </div>
-      )}
 
-      {/* Botones de acción rápida */}
-      {showTrash && (
-        <button
-          onClick={(e) => { e.stopPropagation(); handleMoverPapelera(cot.id); }}
-          className="absolute -right-2 -top-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] hover:border-[var(--ts-red)] p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-          title="Mover a papelera"
-        >
-          <Trash2 className="w-3 h-3" />
-        </button>
-      )}
-      {cot.clientes?.telefono && (
-        <a
-          href={`https://wa.me/${cot.clientes.telefono.replace(/\D/g, "")}`}
-          target="_blank" rel="noreferrer"
-          onClick={e => e.stopPropagation()}
-          className="absolute -left-2 -top-2 bg-[#25D366] text-[var(--ts-text-primary)] p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-          title="WhatsApp"
-        >
-          <Phone className="w-3 h-3" />
-        </a>
-      )}
-    </div>
-  );
+        {/* Botón rápido para cotizaciones aprobadas */}
+        {(["aprobada", "aprobadas", "Aprobada", "Aprobadas"].includes(cot.estado)) && (
+          <div className="mt-2 pt-1.5 border-t border-[var(--ts-border-2)]">
+            <a
+              href={`/ordenes?cotizacion_id=${cot.id}`}
+              onClick={e => e.stopPropagation()}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[11px] font-bold border border-emerald-500/30 transition-colors shadow-xs"
+            >
+              <Wrench className="w-3 h-3" />
+              <span>Generar Orden de Trabajo</span>
+            </a>
+          </div>
+        )}
+
+        {/* Botones flotantes al hacer hover */}
+        {showTrash && (
+          <button
+            onClick={(e) => { e.stopPropagation(); handleMoverPapelera(cot.id); }}
+            className="absolute -right-2 -top-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] hover:border-[var(--ts-red)] p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+            title="Mover a papelera"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        )}
+        {cot.clientes?.telefono && (
+          <a
+            href={`https://wa.me/${cot.clientes.telefono.replace(/\D/g, "")}`}
+            target="_blank" rel="noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="absolute -left-2 -top-2 bg-[#25D366] text-white p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+            title="WhatsApp"
+          >
+            <Phone className="w-3 h-3" />
+          </a>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -337,15 +372,25 @@ export default function CRMManager() {
                       <th className="px-5 py-3 font-semibold border-b border-[var(--ts-border)]">Cliente</th>
                       <th className="px-5 py-3 font-semibold border-b border-[var(--ts-border)] text-right">Total</th>
                       <th className="px-5 py-3 font-semibold border-b border-[var(--ts-border)] text-center">Estado</th>
-                      <th className="px-5 py-3 font-semibold border-b border-[var(--ts-border)] text-center w-16">Acc.</th>
+                      <th className="px-5 py-3 font-semibold border-b border-[var(--ts-border)] text-center w-28">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--ts-border-2)]">
                     {cotFiltradas.length === 0 ? (
                       <tr><td colSpan={6} className="py-10 text-center text-sm text-[var(--ts-text-muted)]">No hay cotizaciones.</td></tr>
                     ) : cotFiltradas.map(cot => (
-                      <tr key={cot.id} onClick={() => abrirDetalle(cot)} className="hover:bg-[var(--ts-surface-2)] group cursor-pointer">
-                        <td className="px-5 py-3 text-sm font-bold text-[var(--ts-red)]">{cot.numero_cotizacion}</td>
+                      <tr key={cot.id} onClick={() => abrirDetalle(cot)} className="hover:bg-[var(--ts-surface-2)] group cursor-pointer transition-colors">
+                        <td className="px-5 py-3 text-sm font-bold text-[var(--ts-red)]">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span>{cot.numero_cotizacion}</span>
+                            {cot.numero_cotizacion?.includes("-R") && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded">
+                                <GitBranch className="w-2.5 h-2.5" />
+                                Rev.
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-5 py-3 text-xs text-[var(--ts-text-muted)]">{formatFecha(cot.created_at)}</td>
                         <td className="px-5 py-3 text-sm font-medium text-[var(--ts-text-primary)]">
                           {cot.clientes?.empresa || cot.clientes?.contacto}
@@ -365,13 +410,31 @@ export default function CRMManager() {
                           </select>
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleMoverPapelera(cot.id); }}
-                            className="text-[#d9d9d9] group-hover:text-[var(--ts-red)] transition-colors p-1"
-                            title="Mover a papelera"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <a
+                              href={`/nueva?edit=${cot.id}`}
+                              onClick={e => e.stopPropagation()}
+                              className="p-1.5 rounded-md text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] hover:bg-[var(--ts-surface-3)] transition-colors"
+                              title="Editar o generar nueva revisión"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </a>
+                            <a
+                              href={`/nueva?duplicar=${cot.id}`}
+                              onClick={e => e.stopPropagation()}
+                              className="p-1.5 rounded-md text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-3)] transition-colors"
+                              title="Duplicar cotización"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </a>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleMoverPapelera(cot.id); }}
+                              className="p-1.5 rounded-md text-[var(--ts-text-muted)] hover:text-red-600 hover:bg-[var(--ts-surface-3)] transition-colors"
+                              title="Mover a papelera"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -443,10 +506,16 @@ export default function CRMManager() {
             <div className="px-6 py-5 border-b border-[var(--ts-border)] bg-[var(--ts-surface-2)]">
               <div className="flex justify-between items-start">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <h2 className="text-xl font-extrabold text-[var(--ts-red)]">
                       {selected.numero_cotizacion}
                     </h2>
+                    {selected.numero_cotizacion?.includes("-R") && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-md">
+                        <GitBranch className="w-3 h-3" />
+                        Revisión
+                      </span>
+                    )}
                     <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${ESTADOS_MAP[selected.estado]?.color || "bg-gray-100 text-gray-700"}`}>
                       {ESTADOS_MAP[selected.estado]?.label || selected.estado}
                     </span>
@@ -581,11 +650,31 @@ export default function CRMManager() {
             </div>
 
             {/* ── Acciones del drawer ── */}
-            <div className="p-5 border-t border-[var(--ts-border)] space-y-2">
+            <div className="p-5 border-t border-[var(--ts-border)] space-y-2.5">
+              {/* Botones de Edición y Duplicación */}
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={`/nueva?edit=${selected.id}`}
+                  className="flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white text-xs font-bold py-2.5 px-3 rounded-xl transition-all shadow-xs text-center"
+                  title="Editar o generar nueva revisión de esta cotización"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                  <span>Editar / Corregir</span>
+                </a>
+                <a
+                  href={`/nueva?duplicar=${selected.id}`}
+                  className="flex items-center justify-center gap-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface-3)] text-[var(--ts-text-primary)] border border-[var(--ts-border)] text-xs font-bold py-2.5 px-3 rounded-xl transition-colors text-center"
+                  title="Crear una cotización nueva duplicando estos ítems"
+                >
+                  <Copy className="w-3.5 h-3.5 text-[var(--ts-text-muted)]" />
+                  <span>Duplicar</span>
+                </a>
+              </div>
+
               {(["aprobada", "aprobadas", "Aprobada", "Aprobadas"].includes(selected.estado)) && (
                 <a
                   href={`/ordenes?cotizacion_id=${selected.id}`}
-                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white text-sm font-bold py-2.5 rounded-xl transition-colors shadow-xs"
+                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-xs"
                 >
                   <Wrench className="w-4 h-4" />
                   Generar Orden de Trabajo (OT)
@@ -595,9 +684,9 @@ export default function CRMManager() {
               <button
                 onClick={() => handleRedescargarCot(selected)}
                 disabled={regenerando || loadingDetalles || detalles.length === 0}
-                className="w-full flex items-center justify-center gap-2 bg-[var(--ts-text-primary)] hover:bg-black disabled:opacity-40 text-[var(--ts-surface)] text-sm font-bold py-2.5 rounded-xl transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface-3)] border border-[var(--ts-border)] disabled:opacity-40 text-[var(--ts-text-primary)] text-xs font-bold py-2.5 rounded-xl transition-colors"
               >
-                <Download className="w-4 h-4" />
+                <Download className="w-4 h-4 text-[var(--ts-text-muted)]" />
                 {regenerando ? "Generando PDF..." : "Descargar PDF"}
               </button>
 
@@ -606,7 +695,7 @@ export default function CRMManager() {
                   href={`https://wa.me/${selected.clientes.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola, adjunto la cotización ${selected.numero_cotizacion} de TecnoSmart VZL por un total de ${formatUSD(selected.total)}.`)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20b858] text-white text-sm font-bold py-2.5 rounded-xl transition-colors"
+                  className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20b858] text-white text-xs font-bold py-2.5 rounded-xl transition-colors"
                 >
                   <MessageCircle className="w-4 h-4" />
                   Enviar por WhatsApp

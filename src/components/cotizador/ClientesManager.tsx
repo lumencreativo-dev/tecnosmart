@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Search, ArrowUpDown, X, Save, Phone, Mail,
   MapPin, FileText, TrendingUp, Calendar, Edit2,
-  ChevronDown, Star, Users, RefreshCw
+  ChevronDown, Star, Users, RefreshCw, Edit, ExternalLink, GitBranch
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -607,9 +607,17 @@ export default function ClientesManager() {
                         vencida:   "bg-orange-100 text-orange-700",
                       };
                       return (
-                        <div key={cot.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-[var(--ts-border-2)] hover:bg-[var(--ts-surface-2)]">
+                        <div key={cot.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-[var(--ts-border-2)] hover:bg-[var(--ts-surface-2)] transition-colors">
                           <div>
-                            <p className="text-xs font-bold text-[var(--ts-red)]">{cot.numero_cotizacion}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="text-xs font-bold text-[var(--ts-red)]">{cot.numero_cotizacion}</p>
+                              {cot.numero_cotizacion?.includes("-R") && (
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.2 text-[8px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded">
+                                  <GitBranch className="w-2.5 h-2.5" />
+                                  Rev.
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-[var(--ts-text-muted)]">{formatFecha(cot.created_at)}</p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -617,6 +625,13 @@ export default function ClientesManager() {
                               {cot.estado}
                             </span>
                             <span className="text-sm font-bold text-[var(--ts-text-primary)]">{formatUSD(Number(cot.total))}</span>
+                            <a
+                              href={`/nueva?edit=${cot.id}`}
+                              className="p-1 rounded text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] hover:bg-[var(--ts-surface-3)] transition-colors"
+                              title="Editar cotización"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </a>
                           </div>
                         </div>
                       );
