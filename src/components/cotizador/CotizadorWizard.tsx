@@ -290,6 +290,15 @@ export default function CotizadorWizard() {
     setLineas((prev) => prev.filter((l) => l.id !== id));
   }, []);
 
+  const reorderLinea = useCallback((fromIndex: number, toIndex: number) => {
+    setLineas((prev) => {
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+      return updated;
+    });
+  }, []);
+
   const agregarConceptoLibre = () => {
     if (!conceptoDesc.trim() || conceptoPrecio <= 0) return;
     addLinea({
@@ -901,6 +910,7 @@ export default function CotizadorWizard() {
               onUpdateCantidad={updateCantidad}
               onUpdatePrecio={updatePrecio}
               onRemove={removeLinea}
+              onReorder={reorderLinea}
             />
           </div>
 

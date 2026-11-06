@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import {
   Search, FileText, CheckCircle2, AlertCircle,
   RefreshCw, ShoppingCart, Plus, Minus, Trash2,
-  ArrowRight, Package, Building2, Info,
+  ArrowRight, Package, Building2, Info, GripVertical,
+  ArrowUp, ArrowDown,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, tempId } from "@/lib/utils";
@@ -249,6 +250,83 @@ export default function FacturadorWizard() {
   };
 
   const quitarLinea = (id: string) => setLineasDirectas(prev => prev.filter(l => l.id !== id));
+
+  // ── Drag & Drop y Reordenamiento de Carrito ──
+  const [draggedFactIdx, setDraggedFactIdx] = useState<number | null>(null);
+  const [dragOverFactIdx, setDragOverFactIdx] = useState<number | null>(null);
+
+  const reorderLineaDirecta = (fromIndex: number, toIndex: number) => {
+    setLineasDirectas(prev => {
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+      return updated;
+    });
+  };
+
+  const moverLineaDirecta = (index: number, direccion: -1 | 1) => {
+    const target = index + direccion;
+    if (target >= 0 && target < lineasDirectas.length) {
+      reorderLineaDirecta(index, target);
+    }
+  };
+
+  const startDragFact = (index: number, e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    setDraggedFactIdx(index);
+    setDragOverFactIdx(index);
+
+    let currentOver = index;
+
+    const onPointerMove = (evt: PointerEvent) => {
+      evt.preventDefault();
+      const el = document.elementFromPoint(evt.clientX, evt.clientY);
+      const row = el?.closest("[data-fact-index]");
+      if (row) {
+        const idxAttr = row.getAttribute("data-fact-index");
+        if (idxAttr !== null) {
+          const tIdx = parseInt(idxAttr, 10);
+          if (!isNaN(tIdx) && tIdx !== currentOver) {
+            currentOver = tIdx;
+            setDragOverFactIdx(tIdx);
+          }
+        }
+      }
+    };
+
+    const onPointerUp = (evt: PointerEvent) => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      document.body.style.removeProperty("cursor");
+      document.body.style.removeProperty("user-select");
+
+      const el = document.elementFromPoint(evt.clientX, evt.clientY);
+      const row = el?.closest("[data-fact-index]");
+      let finalTarget = currentOver;
+      if (row) {
+        const idxAttr = row.getAttribute("data-fact-index");
+        if (idxAttr !== null) {
+          const tIdx = parseInt(idxAttr, 10);
+          if (!isNaN(tIdx)) finalTarget = tIdx;
+        }
+      }
+
+      if (finalTarget !== null && finalTarget !== index && finalTarget >= 0 && finalTarget < lineasDirectas.length) {
+        reorderLineaDirecta(index, finalTarget);
+      }
+
+      setDraggedFactIdx(null);
+      setDragOverFactIdx(null);
+    };
+
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
+    window.addEventListener("pointerup", onPointerUp);
+  };
 
   const totalDirecto = lineasDirectas.reduce((s, l) => s + l.subtotal, 0);
 
@@ -1494,47 +1572,109 @@ export default function FacturadorWizard() {
           {/* Lista de items */}
           {lineasDirectas.length > 0 && (
             <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] shadow-sm overflow-hidden">
-              <div className="px-5 py-3 bg-[var(--ts-surface-2)] border-b border-[var(--ts-border)] flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 text-[var(--ts-red)]" />
-                <span className="text-sm font-bold text-[var(--ts-text-primary)]">
-                  Carrito de Venta ({lineasDirectas.length} producto{lineasDirectas.length !== 1 ? "s" : ""})
+              <div className="px-5 py-3 bg-[var(--ts-surface-2)] border-b border-[var(--ts-border)] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="w-4 h-4 text-[var(--ts-red)]" />
+                  <span className="text-sm font-bold text-[var(--ts-text-primary)]">
+                    Carrito de Venta ({lineasDirectas.length} producto{lineasDirectas.length !== 1 ? "s" : ""})
+                  </span>
+                </div>
+                <span className="text-[11px] text-[var(--ts-text-muted)] flex items-center gap-1 font-medium">
+                  <GripVertical className="w-3.5 h-3.5 text-[var(--ts-red)]" />
+                  Arrastra cualquier producto para organizar el orden de facturación
                 </span>
               </div>
-              <div className="divide-y divide-[var(--ts-border-2)]">
-                {lineasDirectas.map(linea => (
-                  <div key={linea.id} className="flex items-center gap-3 px-5 py-3">
-                    <Package className="w-4 h-4 text-[var(--ts-text-muted)] shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-[var(--ts-text-primary)] truncate">{linea.descripcion}</p>
-                      <p className="text-xs text-[var(--ts-text-muted)]">{formatUSD(linea.precio_unitario)} c/u</p>
-                    </div>
-                    {/* Controles de cantidad */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => cambiarCantidad(linea.id, -1)}
-                        className="w-7 h-7 rounded-full border border-[var(--ts-border)] flex items-center justify-center hover:border-[var(--ts-red)] hover:text-[var(--ts-red)] transition-colors"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-8 text-center text-sm font-bold">{linea.cantidad}</span>
-                      <button
-                        onClick={() => cambiarCantidad(linea.id, 1)}
-                        className="w-7 h-7 rounded-full border border-[var(--ts-border)] flex items-center justify-center hover:border-[var(--ts-red)] hover:text-[var(--ts-red)] transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <span className="text-sm font-bold text-[var(--ts-red)] w-20 text-right">
-                      {formatUSD(linea.subtotal)}
-                    </span>
-                    <button
-                      onClick={() => quitarLinea(linea.id)}
-                      className="text-[#d9d9d9] hover:text-red-500 transition-colors"
+              <div className="divide-y divide-[var(--ts-border-2)] select-none">
+                {lineasDirectas.map((linea, idx) => {
+                  const isDragging = draggedFactIdx === idx;
+                  const isOver = dragOverFactIdx === idx && draggedFactIdx !== null && draggedFactIdx !== idx;
+                  const isOverAbove = isOver && draggedFactIdx !== null && idx < draggedFactIdx;
+                  const isOverBelow = isOver && draggedFactIdx !== null && idx > draggedFactIdx;
+
+                  return (
+                    <div
+                      key={linea.id}
+                      data-fact-index={idx}
+                      className={`flex items-center gap-3 px-5 py-3 transition-all group ${
+                        isDragging
+                          ? "opacity-30 bg-red-950/20 border-2 border-dashed border-[var(--ts-red)]"
+                          : isOverAbove
+                          ? "bg-red-500/15 border-t-4 border-t-[var(--ts-red)] shadow-inner"
+                          : isOverBelow
+                          ? "bg-red-500/15 border-b-4 border-b-[var(--ts-red)] shadow-inner"
+                          : "hover:bg-[var(--ts-surface-2)]"
+                      }`}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
+                      {/* Control de Orden: Asa + Posición + Flechas */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <div
+                          onPointerDown={(e) => startDragFact(idx, e)}
+                          className="cursor-grab active:cursor-grabbing p-1.5 rounded-lg bg-[var(--ts-surface-2)] hover:bg-red-500/10 border border-[var(--ts-border)] hover:border-[var(--ts-red)]/40 text-[var(--ts-text-muted)] hover:text-white transition-all touch-none select-none"
+                          title="Haz clic sostenido y arrastra para reordenar"
+                        >
+                          <GripVertical className="w-4 h-4 pointer-events-none" />
+                        </div>
+                        <span className="font-mono text-xs font-bold text-[var(--ts-text-muted)] w-4 text-center">
+                          {idx + 1}
+                        </span>
+                        <div className="flex flex-col opacity-30 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => moverLineaDirecta(idx, -1)}
+                            disabled={idx === 0}
+                            className="hover:text-[var(--ts-red)] disabled:opacity-20 transition-colors p-0.5"
+                            title="Subir posición"
+                          >
+                            <ArrowUp className="w-2.5 h-2.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moverLineaDirecta(idx, 1)}
+                            disabled={idx === lineasDirectas.length - 1}
+                            className="hover:text-[var(--ts-red)] disabled:opacity-20 transition-colors p-0.5"
+                            title="Bajar posición"
+                          >
+                            <ArrowDown className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <Package className="w-4 h-4 text-[var(--ts-text-muted)] shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[var(--ts-text-primary)] truncate">{linea.descripcion}</p>
+                        <p className="text-xs text-[var(--ts-text-muted)]">{formatUSD(linea.precio_unitario)} c/u</p>
+                      </div>
+                      {/* Controles de cantidad */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => cambiarCantidad(linea.id, -1)}
+                          className="w-7 h-7 rounded-full border border-[var(--ts-border)] flex items-center justify-center hover:border-[var(--ts-red)] hover:text-[var(--ts-red)] transition-colors"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="w-8 text-center text-sm font-bold">{linea.cantidad}</span>
+                        <button
+                          type="button"
+                          onClick={() => cambiarCantidad(linea.id, 1)}
+                          className="w-7 h-7 rounded-full border border-[var(--ts-border)] flex items-center justify-center hover:border-[var(--ts-red)] hover:text-[var(--ts-red)] transition-colors"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <span className="text-sm font-bold text-[var(--ts-red)] w-20 text-right">
+                        {formatUSD(linea.subtotal)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => quitarLinea(linea.id)}
+                        className="text-[#d9d9d9] hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
               <div className="px-5 py-3 bg-[var(--ts-surface-2)] border-t border-[var(--ts-border)] flex justify-between items-center">
                 <span className="text-sm font-semibold text-[var(--ts-text-muted)]">Subtotal USD</span>
