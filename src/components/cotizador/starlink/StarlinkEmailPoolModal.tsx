@@ -13,10 +13,6 @@ import {
   Filter,
   CheckCircle2,
   AlertCircle,
-  Copy,
-  ExternalLink,
-  ShieldCheck,
-  Database,
   Cloud,
 } from "lucide-react";
 import {
@@ -508,23 +504,13 @@ create policy "Permitir todo a anon y auth" on public.starlink_email_pool for al
         </div>
 
         {/* Footer Informativo */}
-        <div className="px-6 py-3 border-t border-[var(--ts-border)] bg-[var(--ts-surface-2)] flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-[var(--ts-text-muted)]">
+        <div className="px-6 py-3 border-t border-[var(--ts-border)] bg-[var(--ts-surface-2)] flex items-center justify-between text-[11px] text-[var(--ts-text-muted)]">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span>
               Todos estos alias reenvían al buzón maestro <strong>tecnosmarvzl@gmail.com</strong> vía Cloudflare.
             </span>
           </div>
-
-          <button
-            type="button"
-            onClick={handleCopiarSQL}
-            className="text-[10px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1 transition-colors"
-            title="Copiar script para crear la tabla permanente en Supabase si aún no lo has ejecutado"
-          >
-            <Database className="w-3 h-3" />
-            <span>{copiadoSQL ? "¡SQL Copiado!" : "Copiar SQL para Supabase"}</span>
-          </button>
         </div>
       </div>
     </div>
