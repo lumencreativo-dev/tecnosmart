@@ -27,13 +27,13 @@
   /* Texto */
   --ts-text-primary:   #111111;
   --ts-text-secondary: #6e6e6e;
-  --ts-text-muted:     #a0a0a0;
+  --ts-text-muted:     #424242;
   --ts-text-on-dark:   #ffffff;
 
   /* Acciones */
   --ts-red:         #c9242b;
   --ts-red-hover:   #b01f25;
-  --ts-red-subtle:  rgba(201, 36, 43, 0.08);
+  --ts-red-subtle:  rgba(179, 0, 9, 0.08);
 
   /* Radio de esquinas (estilo Rial) */
   --ts-radius:      16px;
@@ -48,14 +48,14 @@
 .dark {
   --ts-bg:             #0a0a0a;
   --ts-surface:        #151515;
-  --ts-surface-2:      #1e1e1e;
+  --ts-surface-2:      #191919;
   --ts-surface-raised: #0d0d0d;  /* en dark, banners son casi negros */
   --ts-border:         #2a2a2a;
   --ts-border-2:       #222222;
 
   --ts-text-primary:   #f2f2f2;
-  --ts-text-secondary: #a0a0a0;
-  --ts-text-muted:     #606060;
+  --ts-text-secondary: #c8c9c8;
+  --ts-text-muted:     #797979;
   --ts-text-on-dark:   #f2f2f2;
 
   --ts-red:         #e03535;
