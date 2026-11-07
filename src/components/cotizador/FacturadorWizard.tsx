@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, tempId } from "@/lib/utils";
-import { buscarProductos } from "@/lib/supabase/servicios";
-import type { Producto, Cliente } from "@/lib/types";
+import { buscarProductos, cargarServicios } from "@/lib/supabase/servicios";
+import type { Producto, Cliente, ServicioManoObra } from "@/lib/types";
 import ClientePicker from "@/components/cotizador/ClientePicker";
 
 type CotizacionDB = any;
@@ -105,10 +105,17 @@ export default function FacturadorWizard() {
   const [lineasDirectas, setLineasDirectas]     = useState<LineaVenta[]>([]);
   const [clienteDirecto, setClienteDirecto]     = useState<Cliente | null>(null);
 
-  // ── Estado: Concepto Libre ──
+  // ── Estado: Concepto Libre & Catálogo de Servicios ──
   const [conceptoDesc, setConceptoDesc] = useState("");
   const [conceptoCant, setConceptoCant] = useState(1);
   const [conceptoPrecio, setConceptoPrecio] = useState(0);
+  const [serviciosDisponibles, setServiciosDisponibles] = useState<ServicioManoObra[]>([]);
+
+  useEffect(() => {
+    cargarServicios(true).then((data) => {
+      if (data && data.length > 0) setServiciosDisponibles(data);
+    });
+  }, []);
 
   // ── Estado compartido ──
   const [error, setError]                 = useState<string | null>(null);
@@ -1524,9 +1531,32 @@ export default function FacturadorWizard() {
             </div>
 
             <div className="pl-0 md:pl-6 md:border-l border-[var(--ts-border)]">
-              <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide mb-3">
-                Concepto Libre
-              </h2>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
+                  Servicios o Concepto Libre
+                </h2>
+                {serviciosDisponibles.length > 0 && (
+                  <select
+                    className="bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-2.5 py-1 text-xs text-[var(--ts-text-primary)] focus:outline-none focus:border-[var(--ts-red)] max-w-full sm:max-w-[260px]"
+                    defaultValue=""
+                    onChange={(e) => {
+                      const sel = serviciosDisponibles.find(s => s.id === e.target.value);
+                      if (sel) {
+                        setConceptoDesc(`${sel.concepto} (${sel.unidad})`);
+                        setConceptoPrecio(sel.precio_base);
+                      }
+                      e.target.value = "";
+                    }}
+                  >
+                    <option value="" disabled>⚡ Catálogo de Servicios...</option>
+                    {serviciosDisponibles.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.categoria ? `[${s.categoria}] ` : ""}{s.concepto} - ${s.precio_base}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
               <div className="space-y-3">
                 <input
                   type="text"

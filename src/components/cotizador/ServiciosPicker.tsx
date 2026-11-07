@@ -4,27 +4,7 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import type { LineaDetalle, ServicioManoObra } from "@/lib/types";
 import { tempId } from "@/lib/utils";
-import { cargarServicios } from "@/lib/supabase/servicios";
-
-// Servicios hardcoded como fallback (si no hay BD aún)
-const SERVICIOS_FALLBACK: ServicioManoObra[] = [
-  { id: "1", codigo: "INS-CAM-STD",  concepto: "Instalación Cámara – Estándar",           precio_base: 30,  precio_max: 35,  unidad: "punto",   categoria: "Instalación" },
-  { id: "2", codigo: "INS-CAM-BAJO", concepto: "Instalación Cámara – Centro < 2.5m",      precio_base: 25,  precio_max: 25,  unidad: "punto",   categoria: "Instalación" },
-  { id: "3", codigo: "CAB-UTP-M",    concepto: "Tendido UTP / Canaleta / Tubería",         precio_base: 0.5, precio_max: 0.5, unidad: "metro",   categoria: "Cableado" },
-  { id: "4", codigo: "CAB-ELEC-M",   concepto: "Tendido Cable Eléctrico",                  precio_base: 0.25,precio_max: 0.25,unidad: "metro",   categoria: "Cableado" },
-  { id: "5", codigo: "CFG-DVR-16",   concepto: "Configuración DVR/NVR ≤ 16ch",            precio_base: 50,  precio_max: 50,  unidad: "equipo",  categoria: "Configuración" },
-  { id: "6", codigo: "CFG-DVR-32",   concepto: "Configuración DVR/NVR > 16ch",            precio_base: 80,  precio_max: 80,  unidad: "equipo",  categoria: "Configuración" },
-  { id: "7", codigo: "CFG-RACK",     concepto: "Instalación y Peinado de Rack",            precio_base: 40,  precio_max: 40,  unidad: "global",  categoria: "Configuración" },
-  { id: "8", codigo: "CFG-ACC-CTL",  concepto: "Mano de Obra Control de Acceso",          precio_base: 150, precio_max: 250, unidad: "punto",   categoria: "Configuración" },
-  { id: "9", codigo: "MTO-CAM",      concepto: "Mantenimiento preventivo por cámara",      precio_base: 30,  precio_max: 30,  unidad: "punto",   categoria: "Mantenimiento" },
-  { id: "10",codigo: "MTO-DVR",      concepto: "Mantenimiento DVR (batería/firmware)",     precio_base: 50,  precio_max: 50,  unidad: "equipo",  categoria: "Mantenimiento" },
-  { id: "11",codigo: "LOG-LOCAL",    concepto: "Logística Local (Tinaquillo)",             precio_base: 5,   precio_max: 10,  unidad: "día",     categoria: "Logística" },
-  { id: "12",codigo: "LOG-FORANEO",  concepto: "Transporte + Comida Foráneo / técnico",   precio_base: 30,  precio_max: 30,  unidad: "día",     categoria: "Logística" },
-  // Starlink
-  { id: "SL1", codigo: "SL-INS",      concepto: "Instalación de Antena Starlink",         precio_base: 80,  precio_max: 120, unidad: "global",  categoria: "Starlink" },
-  { id: "SL2", codigo: "SL-CFG",      concepto: "Configuración de red Starlink",          precio_base: 50,  precio_max: 50,  unidad: "equipo",  categoria: "Starlink" },
-  { id: "SL3", codigo: "SL-MENS",     concepto: "Gestión mensual Starlink (Comisión)",    precio_base: 10,  precio_max: 10,  unidad: "mes",     categoria: "Starlink" },
-];
+import { cargarServicios, getLocalServicios } from "@/lib/supabase/servicios";
 
 interface Props {
   onAdd: (linea: LineaDetalle) => void;
@@ -33,13 +13,16 @@ interface Props {
 }
 
 export default function ServiciosPicker({ onAdd, clienteTipo, descuentoTecnico = 15 }: Props) {
-  const [servicios, setServicios] = useState<ServicioManoObra[]>(SERVICIOS_FALLBACK);
+  const [servicios, setServicios] = useState<ServicioManoObra[]>(() => {
+    const list = getLocalServicios();
+    return list.filter(s => s.activo !== false);
+  });
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
   const [preciosCustom, setPreciosCustom] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    cargarServicios().then((data) => {
-      if (data.length > 0) setServicios(data);
+    cargarServicios(true).then((data) => {
+      if (data && data.length > 0) setServicios(data);
     });
   }, []);
 

@@ -30,6 +30,7 @@ const SECCIONES = [
     items: [
       { href: "/suscripciones", icon: Repeat,      label: "Bóveda & MRR", desc: "Suscripciones y claves", permiso: "inventario.suscripciones" },
       { href: "/inventario",    icon: Package,     label: "Inventario",   desc: "Stock de equipos",        permiso: "inventario.ver" },
+      { href: "/servicios",     icon: Wrench,      label: "Servicios",    desc: "Mano de obra y tarifas",  permiso: "inventario.ver" },
       { href: "/importar",      icon: UploadCloud, label: "Importar",     desc: "Carga masiva CSV",        permiso: "inventario.importar" },
       { href: "/dashboard",     icon: BarChart2,   label: "Dashboard",    desc: "Métricas y KPIs" },
     ],

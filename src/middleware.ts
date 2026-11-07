@@ -12,6 +12,7 @@ const PROTECTED_PREFIXES = [
   "/crm",
   "/clientes",
   "/inventario",
+  "/servicios",
   "/importar",
   "/suscripciones",
   "/menu",

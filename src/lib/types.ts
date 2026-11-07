@@ -32,6 +32,10 @@ export interface ServicioManoObra {
   precio_tecnico?: number;   // Precio especial para técnicos
   unidad: string;
   categoria?: string;
+  detalles?: string;
+  activo?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Cliente {

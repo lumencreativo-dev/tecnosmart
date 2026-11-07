@@ -64,6 +64,7 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
     permisoGrupo: "inventario",
     items: [
       { href: "/inventario",    icon: Package,     label: "Inventario Equipos", permiso: "inventario.ver" },
+      { href: "/servicios",     icon: Wrench,      label: "Servicios & Mano de Obra", permiso: "inventario.ver" },
       { href: "/importar",      icon: UploadCloud, label: "Carga Masiva",       permiso: "inventario.importar" },
       { href: "/suscripciones", icon: Repeat,      label: "Suscripciones",      permiso: "inventario.suscripciones" },
     ],
