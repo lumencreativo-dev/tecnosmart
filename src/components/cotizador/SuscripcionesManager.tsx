@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
 import { useUsuario } from "@/hooks/useUsuario";
@@ -240,6 +240,7 @@ const getSocioBadgeInfo = (socio: Socio) => {
 
 export default function SuscripcionesManager() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { usuario } = useUsuario();
 
   // Estados principales
@@ -248,6 +249,13 @@ export default function SuscripcionesManager() {
   const [perfilesEquipo, setPerfilesEquipo] = useState<PerfilEquipo[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"starlink" | "activas" | "cobranzas" | "analitica" | "catalogo">("starlink");
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "starlink" || t === "activas" || t === "cobranzas" || t === "analitica" || t === "catalogo") {
+      setActiveTab(t as any);
+    }
+  }, [searchParams]);
   const [showStarlinkModal, setShowStarlinkModal] = useState(false);
   const [starlinkEditSub, setStarlinkEditSub] = useState<Suscripcion | null>(null);
   const [filtroSocio, setFiltroSocio] = useState<string>("todos");

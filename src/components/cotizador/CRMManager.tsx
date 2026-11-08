@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Search, Clock, LayoutGrid, List, Trash2,
   RotateCcw, AlertTriangle, Phone, MoreVertical,
@@ -30,11 +31,20 @@ const ESTADOS_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export default function CRMManager() {
+  const searchParams = useSearchParams();
   const [cotizaciones, setCotizaciones]   = useState<CotizacionDB[]>([]);
   const [papelera, setPapelera]           = useState<CotizacionDB[]>([]);
   const [loading, setLoading]             = useState(true);
   const [query, setQuery]                 = useState("");
   const [viewMode, setViewMode]           = useState<"kanban" | "list" | "papelera">("kanban");
+
+  useEffect(() => {
+    const v = searchParams.get("view");
+    if (v === "list" || v === "kanban" || v === "papelera") {
+      setViewMode(v as any);
+    }
+  }, [searchParams]);
+
   const [updatingId, setUpdatingId]       = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 

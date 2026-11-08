@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,110 +9,136 @@ import {
   LayoutDashboard, FileEdit, Receipt, History,
   Kanban, Users, Package, UploadCloud,
   Sparkles, Globe, Plus, LayoutGrid,
-  Settings, LogOut, ChevronDown, Sun, Moon, Monitor,
+  Settings, LogOut, ChevronDown, ChevronRight, Sun, Moon, Monitor,
   Repeat, Wrench, Wallet, BarChart3, Clock, UserCheck, X, Menu,
-  Calendar, ClipboardCheck, HardHat, Boxes, User as UserIcon
+  Calendar, ClipboardCheck, HardHat, Boxes, User as UserIcon,
+  CreditCard, Truck, ArrowUpDown, LifeBuoy, Ticket, ShieldCheck,
+  BookOpen, Megaphone, Send, MessageSquare, Search, Zap
 } from "lucide-react";
 import { useUsuario } from "@/hooks/useUsuario";
 import { supabase } from "@/lib/supabase/client";
 
-import { GRUPOS_PERMISOS, tienePermiso } from "@/lib/permissions";
+import { tienePermiso } from "@/lib/permissions";
 
 // ── Tipos ────────────────────────────────────────────────────────
-interface PlaceholderInfo {
+export interface PlaceholderInfo {
   title: string;
   description: string;
   icon: any;
 }
 
-interface SidebarItem {
+export interface SidebarItem {
   href: string;
   icon: any;
   label: string;
+  badge?: string;
   permiso?: string;
   isPlaceholder?: boolean;
   placeholder?: PlaceholderInfo;
 }
 
-interface SidebarSection {
+export interface SidebarSection {
+  id: string;
   title: string;
+  badge?: string;
+  badgeColor?: "amber" | "emerald" | "gray";
   permisoGrupo?: string;
   items: SidebarItem[];
 }
 
-// ── Configuración de Módulos (Sidebar ERP Desktop) ───────────────
+// ── Configuración Maestra de Módulos (Sidebar ERP Desktop & Móvil) ─
 const SIDEBAR_SECTIONS: SidebarSection[] = [
   {
-    title: "HOME",
+    id: "inicio",
+    title: "1. INICIO",
     items: [
-      { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+      { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard General" },
     ],
   },
   {
-    title: "VENTAS & CLIENTES",
+    id: "ventas",
+    title: "2. VENTAS & CLIENTES",
     permisoGrupo: "ventas",
     items: [
-      { href: "/nueva",             icon: FileEdit,  label: "Cotizaciones",       permiso: "ventas.cotizar" },
-      { href: "/facturacion",        icon: Receipt,   label: "Facturación",        permiso: "ventas.facturar" },
-      { href: "/historial-facturas", icon: History,   label: "Historial Facturas", permiso: "ventas.ver_global" },
-      { href: "/crm",               icon: Kanban,    label: "CRM Pipeline",       permiso: "ventas.crm" },
-      { href: "/clientes",          icon: Users,     label: "Directorio Clientes",permiso: "ventas.clientes" },
+      { href: "/nueva",             icon: FileEdit, label: "Cotizaciones", permiso: "ventas.cotizar" },
+      { href: "/crm?view=list",     icon: History,  label: "Historial de Cotizaciones", permiso: "ventas.cotizar" },
+      { href: "/facturacion",        icon: Receipt,  label: "Facturación SENIAT", permiso: "ventas.facturar" },
+      { href: "/historial-facturas", icon: History,  label: "Historial de Facturas", permiso: "ventas.ver_global" },
+      { href: "/crm",               icon: Kanban,   label: "CRM Pipeline", permiso: "ventas.crm" },
+      { href: "/clientes",          icon: Users,    label: "Directorio de Clientes", permiso: "ventas.clientes" },
     ],
   },
   {
-    title: "INVENTARIO & RECURRENTES",
+    id: "inventario",
+    title: "3. INVENTARIO & CATÁLOGO",
     permisoGrupo: "inventario",
     items: [
-      { href: "/inventario",    icon: Package,     label: "Inventario Equipos", permiso: "inventario.ver" },
-      { href: "/servicios",     icon: Wrench,      label: "Servicios & Mano de Obra", permiso: "inventario.ver" },
-      { href: "/importar",      icon: UploadCloud, label: "Carga Masiva",       permiso: "inventario.importar" },
-      { href: "/suscripciones", icon: Repeat,      label: "Suscripciones",      permiso: "inventario.suscripciones" },
+      { href: "/inventario", icon: Package,     label: "Inventario Equipos", permiso: "inventario.ver" },
+      { href: "/servicios",  icon: Wrench,      label: "Servicios & Mano de Obra", permiso: "inventario.ver" },
+      { href: "/importar",   icon: UploadCloud, label: "Carga Masiva (CSV)", permiso: "inventario.importar" },
+      {
+        href: "#placeholder-kardex",
+        icon: ArrowUpDown,
+        label: "Kardex & Movimientos",
+        badge: "PRÓX",
+        permiso: "inventario.gestionar",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Kardex y Trazabilidad de Almacén",
+          description: "Historial auditable de entradas por compra, salidas a proyectos técnicos, devoluciones y ajustes por merma.",
+          icon: ArrowUpDown
+        }
+      },
+      {
+        href: "#placeholder-proveedores",
+        icon: Truck,
+        label: "Proveedores & Compras",
+        badge: "PRÓX",
+        permiso: "inventario.gestionar",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Directorio de Proveedores y Compras",
+          description: "Control de órdenes de compra a mayoristas de tecnología, registro de facturas recibidas y cálculo automático de costo promedio.",
+          icon: Truck
+        }
+      },
     ],
   },
   {
-    title: "PROYECTOS & OPERACIONES · BETA",
+    id: "suscripciones",
+    title: "4. SUSCRIPCIONES (MRR)",
+    permisoGrupo: "inventario",
+    items: [
+      { href: "/suscripciones?tab=starlink", icon: Globe,  label: "Flota Starlink", permiso: "inventario.suscripciones" },
+      { href: "/suscripciones?tab=activas",  icon: Repeat, label: "Spotify & Streaming", permiso: "inventario.suscripciones" },
+      { href: "/suscripciones?tab=catalogo", icon: Boxes,  label: "Otras Suscripciones", permiso: "inventario.suscripciones" },
+    ],
+  },
+  {
+    id: "proyectos",
+    title: "5. PROYECTOS & OPERACIONES",
+    badge: "BETA",
+    badgeColor: "amber",
     permisoGrupo: "proyectos",
     items: [
-      {
-        href: "/ordenes",
-        icon: Wrench,
-        label: "Órdenes de Trabajo",
-        permiso: "proyectos.ver_propias",
-      },
-      {
-        href: "/cuadrillas",
-        icon: HardHat,
-        label: "Cuadrillas & Técnicos",
-        permiso: "proyectos.asignar_cuadrillas",
-      },
-      {
-        href: "/materiales",
-        icon: Boxes,
-        label: "Requisición de Materiales",
-        permiso: "proyectos.materiales",
-      },
-      {
-        href: "/agenda",
-        icon: Calendar,
-        label: "Calendario de Obras",
-        permiso: "proyectos.agenda",
-      },
-      {
-        href: "/actas",
-        icon: ClipboardCheck,
-        label: "Actas de Entrega",
-        permiso: "proyectos.actas",
-      },
+      { href: "/ordenes",    icon: Wrench,         label: "Órdenes de Trabajo", permiso: "proyectos.ver_propias" },
+      { href: "/cuadrillas", icon: HardHat,        label: "Cuadrillas & Técnicos", permiso: "proyectos.asignar_cuadrillas" },
+      { href: "/materiales", icon: Boxes,          label: "Requisición de Materiales", permiso: "proyectos.materiales" },
+      { href: "/agenda",     icon: Calendar,       label: "Calendario de Obras", permiso: "proyectos.agenda" },
+      { href: "/actas",      icon: ClipboardCheck, label: "Actas de Entrega", permiso: "proyectos.actas" },
     ],
   },
   {
-    title: "FINANZAS (PRÓXIMAMENTE)",
+    id: "finanzas",
+    title: "6. FINANZAS & TESORERÍA",
+    badge: "PRÓX",
+    badgeColor: "gray",
     permisoGrupo: "finanzas",
     items: [
       {
         href: "#placeholder-cuentas",
         icon: Wallet,
-        label: "Cuentas & Bancos",
+        label: "Cuentas, Cajas & Bancos",
         permiso: "finanzas.cajas",
         isPlaceholder: true,
         placeholder: {
@@ -136,7 +162,7 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
       {
         href: "#placeholder-cxc",
         icon: Clock,
-        label: "Cuentas por Cobrar",
+        label: "Cuentas por Cobrar (CxC)",
         permiso: "finanzas.cxc",
         isPlaceholder: true,
         placeholder: {
@@ -145,60 +171,172 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
           icon: Clock
         }
       },
+      {
+        href: "#placeholder-cxp",
+        icon: CreditCard,
+        label: "Cuentas por Pagar (CxP)",
+        permiso: "finanzas.dashboard",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Cuentas por Pagar & Gastos Operativos",
+          description: "Gestión de viáticos, compras de insumos para obras y pagos pendientes a proveedores.",
+          icon: CreditCard
+        }
+      },
     ],
   },
   {
-    title: "CONFIGURACIÓN",
+    id: "soporte",
+    title: "7. SOPORTE & POSTVENTA",
+    badge: "NUEVO",
+    badgeColor: "emerald",
+    permisoGrupo: "soporte",
     items: [
-      { href: "/perfil", icon: UserIcon,  label: "Mi Perfil" },
-      { href: "/equipo", icon: UserCheck, label: "Mi Equipo & Roles", permiso: "administracion.roles" },
-      { href: "/menu",   icon: Settings,  label: "Ajustes del Sistema" },
+      {
+        href: "#placeholder-tickets",
+        icon: LifeBuoy,
+        label: "Tickets de Soporte",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Mesa de Ayuda & Incidencias",
+          description: "Recepción y seguimiento de incidencias técnicas reportadas por clientes (CCTV sin señal, falla de enlace Starlink, etc.) con SLA de atención.",
+          icon: LifeBuoy
+        }
+      },
+      {
+        href: "#placeholder-garantias",
+        icon: ShieldCheck,
+        label: "Garantías & Seriales",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Trazabilidad de Garantías",
+          description: "Registro de números de serie instalados por cliente y comprobación rápida de validez de garantías técnicas.",
+          icon: ShieldCheck
+        }
+      },
+      {
+        href: "#placeholder-wiki",
+        icon: BookOpen,
+        label: "Base de Conocimiento",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Wikis & Procedimientos Técnicos",
+          description: "Manuales rápidos de configuración para técnicos: diagramas de conexión, configuración de DVRs y parametrización de routers.",
+          icon: BookOpen
+        }
+      },
     ],
   },
-];
-
-// ── Bottom Nav Móvil ─────────────────────────────────────────────
-const MOBILE_NAV = [
-  { href: "/dashboard", icon: LayoutDashboard, label: "Inicio" },
-  { href: "/crm",       icon: Kanban,          label: "CRM",   permiso: "ventas.crm" },
-  { href: "/inventario",icon: Package,         label: "Stock", permiso: "inventario.ver" },
-  { href: "/menu",      icon: LayoutGrid,      label: "Menú" },
+  {
+    id: "marketing",
+    title: "8. MARKETING & LEADS",
+    badge: "NUEVO",
+    badgeColor: "emerald",
+    permisoGrupo: "marketing",
+    items: [
+      {
+        href: "#placeholder-leads",
+        icon: Megaphone,
+        label: "Solicitudes Web Landing",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Bandeja de Leads Web",
+          description: "Captura en tiempo real de los clientes potenciales que rellenan el formulario de asesoría en somostecnosmart.com.",
+          icon: Megaphone
+        }
+      },
+      {
+        href: "#placeholder-resend",
+        icon: Send,
+        label: "Campañas Resend (Email)",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Campañas de Correo con Resend",
+          description: "Envío automatizado de recordatorios de pago, newsletters y promociones especiales sin costo con la API de Resend.",
+          icon: Send
+        }
+      },
+      {
+        href: "#placeholder-whatsapp",
+        icon: MessageSquare,
+        label: "Enlaces WhatsApp Business",
+        isPlaceholder: true,
+        placeholder: {
+          title: "Generador de Enlaces WhatsApp",
+          description: "Creación de enlaces inteligentes con mensajes preconfigurados para campañas en Instagram y seguimiento comercial.",
+          icon: MessageSquare
+        }
+      },
+    ],
+  },
+  {
+    id: "configuracion",
+    title: "9. CONFIGURACIÓN",
+    items: [
+      { href: "/menu",   icon: Settings,  label: "Centro de Ajustes" },
+      { href: "/equipo", icon: UserCheck, label: "Mi Equipo & Roles", permiso: "administracion.roles" },
+      { href: "/perfil", icon: UserIcon,  label: "Mi Perfil" },
+    ],
+  },
 ];
 
 export default function NavShell({ children }: { children: React.ReactNode }) {
   const pathname  = usePathname();
   const router    = useRouter();
+  const searchParams = useSearchParams();
   const { theme, setTheme } = useTheme();
   const { usuario } = useUsuario();
   const [mounted, setMounted] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
+  const [drawerSearch, setDrawerSearch] = useState("");
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const [activePlaceholder, setActivePlaceholder] = useState<PlaceholderInfo | null>(null);
+
+  // Secciones expandidas en el Sidebar Desktop
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    inicio: true,
+    ventas: true,
+    inventario: true,
+    suscripciones: true,
+    proyectos: true,
+    finanzas: false,
+    soporte: false,
+    marketing: false,
+    configuracion: true,
+  });
 
   // Permisos efectivos del usuario activo
   const permisosUsuario: string[] = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
 
-  // Evitar hydration mismatch asegurando renderizado de tema solo en cliente
+  // Evitar hydration mismatch
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Cerrar Drawer móvil automáticamente al cambiar de ruta
+  // Cerrar Drawer y Quick Actions automáticamente al cambiar de ruta
   useEffect(() => {
     setDrawerOpen(false);
+    setQuickActionsOpen(false);
+    setDrawerSearch("");
+  }, [pathname, searchParams]);
+
+  // Auto-expandir la sección correspondiente a la ruta activa
+  useEffect(() => {
+    for (const section of SIDEBAR_SECTIONS) {
+      const match = section.items.some(it => {
+        if (it.isPlaceholder) return false;
+        const [cleanHref] = it.href.split("?");
+        return pathname.startsWith(cleanHref);
+      });
+      if (match) {
+        setExpandedSections(prev => ({ ...prev, [section.id]: true }));
+      }
+    }
   }, [pathname]);
 
-  // Cerrar dropdown al hacer click fuera
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
+  };
 
   const handleLogout = async () => {
     try {
@@ -211,8 +349,15 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   };
 
   const isActive = (href: string) => {
-    if (href === "/dashboard") return pathname === href || pathname === "/dashboard";
-    return pathname.startsWith(href);
+    if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
+    const [pathPart, queryPart] = href.split("?");
+    const pathMatches = pathname === pathPart || (pathPart !== "/dashboard" && pathname.startsWith(pathPart));
+    if (!pathMatches) return false;
+    if (queryPart && searchParams) {
+      const currentQuery = searchParams.toString();
+      return currentQuery.includes(queryPart);
+    }
+    return true;
   };
 
   const isLoginPage = pathname === "/login";
@@ -223,6 +368,69 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
     { key: "system", icon: Monitor, label: "Automático" },
   ];
 
+  // Acciones Rápidas para el Botón Central Flotante Móvil (+)
+  const ACCIONES_RAPIDAS = [
+    {
+      label: "Nueva Cotización",
+      desc: "Crear propuesta comercial",
+      href: "/nueva",
+      icon: FileEdit,
+      color: "bg-red-500/10 text-[var(--ts-red)] border-red-500/20",
+      permiso: "ventas.cotizar",
+    },
+    {
+      label: "Facturación SENIAT",
+      desc: "Emitir factura o venta",
+      href: "/facturacion",
+      icon: Receipt,
+      color: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+      permiso: "ventas.facturar",
+    },
+    {
+      label: "Registrar Cliente",
+      desc: "Alta de contacto o empresa",
+      href: "/clientes",
+      icon: Users,
+      color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+      permiso: "ventas.clientes",
+    },
+    {
+      label: "Orden de Trabajo",
+      desc: "Crear misión técnica",
+      href: "/ordenes",
+      icon: Wrench,
+      color: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+      permiso: "proyectos.crear_ordenes",
+    },
+    {
+      label: "Consultar Stock",
+      desc: "Ver precios y existencias",
+      href: "/inventario",
+      icon: Package,
+      color: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+      permiso: "inventario.ver",
+    },
+    {
+      label: "Flota Starlink",
+      desc: "Terminales y suscripciones",
+      href: "/suscripciones?tab=starlink",
+      icon: Globe,
+      color: "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20",
+      permiso: "inventario.suscripciones",
+    },
+  ];
+
+  const badgeStyles = (badgeColor?: string) => {
+    switch (badgeColor) {
+      case "amber":
+        return "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800";
+      case "emerald":
+        return "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800";
+      default:
+        return "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-300 dark:border-gray-700";
+    }
+  };
+
   return (
     <div className={`min-h-screen bg-[var(--ts-bg)] transition-colors duration-200 ${!isLoginPage ? "pb-20 md:pb-0" : ""}`}>
 
@@ -230,26 +438,37 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
         <div className="flex min-h-screen">
 
           {/* ══════════════════════════════════════════════
-              SIDEBAR DESKTOP (ERP STYLE / FINA INSPIRADO)
+              SIDEBAR DESKTOP (ERP MODULAR · HUB & SPOKE)
           ══════════════════════════════════════════════ */}
           <aside className="hidden md:flex flex-col w-64 bg-[var(--ts-surface)] border-r border-[var(--ts-border)] fixed top-0 bottom-0 left-0 z-40 shadow-[var(--ts-shadow)]">
             
             {/* Header del Sidebar: Logo */}
-            <div className="p-5 flex items-center justify-between border-b border-[var(--ts-border)]">
-              <Link href="/dashboard" className="flex items-center gap-2.5">
-                <Image src="/brands/isotipo/isotipo-rojo.png" alt="TecnoSmart" width={32} height={32} className="h-7 w-auto object-contain" />
-                <span className="font-black text-sm tracking-tight text-[var(--ts-text-primary)]">
-                  Tecno<span className="text-[var(--ts-red)]">Smart</span>
-                </span>
-                <span className="bg-[var(--ts-red-subtle)] text-[var(--ts-red)] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ml-1">
-                  ERP
-                </span>
+            <div className="p-4 flex items-center justify-between border-b border-[var(--ts-border)]">
+              <Link href="/dashboard" className="flex items-center gap-2.5 group">
+                <Image
+                  src="/brands/isotipo/isotipo-rojo.png"
+                  alt="TecnoSmart"
+                  width={30}
+                  height={30}
+                  className="h-7 w-auto object-contain transition-transform group-hover:scale-105"
+                />
+                <div className="flex flex-col leading-none">
+                  <div className="flex items-center gap-1">
+                    <span className="font-black text-sm tracking-tight text-[var(--ts-text-primary)]">
+                      Tecno<span className="text-[var(--ts-red)]">Smart</span>
+                    </span>
+                    <span className="bg-[var(--ts-red-subtle)] text-[var(--ts-red)] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ml-1">
+                      ERP
+                    </span>
+                  </div>
+                  <span className="text-[9px] text-[var(--ts-text-muted)] font-semibold mt-0.5">Venezuela</span>
+                </div>
               </Link>
             </div>
 
-            {/* Botón CTA Superior: + Nueva Cotización (Solo con facultad de cotizar) */}
+            {/* Botón CTA Superior: + Nueva Cotización */}
             {tienePermiso(permisosUsuario, "ventas.cotizar") && (
-              <div className="p-4 pb-2">
+              <div className="p-3 pb-2">
                 <Link
                   href="/nueva"
                   className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl transition-all shadow-md active:scale-95"
@@ -260,71 +479,92 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
 
-            {/* Navegación por Grupos con Control de Acceso por Permisos */}
-            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-5 scrollbar-thin">
-              {SIDEBAR_SECTIONS.map((section, idx) => {
-                // Filtrar los items accesibles según los permisos del usuario activo
+            {/* Navegación Modular por Categorías (Acordeón ERP) */}
+            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2.5 scrollbar-thin">
+              {SIDEBAR_SECTIONS.map((section) => {
                 const itemsVisibles = section.items.filter((item) => {
                   if (!item.permiso) return true;
                   return tienePermiso(permisosUsuario, item.permiso);
                 });
 
-                // Si la sección no tiene ningún ítem visible para este rol, ocultar la sección completa
                 if (itemsVisibles.length === 0) return null;
 
+                const isExpanded = expandedSections[section.id] ?? true;
+                const sectionHasActive = itemsVisibles.some(it => !it.isPlaceholder && isActive(it.href));
+
                 return (
-                  <div key={idx}>
-                    <p className="px-3 text-[10px] font-black tracking-wider text-[var(--ts-text-muted)] uppercase mb-1.5 opacity-70">
-                      {section.title}
-                    </p>
-                    <div className="space-y-0.5">
-                      {itemsVisibles.map((item: any, itemIdx) => {
-                        const Icon = item.icon;
-                        const isPlaceholder = Boolean(item.isPlaceholder);
-                        const active = !isPlaceholder && isActive(item.href);
+                  <div key={section.id} className="rounded-xl transition-colors">
+                    {/* Header de Categoría Clicable para Colapsar/Expandir */}
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(section.id)}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-left rounded-lg hover:bg-[var(--ts-surface-2)] transition-colors group"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`text-[10px] font-black tracking-wider uppercase transition-colors truncate ${
+                          sectionHasActive ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)] group-hover:text-[var(--ts-text-primary)]"
+                        }`}>
+                          {section.title}
+                        </span>
+                        {section.badge && (
+                          <span className={`text-[7px] font-black uppercase px-1.5 py-0.2 border rounded-full shrink-0 ${badgeStyles(section.badgeColor)}`}>
+                            {section.badge}
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown className={`w-3 h-3 text-[var(--ts-text-muted)] transition-transform duration-200 shrink-0 ${
+                        isExpanded ? "rotate-0" : "-rotate-90 opacity-60"
+                      }`} />
+                    </button>
 
-                        if (isPlaceholder) {
+                    {/* Sub-módulos Desplegables */}
+                    {isExpanded && (
+                      <div className="mt-1 space-y-0.5 pl-1 border-l-2 border-[var(--ts-border-2)] ml-2.5">
+                        {itemsVisibles.map((item, itemIdx) => {
+                          const Icon = item.icon;
+                          const isPlaceholder = Boolean(item.isPlaceholder);
+                          const active = !isPlaceholder && isActive(item.href);
+
+                          if (isPlaceholder) {
+                            return (
+                              <button
+                                key={itemIdx}
+                                onClick={() => setActivePlaceholder(item.placeholder || null)}
+                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)] transition-all text-left group"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <Icon className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
+                                  <span className="truncate">{item.label}</span>
+                                </div>
+                                <span className="text-[7px] font-black uppercase px-1 py-0.2 rounded bg-[var(--ts-border)] text-[var(--ts-text-muted)] shrink-0 ml-1">
+                                  {item.badge || "Próx"}
+                                </span>
+                              </button>
+                            );
+                          }
+
                           return (
-                            <button
+                            <Link
                               key={itemIdx}
-                              onClick={() => setActivePlaceholder(item.placeholder || null)}
-                              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)] transition-all text-left group"
+                              href={item.href}
+                              className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-xs transition-all ${
+                                active
+                                  ? "bg-[var(--ts-red-subtle)] text-[var(--ts-red)] font-bold shadow-xs"
+                                  : "font-medium text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)]"
+                              }`}
                             >
-                              <div className="flex items-center gap-2.5">
-                                <Icon className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity" />
-                                <span>{item.label}</span>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Icon className={`w-3.5 h-3.5 shrink-0 ${active ? "text-[var(--ts-red)]" : "opacity-70"}`} />
+                                <span className="truncate">{item.label}</span>
                               </div>
-                              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-[var(--ts-border)] text-[var(--ts-text-muted)]">
-                                Próx
-                              </span>
-                            </button>
+                              {active && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-[var(--ts-red)] shrink-0" />
+                              )}
+                            </Link>
                           );
-                        }
-
-                        const isBetaSection = section.permisoGrupo === "proyectos";
-                        return (
-                          <Link
-                            key={itemIdx}
-                            href={item.href}
-                            className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                              active
-                                ? "bg-[var(--ts-red-subtle)] text-[var(--ts-red)] font-bold shadow-xs"
-                                : "text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)]"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5">
-                              <Icon className={`w-4 h-4 ${active ? "text-[var(--ts-red)]" : "opacity-70"}`} />
-                              <span>{item.label}</span>
-                            </div>
-                            {isBetaSection && (
-                              <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 tracking-widest shrink-0">
-                                BETA
-                              </span>
-                            )}
-                          </Link>
-                        );
-                      })}
-                    </div>
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -453,7 +693,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 <span>TecnoSmart Portal</span>
                 <span>/</span>
                 <span className="text-[var(--ts-text-primary)] font-bold capitalize">
-                  {pathname.split("/").pop() || "Dashboard"}
+                  {pathname.split("/").filter(Boolean).pop() || "Dashboard"}
                 </span>
               </div>
 
@@ -504,18 +744,18 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ══════════════════════════════════════════════
-          DRAWER LATERAL MÓVIL DESLIZABLE (SIDEBAR ERP MÓVIL)
+          DRAWER LATERAL MÓVIL DESLIZABLE (APP MODULAR)
       ══════════════════════════════════════════════ */}
       {drawerOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop oscurecido con desenfoque */}
+          {/* Backdrop oscurecido */}
           <div
             onClick={() => setDrawerOpen(false)}
             className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
           />
 
           {/* Panel Deslizable */}
-          <div className="relative w-72 max-w-[84vw] bg-[var(--ts-surface)] border-r border-[var(--ts-border)] z-50 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-250">
+          <div className="relative w-80 max-w-[86vw] bg-[var(--ts-surface)] border-r border-[var(--ts-border)] z-50 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-250">
             
             {/* Header del Drawer Móvil */}
             <div className="p-4 flex items-center justify-between border-b border-[var(--ts-border)] bg-[var(--ts-surface)]">
@@ -543,13 +783,35 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               </button>
             </div>
 
+            {/* Buscador Rápido de Módulos en Móvil */}
+            <div className="p-3 border-b border-[var(--ts-border)] bg-[var(--ts-surface-2)]">
+              <div className="relative flex items-center">
+                <Search className="w-3.5 h-3.5 text-[var(--ts-text-muted)] absolute left-3 pointer-events-none" />
+                <input
+                  type="text"
+                  value={drawerSearch}
+                  onChange={(e) => setDrawerSearch(e.target.value)}
+                  placeholder="Buscar módulo o función..."
+                  className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg border border-[var(--ts-border)] bg-[var(--ts-surface)] text-[var(--ts-text-primary)] placeholder:text-[var(--ts-text-muted)] focus:outline-none focus:border-[var(--ts-red)]"
+                />
+                {drawerSearch && (
+                  <button
+                    onClick={() => setDrawerSearch("")}
+                    className="absolute right-2.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* CTA Nueva Cotización en Drawer */}
             {tienePermiso(permisosUsuario, "ventas.cotizar") && (
               <div className="p-3 pb-1">
                 <Link
                   href="/nueva"
                   onClick={() => setDrawerOpen(false)}
-                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl transition-all shadow-md active:scale-95"
+                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white font-bold text-xs py-2 px-3 rounded-xl transition-all shadow-md active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Nueva Cotización</span>
@@ -557,23 +819,32 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
 
-            {/* Lista scrolleable de módulos ERP */}
-            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-4 scrollbar-thin">
-              {SIDEBAR_SECTIONS.map((section, idx) => {
+            {/* Lista Modular con Filtro */}
+            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 scrollbar-thin">
+              {SIDEBAR_SECTIONS.map((section) => {
                 const itemsVisibles = section.items.filter((item) => {
-                  if (!item.permiso) return true;
-                  return tienePermiso(permisosUsuario, item.permiso);
+                  if (item.permiso && !tienePermiso(permisosUsuario, item.permiso)) return false;
+                  if (!drawerSearch) return true;
+                  const term = drawerSearch.toLowerCase();
+                  return item.label.toLowerCase().includes(term) || section.title.toLowerCase().includes(term);
                 });
 
                 if (itemsVisibles.length === 0) return null;
 
                 return (
-                  <div key={idx}>
-                    <p className="px-3 text-[10px] font-black tracking-wider text-[var(--ts-text-muted)] uppercase mb-1 opacity-70">
-                      {section.title}
-                    </p>
+                  <div key={section.id} className="bg-[var(--ts-surface-2)]/50 rounded-xl p-2 border border-[var(--ts-border)]/50">
+                    <div className="flex items-center justify-between mb-1.5 px-1">
+                      <span className="text-[10px] font-black tracking-wider text-[var(--ts-text-muted)] uppercase">
+                        {section.title}
+                      </span>
+                      {section.badge && (
+                        <span className={`text-[7px] font-black uppercase px-1.5 py-0.2 border rounded-full ${badgeStyles(section.badgeColor)}`}>
+                          {section.badge}
+                        </span>
+                      )}
+                    </div>
                     <div className="space-y-0.5">
-                      {itemsVisibles.map((item: any, itemIdx) => {
+                      {itemsVisibles.map((item, itemIdx) => {
                         const Icon = item.icon;
                         const isPlaceholder = Boolean(item.isPlaceholder);
                         const active = !isPlaceholder && isActive(item.href);
@@ -586,39 +857,36 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                                 setDrawerOpen(false);
                                 setActivePlaceholder(item.placeholder || null);
                               }}
-                              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)] transition-all text-left group"
+                              className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface)] hover:text-[var(--ts-text-primary)] transition-all text-left group"
                             >
-                              <div className="flex items-center gap-2.5">
-                                <Icon className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity" />
+                              <div className="flex items-center gap-2">
+                                <Icon className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
                                 <span>{item.label}</span>
                               </div>
-                              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-[var(--ts-border)] text-[var(--ts-text-muted)]">
-                                Próx
+                              <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-[var(--ts-border)] text-[var(--ts-text-muted)]">
+                                {item.badge || "Próx"}
                               </span>
                             </button>
                           );
                         }
 
-                        const isBetaSection = section.permisoGrupo === "proyectos";
                         return (
                           <Link
                             key={itemIdx}
                             href={item.href}
                             onClick={() => setDrawerOpen(false)}
-                            className={`flex items-center justify-between gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                            className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs transition-all ${
                               active
-                                ? "bg-[var(--ts-red-subtle)] text-[var(--ts-red)] font-bold shadow-xs"
-                                : "text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)] hover:text-[var(--ts-text-primary)]"
+                                ? "bg-[var(--ts-red)] text-white font-bold shadow-xs"
+                                : "font-medium text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface)] hover:text-[var(--ts-text-primary)]"
                             }`}
                           >
-                            <div className="flex items-center gap-2.5">
-                              <Icon className={`w-4 h-4 ${active ? "text-[var(--ts-red)]" : "opacity-70"}`} />
+                            <div className="flex items-center gap-2">
+                              <Icon className={`w-4 h-4 ${active ? "text-white" : "opacity-70"}`} />
                               <span>{item.label}</span>
                             </div>
-                            {isBetaSection && (
-                              <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 tracking-widest shrink-0">
-                                BETA
-                              </span>
+                            {active && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
                             )}
                           </Link>
                         );
@@ -673,115 +941,150 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ══════════════════════════════════════════════
-          BOTTOM NAV MÓVIL ADAPTATIVO CON FAB INTELIGENTE
+          BOTTOM NAV MÓVIL (ERGONOMÍA CON ACCIONES RÁPIDAS)
       ══════════════════════════════════════════════ */}
       {!isLoginPage && (() => {
         const esTecnico = usuario?.rol_id === "tecnico" || (!tienePermiso(permisosUsuario, "ventas.cotizar") && tienePermiso(permisosUsuario, "proyectos.ver_propias"));
 
-        const itemsIzquierda = esTecnico
-          ? [
-              { href: "/dashboard", icon: LayoutDashboard, label: "Inicio" },
-              { href: "/ordenes",   icon: Wrench,          label: "Órdenes" },
-            ]
-          : [
-              { href: "/dashboard", icon: LayoutDashboard, label: "Inicio" },
-              { href: "/crm",       icon: Kanban,          label: "CRM", permiso: "ventas.crm" },
-            ];
+        const tab2 = esTecnico
+          ? { href: "/ordenes", icon: Wrench, label: "Misiones" }
+          : { href: "/crm", icon: Kanban, label: "Ventas", permiso: "ventas.crm" };
 
-        const itemsDerecha = esTecnico
-          ? [
-              { href: "/agenda",    icon: Calendar,        label: "Agenda" },
-              { href: "/menu",      icon: LayoutGrid,      label: "Menú" },
-            ]
-          : [
-              { href: "/inventario",icon: Package,         label: "Stock", permiso: "inventario.ver" },
-              { href: "/menu",      icon: LayoutGrid,      label: "Menú" },
-            ];
+        const tab4 = esTecnico
+          ? { href: "/agenda", icon: Calendar, label: "Agenda" }
+          : { href: "/inventario", icon: Package, label: "Stock", permiso: "inventario.ver" };
 
         return (
           <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[var(--ts-surface)] border-t border-[var(--ts-border)] z-40 shadow-[var(--ts-shadow)]">
             <div className="flex items-end justify-around h-16 px-2">
 
-              {/* Izquierda: 2 tabs */}
-              {itemsIzquierda.map(({ href, icon: Icon, label, permiso }: any) => {
-                if (permiso && !tienePermiso(permisosUsuario, permiso)) return null;
-                const active = isActive(href);
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
-                  >
-                    <div className={`p-1.5 rounded-xl transition-all ${active ? "bg-[var(--ts-red-subtle)]" : ""}`}>
-                      <Icon className={`w-5 h-5 transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
-                    </div>
-                    <span className={`text-[9px] font-bold transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
-                      {label}
-                    </span>
-                  </Link>
-                );
-              })}
+              {/* Tab 1: Inicio */}
+              <Link
+                href="/dashboard"
+                className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
+              >
+                <div className={`p-1.5 rounded-xl transition-all ${isActive("/dashboard") ? "bg-[var(--ts-red-subtle)]" : ""}`}>
+                  <LayoutDashboard className={`w-5 h-5 transition-colors ${isActive("/dashboard") ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
+                </div>
+                <span className={`text-[9px] font-bold transition-colors ${isActive("/dashboard") ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
+                  Inicio
+                </span>
+              </Link>
 
-              {/* FAB Central Inteligente */}
-              {esTecnico ? (
-                <div className="flex flex-col items-center justify-end flex-1 h-full pb-2.5">
-                  <Link
-                    href="/ordenes"
-                    className="w-[52px] h-[52px] bg-amber-500 rounded-full flex items-center justify-center shadow-[var(--ts-shadow-lg)] hover:opacity-90 transition-all active:scale-95 -mt-5"
-                    aria-label="Órdenes de Trabajo"
-                  >
-                    <Wrench className="w-6 h-6 text-white" />
-                  </Link>
-                  <span className="text-[9px] font-bold text-amber-500 mt-0.5">Misiones</span>
+              {/* Tab 2: Ventas / Misiones */}
+              <Link
+                href={tab2.href}
+                className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
+              >
+                <div className={`p-1.5 rounded-xl transition-all ${isActive(tab2.href) ? "bg-[var(--ts-red-subtle)]" : ""}`}>
+                  <tab2.icon className={`w-5 h-5 transition-colors ${isActive(tab2.href) ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
                 </div>
-              ) : tienePermiso(permisosUsuario, "ventas.cotizar") ? (
-                <div className="flex flex-col items-center justify-end flex-1 h-full pb-2.5">
-                  <Link
-                    href="/nueva"
-                    className="w-[52px] h-[52px] bg-[var(--ts-red)] rounded-full flex items-center justify-center shadow-[var(--ts-shadow-lg)] hover:opacity-90 transition-all active:scale-95 -mt-5"
-                    aria-label="Nueva Cotización"
-                  >
-                    <Plus className="w-6 h-6 text-white" />
-                  </Link>
-                  <span className="text-[9px] font-bold text-[var(--ts-red)] mt-0.5">Nueva</span>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-end flex-1 h-full pb-2.5">
-                  <button
-                    onClick={() => setDrawerOpen(true)}
-                    className="w-[52px] h-[52px] bg-[var(--ts-red)] rounded-full flex items-center justify-center shadow-[var(--ts-shadow-lg)] hover:opacity-90 transition-all active:scale-95 -mt-5 text-white"
-                    aria-label="Abrir Menú"
-                  >
-                    <LayoutGrid className="w-6 h-6 text-white" />
-                  </button>
-                  <span className="text-[9px] font-bold text-[var(--ts-red)] mt-0.5">Explorar</span>
-                </div>
-              )}
+                <span className={`text-[9px] font-bold transition-colors ${isActive(tab2.href) ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
+                  {tab2.label}
+                </span>
+              </Link>
 
-              {/* Derecha: 2 tabs */}
-              {itemsDerecha.map(({ href, icon: Icon, label, permiso }: any) => {
-                if (permiso && !tienePermiso(permisosUsuario, permiso)) return null;
-                const active = isActive(href);
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
-                  >
-                    <div className={`p-1.5 rounded-xl transition-all ${active ? "bg-[var(--ts-red-subtle)]" : ""}`}>
-                      <Icon className={`w-5 h-5 transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
-                    </div>
-                    <span className={`text-[9px] font-bold transition-colors ${active ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
-                      {label}
-                    </span>
-                  </Link>
-                );
-              })}
+              {/* Botón Central Flotante [+] (Abre Hoja de Acciones Rápidas) */}
+              <div className="flex flex-col items-center justify-end flex-1 h-full pb-2.5">
+                <button
+                  type="button"
+                  onClick={() => setQuickActionsOpen(true)}
+                  className="w-[52px] h-[52px] bg-[var(--ts-red)] hover:bg-red-700 active:scale-95 text-white rounded-full flex items-center justify-center shadow-lg shadow-red-500/30 transition-all -mt-5"
+                  aria-label="Acciones Rápidas"
+                >
+                  <Plus className="w-6 h-6 stroke-[2.5]" />
+                </button>
+                <span className="text-[9px] font-black text-[var(--ts-red)] mt-0.5">Acción</span>
+              </div>
+
+              {/* Tab 4: Stock / Agenda */}
+              <Link
+                href={tab4.href}
+                className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
+              >
+                <div className={`p-1.5 rounded-xl transition-all ${isActive(tab4.href) ? "bg-[var(--ts-red-subtle)]" : ""}`}>
+                  <tab4.icon className={`w-5 h-5 transition-colors ${isActive(tab4.href) ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`} />
+                </div>
+                <span className={`text-[9px] font-bold transition-colors ${isActive(tab4.href) ? "text-[var(--ts-red)]" : "text-[var(--ts-text-muted)]"}`}>
+                  {tab4.label}
+                </span>
+              </Link>
+
+              {/* Tab 5: Menú / Drawer */}
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(true)}
+                className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
+                aria-label="Abrir Menú"
+              >
+                <div className="p-1.5 rounded-xl">
+                  <LayoutGrid className="w-5 h-5 text-[var(--ts-text-muted)]" />
+                </div>
+                <span className="text-[9px] font-bold text-[var(--ts-text-muted)]">
+                  Módulos
+                </span>
+              </button>
 
             </div>
           </nav>
         );
       })()}
+
+      {/* ══════════════════════════════════════════════
+          ACTION SHEET: ACCIONES RÁPIDAS MÓVIL
+      ══════════════════════════════════════════════ */}
+      {quickActionsOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div
+            onClick={() => setQuickActionsOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
+          />
+
+          <div className="relative w-full max-w-lg bg-[var(--ts-surface)] border-t border-[var(--ts-border)] rounded-t-3xl p-5 shadow-2xl z-50 animate-in slide-in-from-bottom duration-250">
+            <div className="w-12 h-1 bg-[var(--ts-border)] rounded-full mx-auto mb-4" />
+
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-[var(--ts-red)]" />
+                <h3 className="text-sm font-black text-[var(--ts-text-primary)]">Acciones Rápidas</h3>
+              </div>
+              <button
+                onClick={() => setQuickActionsOpen(false)}
+                className="p-1 rounded-lg text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)]"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {ACCIONES_RAPIDAS.map((action, i) => {
+                if (action.permiso && !tienePermiso(permisosUsuario, action.permiso)) return null;
+                const Icon = action.icon;
+                return (
+                  <Link
+                    key={i}
+                    href={action.href}
+                    onClick={() => setQuickActionsOpen(false)}
+                    className="flex items-center gap-3 p-3 rounded-2xl border border-[var(--ts-border)] bg-[var(--ts-surface-2)]/60 hover:bg-[var(--ts-surface-2)] active:scale-95 transition-all group"
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${action.color}`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[var(--ts-text-primary)] group-hover:text-[var(--ts-red)] transition-colors truncate">
+                        {action.label}
+                      </p>
+                      <p className="text-[10px] text-[var(--ts-text-muted)] truncate">
+                        {action.desc}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════
           MODAL ESTILO RIAL: MÓDULO EN DESARROLLO

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { Kanban, Users } from "lucide-react";
 import Link from "next/link";
 import CRMManager from "@/components/cotizador/CRMManager";
@@ -16,8 +17,8 @@ export default function CRMPage() {
                   <Kanban className="w-5 h-5 text-[var(--ts-red)]" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-[var(--ts-text-primary)] tracking-tight">CRM & Historial</h1>
-                  <p className="text-[var(--ts-text-muted)] text-xs">Gestiona estados de cotizaciones y haz seguimiento.</p>
+                  <h1 className="text-xl font-bold text-[var(--ts-text-primary)] tracking-tight">CRM & Historial de Cotizaciones</h1>
+                  <p className="text-[var(--ts-text-muted)] text-xs">Gestiona estados de cotizaciones, haz seguimiento y consulta el historial comercial.</p>
                 </div>
               </div>
 
@@ -35,7 +36,14 @@ export default function CRMPage() {
 
         {/* ── Contenedor principal ── */}
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-6">
-          <CRMManager />
+          <Suspense fallback={
+            <div className="py-20 text-center">
+              <div className="w-8 h-8 border-2 border-[var(--ts-red)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-xs text-[var(--ts-text-muted)]">Cargando cotizaciones...</p>
+            </div>
+          }>
+            <CRMManager />
+          </Suspense>
         </div>
       </div>
     </ProtectedView>

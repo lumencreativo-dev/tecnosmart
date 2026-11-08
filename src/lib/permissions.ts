@@ -99,6 +99,27 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
       { id: "administracion.configuracion", nombre: "Ajustes de empresa", descripcion: "Modificar datos de SENIAT, IVA, días de validez y descuentos" },
     ],
   },
+  {
+    id: "soporte",
+    nombre: "Soporte, Postventa & Garantías",
+    descripcion: "Gestión de incidencias de clientes, garantías y manuales técnicos",
+    icono: "LifeBuoy",
+    permisos: [
+      { id: "soporte.tickets", nombre: "Gestionar tickets de soporte", descripcion: "Crear, atender y cerrar reportes de fallas técnicas" },
+      { id: "soporte.garantias", nombre: "Consultar y registrar garantías", descripcion: "Verificar seriales y vigencia de equipos instalados" },
+      { id: "soporte.wiki", nombre: "Acceso a la base de conocimiento", descripcion: "Consultar manuales de configuración y diagramas" },
+    ],
+  },
+  {
+    id: "marketing",
+    nombre: "Marketing & Leads Web",
+    descripcion: "Captura de prospectos desde la web y campañas de correo",
+    icono: "Megaphone",
+    permisos: [
+      { id: "marketing.leads", nombre: "Gestionar solicitudes web", descripcion: "Revisar y contactar prospectos de la Landing Page" },
+      { id: "marketing.campanas", nombre: "Campañas de correo por Resend", descripcion: "Envío masivo de avisos, promociones y novedades" },
+    ],
+  },
 ];
 
 // Helper: Comprobar si un rol tiene un permiso específico

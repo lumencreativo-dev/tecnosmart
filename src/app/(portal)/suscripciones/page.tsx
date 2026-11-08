@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import SuscripcionesManager from "@/components/cotizador/SuscripcionesManager";
 import ProtectedView from "@/components/cotizador/ProtectedView";
 import { Repeat } from "lucide-react";
@@ -14,8 +15,8 @@ export default function SuscripcionesPage() {
                 <Repeat className="w-5 h-5 text-[var(--ts-red)]" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-[var(--ts-text-primary)] tracking-tight">Suscripciones y Recurrentes</h1>
-                <p className="text-[var(--ts-text-muted)] text-sm">Gestiona pagos recurrentes, servicios activos y credenciales seguras.</p>
+                <h1 className="text-2xl font-bold text-[var(--ts-text-primary)] tracking-tight">Suscripciones & MRR</h1>
+                <p className="text-[var(--ts-text-muted)] text-sm">Gestiona pagos recurrentes, terminales Starlink, streaming y pólizas de servicio.</p>
               </div>
             </div>
           </div>
@@ -23,7 +24,14 @@ export default function SuscripcionesPage() {
 
         {/* ── Contenedor principal ── */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-          <SuscripcionesManager />
+          <Suspense fallback={
+            <div className="py-20 text-center">
+              <div className="w-8 h-8 border-2 border-[var(--ts-red)] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-xs text-[var(--ts-text-muted)]">Cargando suscripciones...</p>
+            </div>
+          }>
+            <SuscripcionesManager />
+          </Suspense>
         </div>
       </div>
     </ProtectedView>
