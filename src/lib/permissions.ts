@@ -19,7 +19,7 @@ export interface GrupoPermisos {
 export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   {
     id: "ventas",
-    nombre: "Ventas & Clientes",
+    nombre: "Ventas & Facturación",
     descripcion: "Gestión de propuestas comerciales, facturación y cartera de clientes",
     icono: "FileEdit",
     permisos: [
@@ -68,6 +68,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
       { id: "finanzas.cajas", nombre: "Control de cajas y cuentas bancarias", descripcion: "Ver saldos de Zelle, Efectivo, Pago Móvil y Bancos" },
       { id: "finanzas.reportes", nombre: "Reportes de rentabilidad y balances", descripcion: "Exportar reportes de utilidades y estado financiero" },
       { id: "finanzas.cxc", nombre: "Cuentas por cobrar y cobranzas", descripcion: "Gestionar créditos otorgados y registrar abonos de clientes" },
+      { id: "finanzas.cxp", nombre: "Cuentas por pagar (Proveedores & Nómina)", descripcion: "Registrar y liquidar pagos a proveedores, mayoristas y honorarios de técnicos" },
     ],
   },
   {
@@ -122,8 +123,128 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
   },
 ];
 
+// ── Catálogo Maestro de Roles Predeterminados ──────────────────────────
+export interface RolDef {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  color: string;
+  es_sistema: boolean;
+  permisos: string[];
+}
+
+export const ROLES_PREDETERMINADOS: RolDef[] = [
+  {
+    id: "admin",
+    nombre: "Super Admin (Gerencia)",
+    descripcion: "Acceso total sin restricciones a todos los módulos y ajustes.",
+    color: "#c9242b",
+    es_sistema: true,
+    permisos: ["*"],
+  },
+  {
+    id: "administrador",
+    nombre: "Administración & Finanzas",
+    descripcion: "Facturación, cuentas bancarias, pagos a proveedores y cobranzas.",
+    color: "#2563eb",
+    es_sistema: true,
+    permisos: [
+      "ventas.facturar",
+      "ventas.ver_global",
+      "finanzas.dashboard",
+      "finanzas.cajas",
+      "finanzas.reportes",
+      "finanzas.cxc",
+      "finanzas.cxp",
+      "dashboard.finanzas",
+      "dashboard.tasas",
+    ],
+  },
+  {
+    id: "vendedor",
+    nombre: "Asesor Comercial",
+    descripcion: "Cotizaciones, CRM Pipeline, directorio de clientes y catálogo.",
+    color: "#059669",
+    es_sistema: true,
+    permisos: [
+      "ventas.cotizar",
+      "ventas.crm",
+      "ventas.clientes",
+      "inventario.ver",
+      "dashboard.tasas",
+      "dashboard.productos_top",
+      "dashboard.clientes_frecuentes",
+      "dashboard.seguimientos",
+    ],
+  },
+  {
+    id: "gerente",
+    nombre: "Gerente Operativo",
+    descripcion: "Obras, cuadrillas técnicas, requisición de materiales y catálogo.",
+    color: "#d97706",
+    es_sistema: true,
+    permisos: [
+      "proyectos.crear_ordenes",
+      "proyectos.asignar_cuadrillas",
+      "proyectos.agenda",
+      "proyectos.materiales",
+      "proyectos.actas",
+      "inventario.ver",
+      "ventas.cotizar",
+      "dashboard.operaciones_campo",
+    ],
+  },
+  {
+    id: "tecnico",
+    nombre: "Técnico Líder / Cuadrilla",
+    descripcion: "App móvil (tec.): órdenes asignadas, materiales y actas en campo.",
+    color: "#9333ea",
+    es_sistema: true,
+    permisos: [
+      "proyectos.ver_propias",
+      "proyectos.materiales",
+      "proyectos.actas",
+      "inventario.ver",
+    ],
+  },
+  {
+    id: "tecnico_aliado",
+    nombre: "Técnico Aliado B2B",
+    descripcion: "App móvil (tec.): catálogo con 15% de descuento, calculadora CCTV y libreta de obras.",
+    color: "#06b6d4",
+    es_sistema: true,
+    permisos: [
+      "inventario.ver",
+      "proyectos.ver_propias",
+      "soporte.tickets",
+      "soporte.wiki",
+    ],
+  },
+];
+
 // Helper: Comprobar si un rol tiene un permiso específico
 export function tienePermiso(permisosUsuario: string[] = [], permisoRequerido: string): boolean {
   if (permisosUsuario.includes("*")) return true; // Super Admin tiene acceso universal
   return permisosUsuario.includes(permisoRequerido);
+}
+
+// Helper: Comprueba si el usuario tiene acceso a un módulo completo (al menos un permiso del grupo)
+export function tieneAccesoModulo(permisosUsuario: string[] = [], moduloId: string): boolean {
+  if (permisosUsuario.includes("*")) return true;
+  const grupo = GRUPOS_PERMISOS.find(g => g.id === moduloId);
+  if (!grupo) return false;
+  return grupo.permisos.some(p => permisosUsuario.includes(p.id));
+}
+
+// Helper: Activa o desactiva todos los permisos de un módulo para un usuario
+export function alternarModuloCompleto(permisosActuales: string[], moduloId: string, activar: boolean): string[] {
+  const grupo = GRUPOS_PERMISOS.find(g => g.id === moduloId);
+  if (!grupo) return permisosActuales;
+  const idsGrupo = grupo.permisos.map(p => p.id);
+  if (activar) {
+    const nuevos = new Set([...permisosActuales, ...idsGrupo]);
+    return Array.from(nuevos);
+  } else {
+    return permisosActuales.filter(p => !idsGrupo.includes(p));
+  }
 }

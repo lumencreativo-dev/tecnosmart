@@ -5,10 +5,10 @@ import {
   Users, Shield, UserPlus, Copy, Check, Plus, Trash2,
   Lock, Save, RefreshCw, AlertCircle, Sparkles, CheckCircle2,
   ToggleLeft, ToggleRight, Info, ExternalLink, Edit, KeyRound, Ban,
-  TrendingUp, DollarSign, FileSpreadsheet, ShieldAlert, X, Activity, Mail
+  TrendingUp, DollarSign, FileSpreadsheet, ShieldAlert, X, Activity, Mail, ChevronRight
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
-import { GRUPOS_PERMISOS, tienePermiso } from "@/lib/permissions";
+import { GRUPOS_PERMISOS, tienePermiso, tieneAccesoModulo, alternarModuloCompleto } from "@/lib/permissions";
 import { useUsuario } from "@/hooks/useUsuario";
 
 interface Rol {
@@ -30,6 +30,7 @@ interface Perfil {
   cedula: string;
   rol_id: string;
   estado: string;
+  permisos_custom?: string[];
   roles?: Rol;
   created_at: string;
 }
@@ -44,6 +45,24 @@ interface Invitacion {
   fecha_expiracion: string;
   roles?: Rol;
 }
+
+const ROL_TECNICO_ALIADO: Rol = {
+  id: "tecnico_aliado",
+  nombre: "Técnico Aliado B2B",
+  descripcion: "Instalador independiente aliado. Acceso a catálogo con precios técnicos mayoristas, calculadora CCTV y programa de referidos.",
+  color: "#06b6d4",
+  es_sistema: true,
+  permisos: ["inventario.ver", "proyectos.ver_propias", "soporte.tickets", "soporte.wiki"],
+};
+
+const ROLES_PREDETERMINADOS: Rol[] = [
+  { id: "admin", nombre: "Super Admin", descripcion: "Acceso total sin restricciones", color: "#c9242b", es_sistema: true, permisos: ["*"] },
+  { id: "gerente", nombre: "Gerente Operativo", descripcion: "Obras, cuadrillas y catálogo", color: "#d97706", es_sistema: true, permisos: ["proyectos.crear_ordenes", "proyectos.asignar_cuadrillas", "ventas.cotizar", "inventario.ver"] },
+  { id: "administrador", nombre: "Administración & Finanzas", descripcion: "Facturación, cajas y cobranzas", color: "#2563eb", es_sistema: true, permisos: ["ventas.facturar", "ventas.ver_global", "finanzas.dashboard", "finanzas.cajas", "finanzas.cxc", "finanzas.cxp"] },
+  { id: "vendedor", nombre: "Asesor Comercial", descripcion: "Cotizaciones, CRM y clientes", color: "#059669", es_sistema: true, permisos: ["ventas.cotizar", "ventas.crm", "ventas.clientes", "inventario.ver"] },
+  { id: "tecnico", nombre: "Técnico Líder / Cuadrilla", descripcion: "Órdenes, materiales y actas en campo", color: "#9333ea", es_sistema: true, permisos: ["proyectos.ver_propias", "proyectos.materiales", "proyectos.actas"] },
+  ROL_TECNICO_ALIADO,
+];
 
 export default function EquipoManager() {
   const { usuario: usuarioActual, loading: cargandoUsuario } = useUsuario();
@@ -96,6 +115,12 @@ export default function EquipoManager() {
   const [enviandoReset, setEnviandoReset] = useState(false);
   const [resetMsg, setResetMsg] = useState<string | null>(null);
 
+  // Estados para Control Modular de Permisos estilo Odoo
+  const [permisosEditando, setPermisosEditando] = useState<string[]>([]);
+  const [guardandoPermisosCustom, setGuardandoPermisosCustom] = useState(false);
+  const [permisosExito, setPermisosExito] = useState(false);
+  const [moduloExpandido, setModuloExpandido] = useState<Record<string, boolean>>({});
+
   // Permisos y condición de Administrador
   const esAdminActual = usuarioActual?.rol_id === "admin" || (usuarioActual?.roles?.permisos || []).includes("*");
   const permisosUsuarioActivo = usuarioActual?.roles?.permisos || (esAdminActual ? ["*"] : []);
@@ -105,14 +130,16 @@ export default function EquipoManager() {
     setLoading(true);
 
     const { data: rolesData } = await supabase.from("roles").select("*").order("created_at", { ascending: true });
-    if (rolesData) {
-      setRoles(rolesData);
-      if (!rolSeleccionado && rolesData.length > 0) {
-        setRolSeleccionado(rolesData[0]);
-      } else if (rolSeleccionado) {
-        const actualizado = rolesData.find((r) => r.id === rolSeleccionado.id);
-        if (actualizado) setRolSeleccionado(actualizado);
-      }
+    let todosRoles = rolesData && rolesData.length > 0 ? rolesData : ROLES_PREDETERMINADOS;
+    if (!todosRoles.some((r: Rol) => r.id === "tecnico_aliado")) {
+      todosRoles = [...todosRoles, ROL_TECNICO_ALIADO];
+    }
+    setRoles(todosRoles);
+    if (!rolSeleccionado && todosRoles.length > 0) {
+      setRolSeleccionado(todosRoles[0]);
+    } else if (rolSeleccionado) {
+      const actualizado = todosRoles.find((r: Rol) => r.id === rolSeleccionado.id);
+      if (actualizado) setRolSeleccionado(actualizado);
     }
 
     const { data: perfilesData } = await supabase.from("perfiles").select("*, roles(*)").order("created_at", { ascending: false });
@@ -205,6 +232,11 @@ export default function EquipoManager() {
     setResetMsg(null);
     setCargandoMetricas(true);
 
+    const base = m.roles?.permisos || [];
+    const custom = m.permisos_custom || [];
+    setPermisosEditando(Array.from(new Set([...base, ...custom])));
+    setPermisosExito(false);
+
     try {
       // Buscar cotizaciones asociadas a su id o usuario
       const { data: cotizaciones } = await supabase
@@ -273,9 +305,53 @@ export default function EquipoManager() {
       if (miembroSeleccionado && miembroSeleccionado.id === perfilId) {
         const rolNuevo = roles.find((r) => r.id === nuevoRolId);
         setMiembroSeleccionado({ ...miembroSeleccionado, rol_id: nuevoRolId, roles: rolNuevo });
+        if (rolNuevo) {
+          setPermisosEditando(rolNuevo.permisos);
+        }
       }
     } else {
       alert("Error al cambiar el rol: " + error.message);
+    }
+  };
+
+  // ── ACCIONES PARA MODULARIDAD ESTILO ODOO ───────────────────
+  const togglePermisoIndividual = (permisoId: string) => {
+    setPermisosEditando((prev) => {
+      if (prev.includes(permisoId)) {
+        return prev.filter((p) => p !== permisoId);
+      } else {
+        return [...prev, permisoId];
+      }
+    });
+  };
+
+  const toggleModuloCompleto = (moduloId: string, activar: boolean) => {
+    const nuevos = alternarModuloCompleto(permisosEditando, moduloId, activar);
+    setPermisosEditando(nuevos);
+  };
+
+  const handleGuardarPermisosCustom = async () => {
+    if (!miembroSeleccionado) return;
+    setGuardandoPermisosCustom(true);
+    setPermisosExito(false);
+
+    const { error } = await supabase
+      .from("perfiles")
+      .update({
+        permisos_custom: permisosEditando,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", miembroSeleccionado.id);
+
+    setGuardandoPermisosCustom(false);
+    if (!error) {
+      setPermisosExito(true);
+      setTimeout(() => setPermisosExito(false), 3000);
+      setPerfiles((prev) =>
+        prev.map((p) => (p.id === miembroSeleccionado.id ? { ...p, permisos_custom: permisosEditando } : p))
+      );
+    } else {
+      alert("Error al guardar permisos: " + error.message);
     }
   };
 
@@ -558,6 +634,57 @@ export default function EquipoManager() {
       ══════════════════════════════════════════════ */}
       {tab === "miembros" && (
         <div className="space-y-6">
+          {/* Banner Programa Técnicos Aliados B2B */}
+          <div className="bg-gradient-to-r from-cyan-500/10 via-cyan-500/5 to-transparent border border-cyan-500/20 rounded-2xl p-5 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30">
+                    Programa B2B Exclusivo
+                  </span>
+                  <span className="text-xs font-mono font-bold text-[var(--ts-text-muted)]">tec.somostecnosmart.com</span>
+                </div>
+                <h3 className="text-sm font-black text-[var(--ts-text-primary)]">
+                  Red de Técnicos & Instaladores Aliados
+                </h3>
+                <p className="text-xs text-[var(--ts-text-muted)] max-w-2xl">
+                  Invita a instaladores independientes con el rol <strong>"Técnico Aliado B2B"</strong> para otorgarles acceso a la app móvil técnica, catálogo con precios técnicos mayoristas y herramientas de cálculo de campo.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInvitarRolId("tecnico_aliado");
+                  setModalInvitar(true);
+                }}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Invitar Técnico Aliado</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-cyan-500/15">
+              <div className="p-2.5 rounded-xl bg-[var(--ts-surface)] border border-[var(--ts-border)]">
+                <p className="text-[10px] font-black uppercase tracking-wider text-cyan-600">1. Precios Técnicos</p>
+                <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5">Tarifa preferencial mayorista en equipos CCTV y fibra.</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[var(--ts-surface)] border border-[var(--ts-border)]">
+                <p className="text-[10px] font-black uppercase tracking-wider text-cyan-600">2. Cálculos de Campo</p>
+                <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5">Calculadora de caídas de tensión 12V y ancho de banda.</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[var(--ts-surface)] border border-[var(--ts-border)]">
+                <p className="text-[10px] font-black uppercase tracking-wider text-cyan-600">3. Comisiones Referidos</p>
+                <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5">Ganan comisión por derivar proyectos a nuestras cuadrillas.</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[var(--ts-surface)] border border-[var(--ts-border)]">
+                <p className="text-[10px] font-black uppercase tracking-wider text-cyan-600">4. Soporte Nivel 2</p>
+                <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5">Respaldo directo de nuestros ingenieros para grandes obras.</p>
+              </div>
+            </div>
+          </div>
+
           {/* Tarjeta de Lista de Miembros */}
           <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl shadow-xs overflow-hidden">
             <div className="p-4 border-b border-[var(--ts-border)] flex items-center justify-between">
@@ -1344,9 +1471,9 @@ export default function EquipoManager() {
               {/* Asignación Rápida de Rol */}
               <div className="p-3 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold text-[var(--ts-text-primary)]">Modificar Rol & Accesos</p>
+                  <p className="text-xs font-bold text-[var(--ts-text-primary)]">Modificar Rol Base</p>
                   <p className="text-[11px] text-[var(--ts-text-muted)]">
-                    Cambia instantáneamente los permisos que este colaborador tiene en la empresa.
+                    Establece el perfil general del colaborador en la organización.
                   </p>
                 </div>
                 <select
@@ -1361,6 +1488,154 @@ export default function EquipoManager() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* ── SECCIÓN MODULAR ESTILO ODOO: INTERRUPTORES DE MÓDULOS & PERMISOS FINOS ── */}
+              <div className="p-4 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-xl space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h5 className="text-xs font-black uppercase text-[var(--ts-text-primary)] flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[var(--ts-red)]" />
+                      <span>Interruptores de Módulos (Estilo Odoo)</span>
+                    </h5>
+                    <p className="text-[10px] text-[var(--ts-text-muted)] mt-0.5">
+                      Activa o desactiva módulos enteros y afina permisos específicos (ver vs modificar) para este usuario.
+                    </p>
+                  </div>
+                  {permisosEditando.length > 0 && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--ts-red)]/10 text-[var(--ts-red)] font-bold shrink-0">
+                      {permisosEditando.includes("*") ? "Acceso Total (*)" : `${permisosEditando.length} permisos`}
+                    </span>
+                  )}
+                </div>
+
+                {/* Lista de Módulos con Interruptores */}
+                <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1 scrollbar-thin">
+                  {GRUPOS_PERMISOS.map((grupo) => {
+                    const tieneAcceso = tieneAccesoModulo(permisosEditando, grupo.id);
+                    const isExpanded = Boolean(moduloExpandido[grupo.id]);
+                    const permisosDelGrupo = grupo.permisos.map(p => p.id);
+                    const permisosActivosEnGrupo = permisosDelGrupo.filter(pid => permisosEditando.includes(pid) || permisosEditando.includes("*")).length;
+
+                    return (
+                      <div
+                        key={grupo.id}
+                        className={`rounded-xl border transition-all ${
+                          tieneAcceso
+                            ? "bg-[var(--ts-surface-2)]/80 border-[var(--ts-border)]"
+                            : "bg-[var(--ts-surface-2)]/30 border-[var(--ts-border)]/40 opacity-70"
+                        }`}
+                      >
+                        {/* Header del Módulo con Interruptor Principal */}
+                        <div className="p-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => setModuloExpandido(prev => ({ ...prev, [grupo.id]: !prev[grupo.id] }))}
+                              className="text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors p-0.5"
+                              title="Ver permisos detallados"
+                            >
+                              <ChevronRight className={`w-4 h-4 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                            </button>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-[var(--ts-text-primary)] truncate flex items-center gap-1.5">
+                                <span>{grupo.nombre}</span>
+                                {tieneAcceso && (
+                                  <span className="text-[9px] font-normal text-[var(--ts-text-muted)] font-mono">
+                                    ({permisosActivosEnGrupo}/{permisosDelGrupo.length})
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-[10px] text-[var(--ts-text-muted)] truncate">{grupo.descripcion}</p>
+                            </div>
+                          </div>
+
+                          {/* Interruptor Principal ON/OFF del Módulo */}
+                          <button
+                            type="button"
+                            disabled={!esAdminActual || miembroSeleccionado.rol_id === "admin"}
+                            onClick={() => toggleModuloCompleto(grupo.id, !tieneAcceso)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 active:scale-95 ${
+                              tieneAcceso
+                                ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/30"
+                                : "bg-[var(--ts-surface)] text-[var(--ts-text-muted)] border border-[var(--ts-border)]"
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${tieneAcceso ? "bg-emerald-500" : "bg-gray-500"}`} />
+                            <span>{tieneAcceso ? "Habilitado" : "Bloqueado"}</span>
+                          </button>
+                        </div>
+
+                        {/* Sub-permisos Desplegables */}
+                        {isExpanded && (
+                          <div className="px-3 pb-3 pt-1 border-t border-[var(--ts-border)]/50 space-y-1.5 bg-[var(--ts-surface)]/50 rounded-b-xl">
+                            <p className="text-[9px] font-black uppercase tracking-wider text-[var(--ts-text-muted)] mb-1">
+                              Permisos Quirúrgicos de {grupo.nombre}:
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {grupo.permisos.map((permiso) => {
+                                const activo = permisosEditando.includes(permiso.id) || permisosEditando.includes("*");
+                                return (
+                                  <label
+                                    key={permiso.id}
+                                    className={`flex items-start gap-2 p-2 rounded-lg border text-left cursor-pointer transition-all ${
+                                      activo
+                                        ? "bg-[var(--ts-surface-2)] border-[var(--ts-red)]/30 text-[var(--ts-text-primary)]"
+                                        : "bg-transparent border-transparent text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface-2)]/40"
+                                    }`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      disabled={!esAdminActual || miembroSeleccionado.rol_id === "admin"}
+                                      checked={activo}
+                                      onChange={() => togglePermisoIndividual(permiso.id)}
+                                      className="mt-0.5 rounded border-[var(--ts-border)] text-[var(--ts-red)] focus:ring-[var(--ts-red)]"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="text-[11px] font-bold leading-tight">{permiso.nombre}</p>
+                                      <p className="text-[9px] text-[var(--ts-text-muted)] leading-tight mt-0.5">{permiso.descripcion}</p>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Botones Guardar y Restablecer Permisos */}
+                <div className="flex items-center justify-between pt-2 border-t border-[var(--ts-border)]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rolBase = roles.find(r => r.id === miembroSeleccionado.rol_id);
+                      if (rolBase) setPermisosEditando(rolBase.permisos);
+                    }}
+                    className="text-[11px] font-bold text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors"
+                  >
+                    Restablecer al rol base
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {permisosExito && (
+                      <span className="text-[11px] font-bold text-emerald-500 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>¡Guardado!</span>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      disabled={guardandoPermisosCustom || !esAdminActual}
+                      onClick={handleGuardarPermisosCustom}
+                      className="px-4 py-2 bg-[var(--ts-red)] hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95 disabled:opacity-50"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{guardandoPermisosCustom ? "Guardando..." : "Guardar Permisos"}</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Botón Editar Datos Formales */}

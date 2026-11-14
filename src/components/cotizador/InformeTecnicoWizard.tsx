@@ -929,34 +929,106 @@ export default function InformeTecnicoWizard({
     );
   }
 
-  // ── Paso: Evidencia Fotográfica ────────────────────────────────────────────
+  // ── Paso: Evidencia Fotográfica (Optimizada con Compresión Móvil 4G) ─────
   function renderPasoFotos() {
+    const comprimirImagen = (file: File, maxDim = 1600, calidad = 0.8): Promise<Blob> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new window.Image();
+          img.onload = () => {
+            let { width, height } = img;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) {
+                height = Math.round((height * maxDim) / width);
+                width = maxDim;
+              } else {
+                width = Math.round((width * maxDim) / height);
+                height = maxDim;
+              }
+            }
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              resolve(file);
+              return;
+            }
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                resolve(blob || file);
+              },
+              "image/jpeg",
+              calidad
+            );
+          };
+          img.onerror = () => resolve(file);
+          img.src = e.target?.result as string;
+        };
+        reader.onerror = () => resolve(file);
+        reader.readAsDataURL(file);
+      });
+    };
+
     const subirFoto = async (file: File) => {
       setSubiendoFoto(true);
-      const ext = file.name.split(".").pop();
-      const path = `campo/${orden.id}/${Date.now()}.${ext}`;
-      const { data, error } = await supabase.storage.from("campo").upload(path, file, { upsert: true });
-      if (!error && data) {
-        const { data: url } = supabase.storage.from("campo").getPublicUrl(path);
-        const foto: FotoEvidencia = { url: url.publicUrl, descripcion: "", tomada_en: new Date().toISOString() };
-        upd("evidencia_fotos", [...informe!.evidencia_fotos, foto]);
+      try {
+        const blobComprimido = await comprimirImagen(file);
+        const path = `campo/${orden.id}/${Date.now()}.jpg`;
+
+        // Intento con bucket actas-obras o fallback a campo
+        let res = await supabase.storage.from("actas-obras").upload(path, blobComprimido, {
+          contentType: "image/jpeg",
+          upsert: true,
+        });
+        let bucketUsado = "actas-obras";
+
+        if (res.error) {
+          res = await supabase.storage.from("campo").upload(path, blobComprimido, {
+            contentType: "image/jpeg",
+            upsert: true,
+          });
+          bucketUsado = "campo";
+        }
+
+        if (!res.error) {
+          const { data: url } = supabase.storage.from(bucketUsado).getPublicUrl(path);
+          const foto: FotoEvidencia = { url: url.publicUrl, descripcion: "", tomada_en: new Date().toISOString() };
+          upd("evidencia_fotos", [...informe!.evidencia_fotos, foto]);
+        }
+      } catch (err) {
+        console.error("Error comprimiendo/subiendo evidencia:", err);
+      } finally {
+        setSubiendoFoto(false);
       }
-      setSubiendoFoto(false);
     };
 
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <SectionHeader icon={Camera} title="Evidencia Fotográfica" />
-          <button
-            onClick={() => fotoInputRef.current?.click()}
-            disabled={subiendoFoto}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[var(--ts-surface-2)] ts-text border ts-border"
-          >
-            {subiendoFoto ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-            {subiendoFoto ? "Subiendo..." : "Agregar Foto"}
-          </button>
-          <input ref={fotoInputRef} type="file" accept="image/*" className="hidden" onChange={e => { if (e.target.files?.[0]) subirFoto(e.target.files[0]); }} />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fotoInputRef.current?.click()}
+              disabled={subiendoFoto}
+              className="flex items-center gap-1.5 text-xs h-10 px-3 rounded-xl bg-[var(--ts-red)] hover:bg-red-700 text-white font-bold active:scale-95 transition-all shadow-md"
+            >
+              {subiendoFoto ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+              <span>{subiendoFoto ? "Comprimiendo..." : "Tomar / Cargar Foto"}</span>
+            </button>
+            <input
+              ref={fotoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.[0]) subirFoto(e.target.files[0]);
+              }}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

@@ -260,7 +260,7 @@ export default function MaterialesManager() {
         </div>
       </div>
 
-      {/* Tabla Principal */}
+      {/* Contenedor de Materiales: Tarjetas Móviles + Tabla Desktop */}
       <div className="ts-surface rounded-2xl border ts-border overflow-hidden">
         {loading ? (
           <div className="flex justify-center py-16">
@@ -273,144 +273,254 @@ export default function MaterialesManager() {
             <p className="text-xs mt-1">Crea o vincula materiales dentro de una Orden de Trabajo</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead className="bg-[var(--ts-surface-2)] border-b ts-border text-left ts-text-muted">
-                <tr>
-                  <th className="py-3 px-4 font-bold">Material / Insumo</th>
-                  <th className="py-3 px-4 font-bold">Orden Destino</th>
-                  <th className="py-3 px-4 font-bold">Técnico Responsable</th>
-                  <th className="py-3 px-4 font-bold text-center">Salida</th>
-                  <th className="py-3 px-4 font-bold text-center">Retorno</th>
-                  <th className="py-3 px-4 font-bold text-center">Consumido</th>
-                  <th className="py-3 px-4 font-bold">Estado</th>
-                  <th className="py-3 px-4 font-bold text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y ts-border">
-                {itemsFiltrados.map(item => {
-                  const isSaving = savingId === item.id;
-                  return (
-                    <tr key={item.id} className="hover:bg-[var(--ts-surface-2)]/60 transition-colors">
-                      {/* Producto */}
-                      <td className="py-3 px-4">
-                        <div className="font-bold ts-text">{item.nombre_producto}</div>
-                        {item.codigo_sku && (
-                          <div className="text-[10px] ts-text-muted font-mono">{item.codigo_sku}</div>
-                        )}
-                        {item.notas && (
-                          <div className="text-[10px] text-gray-500 italic mt-0.5">{item.notas}</div>
-                        )}
-                      </td>
-
-                      {/* Orden */}
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-bold text-[var(--ts-red)]">
+          <>
+            {/* Vista Móvil (Tarjetas Táctiles Ergonómicas para Técnicos en Almacén) */}
+            <div className="md:hidden divide-y ts-border">
+              {itemsFiltrados.map((item) => {
+                const isSaving = savingId === item.id;
+                return (
+                  <div key={item.id} className="p-4 space-y-3 bg-[#131318]/40">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="font-mono text-xs font-bold text-[var(--ts-red)]">
                           {item.orden?.numero || "OT-General"}
                         </span>
-                        <div className="text-[10px] ts-text-muted">
-                          {item.orden?.tipo_servicio || "Instalación"}
-                        </div>
-                      </td>
-
-                      {/* Técnico */}
-                      <td className="py-3 px-4 ts-text">
-                        {item.orden?.tecnico_lider?.nombre || (
-                          <span className="text-[10px] ts-text-muted italic">Sin asignar</span>
+                        <h4 className="font-bold text-sm text-white mt-0.5">{item.nombre_producto}</h4>
+                        {item.codigo_sku && (
+                          <span className="text-[10px] text-[#a5a5b2] font-mono">{item.codigo_sku}</span>
                         )}
-                      </td>
-
-                      {/* Cantidades */}
-                      <td className="py-3 px-4 text-center font-bold text-blue-600">
-                        {item.cantidad_salida} <span className="text-[10px] ts-text-muted">{item.unidad}</span>
-                      </td>
-
-                      <td className="py-3 px-4 text-center font-bold text-green-600">
-                        {item.cantidad_retorno} <span className="text-[10px] ts-text-muted">{item.unidad}</span>
-                      </td>
-
-                      <td className="py-3 px-4 text-center font-bold text-orange-600">
-                        {item.cantidad_usada} <span className="text-[10px] ts-text-muted">{item.unidad}</span>
-                      </td>
-
-                      {/* Estado */}
-                      <td className="py-3 px-4">
-                        <span
-                          className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                            item.estado === "pendiente"
-                              ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600"
-                              : item.estado === "despachado"
-                              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
-                              : item.estado === "retornado"
-                              ? "bg-green-100 dark:bg-green-900/30 text-green-600"
-                              : "bg-gray-100 dark:bg-gray-800 text-gray-600"
-                          }`}
-                        >
-                          {item.estado === "pendiente"
-                            ? "Pendiente"
+                      </div>
+                      <span
+                        className={`text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full shrink-0 ${
+                          item.estado === "pendiente"
+                            ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600"
                             : item.estado === "despachado"
-                            ? "En Campo"
+                            ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
                             : item.estado === "retornado"
-                            ? "Retornado"
-                            : "Consumido"}
-                        </span>
-                      </td>
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-600"
+                            : "bg-gray-100 dark:bg-gray-800 text-gray-600"
+                        }`}
+                      >
+                        {item.estado === "pendiente"
+                          ? "Pendiente"
+                          : item.estado === "despachado"
+                          ? "En Obra"
+                          : item.estado === "retornado"
+                          ? "Retornado"
+                          : "Consumido"}
+                      </span>
+                    </div>
 
-                      {/* Acciones */}
-                      <td className="py-3 px-4 text-right">
-                        {puedeGestionar && (
-                          <div className="flex items-center justify-end gap-1.5">
-                            {item.estado === "pendiente" && (
-                              <button
-                                onClick={() => handleDespachar(item)}
-                                disabled={isSaving}
-                                className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-2xs"
-                              >
-                                <ArrowRight className="w-3 h-3" />
-                                <span>Despachar</span>
-                              </button>
-                            )}
+                    {/* Fila de Cantidades */}
+                    <div className="grid grid-cols-3 gap-2 bg-[#0e0e12] p-2.5 rounded-xl border border-[#22222c] text-center text-xs">
+                      <div>
+                        <span className="text-[10px] text-[#a5a5b2] block">Salida</span>
+                        <span className="font-bold text-blue-400 font-mono">{item.cantidad_salida} {item.unidad}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#a5a5b2] block">Usado</span>
+                        <span className="font-bold text-orange-400 font-mono">{item.cantidad_usada} {item.unidad}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[#a5a5b2] block">Retorno</span>
+                        <span className="font-bold text-emerald-400 font-mono">{item.cantidad_retorno} {item.unidad}</span>
+                      </div>
+                    </div>
 
-                            {item.estado === "despachado" && (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={item.cantidad_salida}
-                                  defaultValue={0}
-                                  id={`ret-${item.id}`}
-                                  className="w-14 text-xs rounded-lg border ts-border bg-[var(--ts-surface)] ts-text px-2 py-1 text-center focus:outline-none"
-                                  placeholder="Sobró"
-                                />
-                                <button
-                                  onClick={() => {
-                                    const input = document.getElementById(`ret-${item.id}`) as HTMLInputElement;
-                                    handleRetorno(item, parseInt(input.value) || 0);
-                                  }}
-                                  disabled={isSaving}
-                                  title="Registrar retorno de sobrante al almacén"
-                                  className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all shadow-2xs"
-                                >
-                                  <ArrowLeft className="w-3 h-3" />
-                                  <span>Retornar</span>
-                                </button>
-                              </div>
-                            )}
+                    {/* Botones Táctiles de Acción (48px) */}
+                    {puedeGestionar && (
+                      <div className="pt-1">
+                        {item.estado === "pendiente" && (
+                          <button
+                            type="button"
+                            onClick={() => handleDespachar(item)}
+                            disabled={isSaving}
+                            className="w-full h-11 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md"
+                          >
+                            <ArrowRight className="w-4 h-4" />
+                            <span>{isSaving ? "Despachando..." : "Confirmar Recibido de Almacén"}</span>
+                          </button>
+                        )}
 
-                            {(item.estado === "retornado" || item.estado === "consumido") && (
-                              <span className="text-[10px] text-green-600 font-bold flex items-center gap-1 justify-end">
-                                <Check className="w-3 h-3" /> Liquidado
-                              </span>
-                            )}
+                        {item.estado === "despachado" && (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min={0}
+                              max={item.cantidad_salida}
+                              defaultValue={0}
+                              id={`ret-mob-${item.id}`}
+                              className="w-20 h-11 text-xs rounded-xl border ts-border bg-[var(--ts-surface)] ts-text px-2 text-center font-bold font-mono focus:outline-none"
+                              placeholder="Sobrante"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const input = document.getElementById(`ret-mob-${item.id}`) as HTMLInputElement;
+                                handleRetorno(item, parseInt(input.value) || 0);
+                              }}
+                              disabled={isSaving}
+                              className="flex-1 h-11 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-md"
+                            >
+                              <ArrowLeft className="w-4 h-4" />
+                              <span>{isSaving ? "Guardando..." : "Retornar Sobrante"}</span>
+                            </button>
                           </div>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+
+                        {(item.estado === "retornado" || item.estado === "consumido") && (
+                          <div className="h-9 bg-emerald-950/20 border border-emerald-800/30 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-400">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Material Liquidado</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Vista Desktop (Tabla Tradicional) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-[var(--ts-surface-2)] border-b ts-border text-left ts-text-muted">
+                  <tr>
+                    <th className="py-3 px-4 font-bold">Material / Insumo</th>
+                    <th className="py-3 px-4 font-bold">Orden Destino</th>
+                    <th className="py-3 px-4 font-bold">Técnico Responsable</th>
+                    <th className="py-3 px-4 font-bold text-center">Salida</th>
+                    <th className="py-3 px-4 font-bold text-center">Retorno</th>
+                    <th className="py-3 px-4 font-bold text-center">Consumido</th>
+                    <th className="py-3 px-4 font-bold">Estado</th>
+                    <th className="py-3 px-4 font-bold text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y ts-border">
+                  {itemsFiltrados.map((item) => {
+                    const isSaving = savingId === item.id;
+                    return (
+                      <tr key={item.id} className="hover:bg-[var(--ts-surface-2)]/60 transition-colors">
+                        {/* Producto */}
+                        <td className="py-3 px-4">
+                          <div className="font-bold ts-text">{item.nombre_producto}</div>
+                          {item.codigo_sku && (
+                            <div className="text-[10px] ts-text-muted font-mono">{item.codigo_sku}</div>
+                          )}
+                          {item.notas && (
+                            <div className="text-[10px] text-gray-500 italic mt-0.5">{item.notas}</div>
+                          )}
+                        </td>
+
+                        {/* Orden */}
+                        <td className="py-3 px-4">
+                          <span className="font-mono font-bold text-[var(--ts-red)]">
+                            {item.orden?.numero || "OT-General"}
+                          </span>
+                          <div className="text-[10px] ts-text-muted">
+                            {item.orden?.tipo_servicio || "Instalación"}
+                          </div>
+                        </td>
+
+                        {/* Técnico */}
+                        <td className="py-3 px-4 ts-text">
+                          {item.orden?.tecnico_lider?.nombre || (
+                            <span className="text-[10px] ts-text-muted italic">Sin asignar</span>
+                          )}
+                        </td>
+
+                        {/* Cantidades */}
+                        <td className="py-3 px-4 text-center font-bold text-blue-600">
+                          {item.cantidad_salida} <span className="text-[10px] ts-text-muted">{item.unidad}</span>
+                        </td>
+
+                        <td className="py-3 px-4 text-center font-bold text-green-600">
+                          {item.cantidad_retorno} <span className="text-[10px] ts-text-muted">{item.unidad}</span>
+                        </td>
+
+                        <td className="py-3 px-4 text-center font-bold text-orange-600">
+                          {item.cantidad_usada} <span className="text-[10px] ts-text-muted">{item.unidad}</span>
+                        </td>
+
+                        {/* Estado */}
+                        <td className="py-3 px-4">
+                          <span
+                            className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                              item.estado === "pendiente"
+                                ? "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600"
+                                : item.estado === "despachado"
+                                ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600"
+                                : item.estado === "retornado"
+                                ? "bg-green-100 dark:bg-green-900/30 text-green-600"
+                                : "bg-gray-100 dark:bg-gray-800 text-gray-600"
+                            }`}
+                          >
+                            {item.estado === "pendiente"
+                              ? "Pendiente"
+                              : item.estado === "despachado"
+                              ? "En Campo"
+                              : item.estado === "retornado"
+                              ? "Retornado"
+                              : "Consumido"}
+                          </span>
+                        </td>
+
+                        {/* Acciones */}
+                        <td className="py-3 px-4 text-right">
+                          {puedeGestionar && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              {item.estado === "pendiente" && (
+                                <button
+                                  onClick={() => handleDespachar(item)}
+                                  disabled={isSaving}
+                                  className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-2xs"
+                                >
+                                  <ArrowRight className="w-3 h-3" />
+                                  <span>Despachar</span>
+                                </button>
+                              )}
+
+                              {item.estado === "despachado" && (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    max={item.cantidad_salida}
+                                    defaultValue={0}
+                                    id={`ret-${item.id}`}
+                                    className="w-14 text-xs rounded-lg border ts-border bg-[var(--ts-surface)] ts-text px-2 py-1 text-center focus:outline-none"
+                                    placeholder="Sobró"
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const input = document.getElementById(`ret-${item.id}`) as HTMLInputElement;
+                                      handleRetorno(item, parseInt(input.value) || 0);
+                                    }}
+                                    disabled={isSaving}
+                                    title="Registrar retorno de sobrante al almacén"
+                                    className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white transition-all shadow-2xs"
+                                  >
+                                    <ArrowLeft className="w-3 h-3" />
+                                    <span>Retornar</span>
+                                  </button>
+                                </div>
+                              )}
+
+                              {(item.estado === "retornado" || item.estado === "consumido") && (
+                                <span className="text-[10px] text-green-600 font-bold flex items-center gap-1 justify-end">
+                                  <Check className="w-3 h-3" /> Liquidado
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

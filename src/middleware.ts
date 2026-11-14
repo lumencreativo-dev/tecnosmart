@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-// middleware.ts — Protege las rutas internas requiriendo sesión
+// middleware.ts — Enrutamiento inteligente por subdominio y protección de rutas
 // ─────────────────────────────────────────────────────────────
 import { NextRequest, NextResponse } from "next/server";
 
@@ -19,11 +19,25 @@ const PROTECTED_PREFIXES = [
   "/novedades",
   "/equipo",
   "/perfil",
+  "/ordenes",
+  "/cuadrillas",
+  "/actas",
+  "/agenda",
+  "/materiales",
+  "/herramientas",
+  "/finanzas",
+  "/soporte",
+  "/marketing",
 ];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const session = req.cookies.get("ts_session");
+  const host = (req.headers.get("host") || "").toLowerCase();
+
+  // Detección de subdominios (soporta producción y localhost)
+  const isApp = host.startsWith("app.") || host.startsWith("app.localhost");
+  const isTec = host.startsWith("tec.") || host.startsWith("tec.localhost");
 
   // Redirigir URLs heredadas /cotizador/* a la versión limpia
   if (pathname === "/cotizador" || pathname === "/cotizador/dashboard") {
@@ -34,17 +48,49 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL(cleanPath, req.url));
   }
 
-  const isProtected = PROTECTED_PREFIXES.some(prefix => pathname === prefix || pathname.startsWith(prefix + "/"));
+  // ── 1. COMPORTAMIENTO EN LA RAÍZ "/" SEGÚN SUBDOMINIO ──
+  if (pathname === "/") {
+    if (isTec) {
+      // Subdominio de Técnicos (tec.somostecnosmart.com o tec.localhost:3000)
+      if (!session) {
+        return NextResponse.redirect(new URL("/login", req.url));
+      }
+      return NextResponse.redirect(new URL("/ordenes", req.url));
+    }
 
-  // Si no hay sesión y va a una ruta protegida
+    if (isApp) {
+      // Subdominio del ERP (app.somostecnosmart.com o app.localhost:3000)
+      if (!session) {
+        return NextResponse.redirect(new URL("/login", req.url));
+      }
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+
+    // Dominio raíz (somostecnosmart.com o localhost:3000): muestra la Landing Page pública
+    return NextResponse.next();
+  }
+
+  // ── 2. SI YA TIENE SESIÓN Y ENTRA A /login ──
+  if (session && pathname === "/login") {
+    if (isTec) {
+      return NextResponse.redirect(new URL("/ordenes", req.url));
+    }
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
+
+  // ── 3. REDIRECCIÓN EN EL SUBDOMINIO DE TÉCNICOS ──
+  if (isTec && pathname === "/dashboard") {
+    return NextResponse.redirect(new URL("/ordenes", req.url));
+  }
+
+  // ── 4. PROTECCIÓN DE RUTAS PRIVADAS ──
+  const isProtected = PROTECTED_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(prefix + "/")
+  );
+
   if (!session && isProtected) {
     const loginUrl = new URL("/login", req.url);
     return NextResponse.redirect(loginUrl);
-  }
-
-  // Si ya tiene sesión y está en /login, mandar al dashboard
-  if (session && pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   return NextResponse.next();
@@ -52,6 +98,7 @@ export function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
     "/login",
     "/cotizador/:path*",
     "/cotizador",
@@ -69,6 +116,18 @@ export const config = {
     "/clientes",
     "/inventario/:path*",
     "/inventario",
+    "/materiales/:path*",
+    "/materiales",
+    "/cuadrillas/:path*",
+    "/cuadrillas",
+    "/ordenes/:path*",
+    "/ordenes",
+    "/agenda/:path*",
+    "/agenda",
+    "/actas/:path*",
+    "/actas",
+    "/servicios/:path*",
+    "/servicios",
     "/importar/:path*",
     "/importar",
     "/suscripciones/:path*",
@@ -81,5 +140,11 @@ export const config = {
     "/equipo",
     "/perfil/:path*",
     "/perfil",
+    "/finanzas/:path*",
+    "/finanzas",
+    "/soporte/:path*",
+    "/soporte",
+    "/marketing/:path*",
+    "/marketing",
   ],
 };

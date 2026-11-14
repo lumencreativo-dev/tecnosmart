@@ -12,7 +12,8 @@ import {
   MapPin, User, Users, Loader2, RefreshCw, MoreVertical,
   ClipboardList, ArrowRight, Zap, SlidersHorizontal, X,
   LayoutGrid, Trash2, RotateCcw, FileSpreadsheet, Receipt,
-  AlertCircle, ShieldAlert, Check, ArrowLeft
+  AlertCircle, ShieldAlert, Check, ArrowLeft,
+  Phone, MessageSquare, Navigation, ExternalLink
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { useUsuario } from "@/hooks/useUsuario";
@@ -588,78 +589,150 @@ export default function OrdenesTrabajoManager() {
     return cols;
   }, [ordenesFiltradas]);
 
-  // ── Render: Tarjeta Kanban ──────────────────────────────────────────────────
+  // ── Render: Tarjeta Kanban (Optimizada para Móvil y Campo) ─────────────────
   const KanbanCard = ({ orden }: { orden: OrdenTrabajo }) => {
     const estadoCfg = ESTADOS_CONFIG[orden.estado];
     const prioridadCfg = PRIORIDAD_CONFIG[orden.prioridad];
     const EstadoIcon = estadoCfg.icon;
 
+    const clienteTel = orden.cliente?.telefono || "";
+    const cleanPhone = clienteTel.replace(/\D/g, "");
+    const waMsg = `Hola ${orden.cliente?.nombre || ""}, le saluda el equipo técnico de TecnoSmart VZL. Estamos coordinando la misión ${orden.numero} (${orden.tipo_servicio || "Instalación"}).`;
+    const waUrl = cleanPhone ? `https://wa.me/${cleanPhone.startsWith("58") ? cleanPhone : "58" + cleanPhone.replace(/^0+/, "")}?text=${encodeURIComponent(waMsg)}` : null;
+    const mapUrl = orden.direccion_obra ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(orden.direccion_obra)}` : null;
+
     return (
       <div
-        className="ts-surface rounded-xl p-3 border ts-border cursor-pointer hover:border-[var(--ts-red)] transition-all group relative"
+        className="bg-[#131318] rounded-2xl p-4 border border-[#22222c] cursor-pointer hover:border-[var(--ts-red)] transition-all group relative shadow-md"
         onClick={() => abrirDetalle(orden)}
       >
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-mono text-[var(--ts-text-muted)]">{orden.numero}</span>
+          <span className="text-xs font-mono font-bold text-[#a5a5b2]">{orden.numero}</span>
           <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${prioridadCfg.dot}`} title={prioridadCfg.label} />
-            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${estadoCfg.bg} ${estadoCfg.color}`}>
-              <EstadoIcon className="inline w-3 h-3 mr-0.5" />
+            <span className={`w-2 h-2 rounded-full ${prioridadCfg.dot}`} title={prioridadCfg.label} />
+            <span className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${estadoCfg.bg} ${estadoCfg.color}`}>
+              <EstadoIcon className="inline w-3 h-3 mr-1" />
               {estadoCfg.label}
             </span>
           </div>
         </div>
 
         {orden.tipo_servicio && (
-          <div className="text-xs font-bold text-[var(--ts-red)] mb-1">{orden.tipo_servicio}</div>
+          <div className="text-xs font-black text-[var(--ts-red)] uppercase tracking-wider mb-1">{orden.tipo_servicio}</div>
         )}
 
         {orden.cliente?.nombre && (
-          <p className="text-xs font-semibold ts-text line-clamp-1 mb-1">{orden.cliente.nombre}</p>
+          <p className="text-sm font-bold text-white line-clamp-1 mb-1">{orden.cliente.nombre}</p>
         )}
 
-        <p className="text-xs ts-text-muted line-clamp-2 mb-2">{orden.descripcion_alcance || "Sin descripción"}</p>
+        <p className="text-xs text-[#a5a5b2] line-clamp-2 mb-3">{orden.descripcion_alcance || "Sin descripción"}</p>
 
         {orden.direccion_obra && (
-          <div className="flex items-center gap-1 text-xs ts-text-muted mb-2">
-            <MapPin className="w-3 h-3 shrink-0" />
+          <div className="flex items-center gap-1.5 text-xs text-[#a5a5b2] mb-3 bg-[#0e0e12] p-2 rounded-xl border border-[#22222c]">
+            <MapPin className="w-3.5 h-3.5 shrink-0 text-[var(--ts-red)]" />
             <span className="truncate">{orden.direccion_obra}</span>
           </div>
         )}
 
-        <div className="flex items-center justify-between pt-2 border-t ts-border">
-          <div className="flex items-center gap-1 text-xs ts-text-muted">
-            <User className="w-3 h-3" />
-            <span>{orden.tecnico_lider?.nombre || "Sin asignar"}</span>
-          </div>
-          {orden.fecha_ejecucion && (
-            <div className="flex items-center gap-1 text-xs ts-text-muted">
-              <Calendar className="w-3 h-3" />
-              <span>{new Date(orden.fecha_ejecucion).toLocaleDateString("es-VE", { day: "2-digit", month: "short" })}</span>
+        {/* Barra de Contacto y Navegación Rápida de Campo (Targets táctiles 44-48px) */}
+        <div className="grid grid-cols-3 gap-1.5 pt-2 mb-3 border-t border-[#22222c]" onClick={(e) => e.stopPropagation()}>
+          {clienteTel ? (
+            <a
+              href={`tel:${clienteTel}`}
+              className="h-10 rounded-xl bg-[#16161f] hover:bg-[#22222c] border border-[#22222c] flex items-center justify-center gap-1 text-[11px] font-bold text-emerald-400 active:scale-95 transition-all"
+              title="Llamar al cliente"
+            >
+              <Phone className="w-3.5 h-3.5" />
+              <span>Llamar</span>
+            </a>
+          ) : (
+            <div className="h-10 rounded-xl bg-[#16161f]/50 border border-[#22222c]/50 flex items-center justify-center text-[10px] text-[#6e6e78]">
+              Sin Tel
+            </div>
+          )}
+
+          {waUrl ? (
+            <a
+              href={waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-10 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-600/30 flex items-center justify-center gap-1 text-[11px] font-bold text-emerald-400 active:scale-95 transition-all"
+              title="Abrir WhatsApp"
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>WhatsApp</span>
+            </a>
+          ) : (
+            <div className="h-10 rounded-xl bg-[#16161f]/50 border border-[#22222c]/50 flex items-center justify-center text-[10px] text-[#6e6e78]">
+              Sin WA
+            </div>
+          )}
+
+          {mapUrl ? (
+            <a
+              href={mapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-10 rounded-xl bg-blue-600/15 hover:bg-blue-600/25 border border-blue-600/30 flex items-center justify-center gap-1 text-[11px] font-bold text-blue-400 active:scale-95 transition-all"
+              title="Abrir GPS"
+            >
+              <Navigation className="w-3.5 h-3.5" />
+              <span>GPS</span>
+            </a>
+          ) : (
+            <div className="h-10 rounded-xl bg-[#16161f]/50 border border-[#22222c]/50 flex items-center justify-center text-[10px] text-[#6e6e78]">
+              Sin Mapa
             </div>
           )}
         </div>
 
-        <div className="mt-2 flex items-center justify-between">
-          <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-            orden.tipo_flujo === "con_inspeccion"
-              ? "bg-purple-100 dark:bg-purple-900/20 text-purple-600"
-              : "bg-cyan-100 dark:bg-cyan-900/20 text-cyan-600"
-          }`}>
-            {orden.tipo_flujo === "con_inspeccion" ? "Inspección" : "Directa"}
-          </span>
-
-          {esAdmin && (
+        {/* Acciones de Flujo de Trabajo en Campo */}
+        <div className="flex items-center gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
+          {(orden.estado === "pendiente" || orden.estado === "programado") && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmacionMoverPapelera(orden);
-              }}
-              className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-              title="Mover a papelera"
+              type="button"
+              onClick={() => cambiarEstado(orden, "en_ejecucion")}
+              className="flex-1 h-11 bg-[var(--ts-red)] hover:bg-red-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
             >
-              <Trash2 className="w-3.5 h-3.5" />
+              <PlayCircle className="w-4 h-4" />
+              <span>Iniciar Misión</span>
             </button>
+          )}
+
+          {orden.estado === "en_ejecucion" && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setOrdenActual(orden);
+                  setModal("materiales");
+                }}
+                className="h-11 px-3 bg-[#16161f] hover:bg-[#22222c] border border-[#22222c] text-[#a5a5b2] hover:text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 active:scale-95 transition-all"
+                title="Materiales de la orden"
+              >
+                <Package className="w-4 h-4 text-[var(--ts-red)]" />
+                <span>Insumos</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setOrdenActual(orden);
+                  setModal("informe");
+                }}
+                className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Acta & Firma</span>
+              </button>
+            </>
+          )}
+
+          {orden.estado === "completado" && (
+            <div className="w-full h-9 bg-emerald-950/30 border border-emerald-800/40 rounded-xl flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-400">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Misión Completada</span>
+            </div>
           )}
         </div>
       </div>

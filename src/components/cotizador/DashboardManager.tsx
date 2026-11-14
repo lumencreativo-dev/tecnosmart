@@ -34,7 +34,8 @@ export default function DashboardManager() {
   const puedeVerAltas = esAdmin || tienePermiso(permisosUsuario, "dashboard.mrr") || tienePermiso(permisosUsuario, "inventario.suscripciones") || tienePermiso(permisosUsuario, "finanzas.dashboard");
   const puedeVerOperaciones = esAdmin || tienePermiso(permisosUsuario, "dashboard.operaciones_campo") || tienePermiso(permisosUsuario, "proyectos.ver_propias") || usuario?.rol_id === "tecnico";
   const puedeConfigurar = esAdmin || tienePermiso(permisosUsuario, "administracion.configuracion");
-  const esTecnico = usuario?.rol_id === "tecnico" || (!puedeVerFinanzas && !tienePermiso(permisosUsuario, "ventas.facturar"));
+  const esTecnicoAliado = usuario?.rol_id === "tecnico_aliado";
+  const esTecnico = usuario?.rol_id === "tecnico" || esTecnicoAliado || (!puedeVerFinanzas && !tienePermiso(permisosUsuario, "ventas.facturar"));
 
   // Filtros o widgets activos personalizables (guardados en localStorage)
   const [widgetsVisibles, setWidgetsVisibles] = useState<Record<string, boolean>>({
@@ -121,13 +122,26 @@ export default function DashboardManager() {
       .eq("estado", "activa");
     if (facData) setFacturas(facData);
 
-    // Obtener suscripciones activas
-    const { data: susData, error: susErr } = await supabase
-      .from("suscripciones")
-      .select("*, clientes(empresa, contacto, telefono), servicios_recurrentes(nombre)")
-      .eq("estado", "Activo");
-    if (susErr) console.error("Error fetching suscripciones:", susErr);
-    if (susData) setSuscripciones(susData);
+    // Obtener suscripciones activas (con fallback resiliente)
+    try {
+      const { data: susData, error: susErr } = await supabase
+        .from("suscripciones")
+        .select("*, clientes(empresa, contacto, telefono), servicios_recurrentes(nombre)")
+        .eq("estado", "Activo");
+
+      if (susErr) {
+        // Fallback resiliente: si la relación con servicios_recurrentes no existe en Supabase, consultar solo suscripciones
+        const { data: fallbackData } = await supabase
+          .from("suscripciones")
+          .select("*")
+          .eq("estado", "Activo");
+        setSuscripciones(fallbackData || []);
+      } else {
+        setSuscripciones(susData || []);
+      }
+    } catch {
+      setSuscripciones([]);
+    }
 
     // Fetch Todas las Tasas desde API
     try {
@@ -400,9 +414,13 @@ export default function DashboardManager() {
               </span>
             </div>
             <p className="text-xs ts-text-muted mt-0.5">
-              {esTecnico
+              {esTecnicoAliado
+                ? "Portal Técnico Aliado B2B: Catálogo mayorista (-15%), calculadoras CCTV y control de obras."
+                : esTecnico
                 ? "Panel operativo de servicios técnicos, cuadrillas y consulta de stock."
-                : "Métricas de ventas, facturación fiscal y rendimiento empresarial."}
+                : esAdmin
+                ? "Centro de Mando Ejecutivo: Visión 360° de ventas, facturación, operaciones y finanzas."
+                : "Métricas comerciales de ventas, cotizaciones en curso y cartera de clientes."}
             </p>
           </div>
         </div>

@@ -13,7 +13,8 @@ import {
   Repeat, Wrench, Wallet, BarChart3, Clock, UserCheck, X, Menu,
   Calendar, ClipboardCheck, HardHat, Boxes, User as UserIcon,
   CreditCard, Truck, ArrowUpDown, LifeBuoy, Ticket, ShieldCheck,
-  BookOpen, Megaphone, Send, MessageSquare, Search, Zap
+  BookOpen, Megaphone, Send, MessageSquare, Search, Zap,
+  Calculator, AlertOctagon, PhoneCall, Radio, Eye
 } from "lucide-react";
 import { useUsuario } from "@/hooks/useUsuario";
 import { supabase } from "@/lib/supabase/client";
@@ -48,32 +49,51 @@ export interface SidebarSection {
 
 // ── Configuración Maestra de Módulos (Sidebar ERP Desktop & Móvil) ─
 const SIDEBAR_SECTIONS: SidebarSection[] = [
+  // ── 1. PANEL PRINCIPAL ───────────────────────────────
   {
     id: "inicio",
-    title: "1. INICIO",
+    title: "PANEL PRINCIPAL",
     items: [
       { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard General" },
     ],
   },
+
+  // ── 2. ÁREA DE VENTAS & FACTURACIÓN ─────────────────────
   {
     id: "ventas",
-    title: "2. VENTAS & CLIENTES",
+    title: "VENTAS & FACTURACIÓN",
     permisoGrupo: "ventas",
     items: [
-      { href: "/nueva",             icon: FileEdit, label: "Cotizaciones", permiso: "ventas.cotizar" },
-      { href: "/crm?view=list",     icon: History,  label: "Historial de Cotizaciones", permiso: "ventas.cotizar" },
-      { href: "/facturacion",        icon: Receipt,  label: "Facturación SENIAT", permiso: "ventas.facturar" },
+      { href: "/crm",                icon: FileEdit, label: "Cotizaciones & CRM", permiso: "ventas.cotizar" },
+      { href: "/facturacion",        icon: Receipt,  label: "Facturación",        permiso: "ventas.facturar" },
       { href: "/historial-facturas", icon: History,  label: "Historial de Facturas", permiso: "ventas.ver_global" },
-      { href: "/crm",               icon: Kanban,   label: "CRM Pipeline", permiso: "ventas.crm" },
       { href: "/clientes",          icon: Users,    label: "Directorio de Clientes", permiso: "ventas.clientes" },
+      { href: "/suscripciones",     icon: Globe,    label: "Suscripciones (MRR)", permiso: "inventario.suscripciones" },
     ],
   },
+
+  // ── 3. OPERACIONES TÉCNICAS & OBRAS ──────────────────
+  {
+    id: "proyectos",
+    title: "OPERACIONES & OBRAS",
+    permisoGrupo: "proyectos",
+    items: [
+      { href: "/ordenes",      icon: Wrench,         label: "Órdenes de Trabajo", permiso: "proyectos.ver_propias" },
+      { href: "/agenda",       icon: Calendar,       label: "Calendario de Obras", permiso: "proyectos.agenda" },
+      { href: "/cuadrillas",   icon: HardHat,        label: "Cuadrillas & Técnicos", permiso: "proyectos.asignar_cuadrillas" },
+      { href: "/materiales",   icon: Boxes,          label: "Requisición de Materiales", permiso: "proyectos.materiales" },
+      { href: "/actas",        icon: ClipboardCheck, label: "Actas de Entrega & Firma", permiso: "proyectos.actas" },
+      { href: "/herramientas", icon: Calculator,     label: "Cálculos CCTV & Campo", permiso: "proyectos.ver_propias" },
+    ],
+  },
+
+  // ── 4. ALMACÉN & CATÁLOGO TÉCNICO ────────────────────
   {
     id: "inventario",
-    title: "3. INVENTARIO & CATÁLOGO",
+    title: "ALMACÉN & CATÁLOGO",
     permisoGrupo: "inventario",
     items: [
-      { href: "/inventario", icon: Package,     label: "Inventario Equipos", permiso: "inventario.ver" },
+      { href: "/inventario", icon: Package,     label: "Inventario de Equipos", permiso: "inventario.ver" },
       { href: "/servicios",  icon: Wrench,      label: "Servicios & Mano de Obra", permiso: "inventario.ver" },
       { href: "/importar",   icon: UploadCloud, label: "Carga Masiva (CSV)", permiso: "inventario.importar" },
       {
@@ -104,178 +124,112 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
       },
     ],
   },
-  {
-    id: "suscripciones",
-    title: "4. SUSCRIPCIONES (MRR)",
-    permisoGrupo: "inventario",
-    items: [
-      { href: "/suscripciones?tab=starlink", icon: Globe,  label: "Flota Starlink", permiso: "inventario.suscripciones" },
-      { href: "/suscripciones?tab=activas",  icon: Repeat, label: "Spotify & Streaming", permiso: "inventario.suscripciones" },
-      { href: "/suscripciones?tab=catalogo", icon: Boxes,  label: "Otras Suscripciones", permiso: "inventario.suscripciones" },
-    ],
-  },
-  {
-    id: "proyectos",
-    title: "5. PROYECTOS & OPERACIONES",
-    badge: "BETA",
-    badgeColor: "amber",
-    permisoGrupo: "proyectos",
-    items: [
-      { href: "/ordenes",    icon: Wrench,         label: "Órdenes de Trabajo", permiso: "proyectos.ver_propias" },
-      { href: "/cuadrillas", icon: HardHat,        label: "Cuadrillas & Técnicos", permiso: "proyectos.asignar_cuadrillas" },
-      { href: "/materiales", icon: Boxes,          label: "Requisición de Materiales", permiso: "proyectos.materiales" },
-      { href: "/agenda",     icon: Calendar,       label: "Calendario de Obras", permiso: "proyectos.agenda" },
-      { href: "/actas",      icon: ClipboardCheck, label: "Actas de Entrega", permiso: "proyectos.actas" },
-    ],
-  },
+
+  // ── 5. FINANZAS & TESORERÍA ──────────────────────────
   {
     id: "finanzas",
-    title: "6. FINANZAS & TESORERÍA",
-    badge: "PRÓX",
-    badgeColor: "gray",
+    title: "FINANZAS & TESORERÍA",
+    badge: "ACTIVO",
+    badgeColor: "emerald",
     permisoGrupo: "finanzas",
     items: [
-      {
-        href: "#placeholder-cuentas",
-        icon: Wallet,
-        label: "Cuentas, Cajas & Bancos",
-        permiso: "finanzas.cajas",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Cuentas, Cajas & Bancos",
-          description: "Control de flujo de caja y saldos en tiempo real de cuentas Zelle, Efectivo USD, Pago Móvil y Bancos Nacionales.",
-          icon: Wallet
-        }
-      },
-      {
-        href: "#placeholder-finanzas",
-        icon: BarChart3,
-        label: "Resumen Financiero",
-        permiso: "finanzas.dashboard",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Rentabilidad & Flujo de Caja",
-          description: "Reportes automatizados de ganancias, pérdidas, costos operativos y margen neto de la empresa en USD y Bs.",
-          icon: BarChart3
-        }
-      },
-      {
-        href: "#placeholder-cxc",
-        icon: Clock,
-        label: "Cuentas por Cobrar (CxC)",
-        permiso: "finanzas.cxc",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Cobranzas & Abonos",
-          description: "Gestión de facturas a crédito, plazos de pago por cliente, recordatorios de cobro y registro de abonos parciales.",
-          icon: Clock
-        }
-      },
-      {
-        href: "#placeholder-cxp",
-        icon: CreditCard,
-        label: "Cuentas por Pagar (CxP)",
-        permiso: "finanzas.dashboard",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Cuentas por Pagar & Gastos Operativos",
-          description: "Gestión de viáticos, compras de insumos para obras y pagos pendientes a proveedores.",
-          icon: CreditCard
-        }
-      },
+      { href: "/finanzas?tab=resumen",     icon: BarChart3,  label: "Resumen & Tasas BCV", permiso: "finanzas.dashboard" },
+      { href: "/finanzas?tab=cuentas",     icon: Wallet,     label: "Cuentas, Cajas & Bancos", permiso: "finanzas.cajas" },
+      { href: "/finanzas?tab=cxc",         icon: Clock,      label: "Cuentas por Cobrar (CxC)", permiso: "finanzas.cxc" },
+      { href: "/finanzas?tab=cxp",         icon: CreditCard, label: "Cuentas por Pagar (CxP)", permiso: "finanzas.cxp" },
+      { href: "/finanzas?tab=movimientos", icon: ArrowUpDown,label: "Libro de Movimientos", permiso: "finanzas.dashboard" },
     ],
   },
+
+  // ── 6. SOPORTE & POSTVENTA ───────────────────────────
   {
     id: "soporte",
-    title: "7. SOPORTE & POSTVENTA",
-    badge: "NUEVO",
+    title: "SOPORTE & POSTVENTA",
+    badge: "ACTIVO",
     badgeColor: "emerald",
     permisoGrupo: "soporte",
     items: [
-      {
-        href: "#placeholder-tickets",
-        icon: LifeBuoy,
-        label: "Tickets de Soporte",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Mesa de Ayuda & Incidencias",
-          description: "Recepción y seguimiento de incidencias técnicas reportadas por clientes (CCTV sin señal, falla de enlace Starlink, etc.) con SLA de atención.",
-          icon: LifeBuoy
-        }
-      },
-      {
-        href: "#placeholder-garantias",
-        icon: ShieldCheck,
-        label: "Garantías & Seriales",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Trazabilidad de Garantías",
-          description: "Registro de números de serie instalados por cliente y comprobación rápida de validez de garantías técnicas.",
-          icon: ShieldCheck
-        }
-      },
-      {
-        href: "#placeholder-wiki",
-        icon: BookOpen,
-        label: "Base de Conocimiento",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Wikis & Procedimientos Técnicos",
-          description: "Manuales rápidos de configuración para técnicos: diagramas de conexión, configuración de DVRs y parametrización de routers.",
-          icon: BookOpen
-        }
-      },
+      { href: "/soporte?tab=tickets",   icon: LifeBuoy,    label: "Mesa de Ayuda (Tickets)", permiso: "soporte.tickets" },
+      { href: "/soporte?tab=garantias", icon: ShieldCheck, label: "Garantías & Seriales (1a)", permiso: "soporte.garantias" },
+      { href: "/soporte?tab=wiki",      icon: BookOpen,    label: "Base de Conocimiento", permiso: "soporte.wiki" },
     ],
   },
+
+  // ── 7. MARKETING & LEADS WEB ─────────────────────────
   {
     id: "marketing",
-    title: "8. MARKETING & LEADS",
-    badge: "NUEVO",
+    title: "MARKETING & LEADS",
+    badge: "ACTIVO",
     badgeColor: "emerald",
     permisoGrupo: "marketing",
     items: [
-      {
-        href: "#placeholder-leads",
-        icon: Megaphone,
-        label: "Solicitudes Web Landing",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Bandeja de Leads Web",
-          description: "Captura en tiempo real de los clientes potenciales que rellenan el formulario de asesoría en somostecnosmart.com.",
-          icon: Megaphone
-        }
-      },
-      {
-        href: "#placeholder-resend",
-        icon: Send,
-        label: "Campañas Resend (Email)",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Campañas de Correo con Resend",
-          description: "Envío automatizado de recordatorios de pago, newsletters y promociones especiales sin costo con la API de Resend.",
-          icon: Send
-        }
-      },
-      {
-        href: "#placeholder-whatsapp",
-        icon: MessageSquare,
-        label: "Enlaces WhatsApp Business",
-        isPlaceholder: true,
-        placeholder: {
-          title: "Generador de Enlaces WhatsApp",
-          description: "Creación de enlaces inteligentes con mensajes preconfigurados para campañas en Instagram y seguimiento comercial.",
-          icon: MessageSquare
-        }
-      },
+      { href: "/marketing?tab=leads",    icon: Megaphone,     label: "Bandeja de Leads Web", permiso: "marketing.leads" },
+      { href: "/marketing?tab=whatsapp", icon: MessageSquare, label: "Enlaces WhatsApp UTM", permiso: "marketing.leads" },
+      { href: "/marketing?tab=email",    icon: Send,          label: "Campañas Email (Resend)", permiso: "marketing.campanas" },
+      { href: "/marketing?tab=funnel",   icon: BarChart3,     label: "Embudo de Conversión", permiso: "marketing.leads" },
+    ],
+  },
+
+  // ── 8. ADMINISTRACIÓN & SISTEMA ───────────────────────
+  {
+    id: "configuracion",
+    title: "ADMINISTRACIÓN",
+    items: [
+      { href: "/equipo", icon: UserCheck, label: "Mi Equipo & Roles", permiso: "administracion.roles" },
+      { href: "/menu",   icon: Settings,  label: "Ajustes de Empresa", permiso: "administracion.configuracion" },
+      { href: "/perfil", icon: UserIcon,  label: "Mi Perfil" },
+    ],
+  },
+];
+
+// ── Configuración Exclusiva de Navegación de Campo (tec.somostecnosmart.com) ─
+const SECCIONES_TECNICO: SidebarSection[] = [
+  {
+    id: "operaciones_campo",
+    title: "OPERACIONES EN CAMPO",
+    items: [
+      { href: "/ordenes",      icon: Wrench,         label: "Mis Órdenes de Trabajo" },
+      { href: "/materiales",   icon: Boxes,          label: "Requisición de Materiales" },
+      { href: "/actas",        icon: ClipboardCheck, label: "Actas de Entrega & Firma" },
+      { href: "/agenda",       icon: Calendar,       label: "Calendario de Obras" },
+      { href: "/herramientas", icon: Calculator,     label: "Cálculos CCTV & Campo" },
+      { href: "/cuadrillas",   icon: HardHat,        label: "Mi Cuadrilla" },
     ],
   },
   {
-    id: "configuracion",
-    title: "9. CONFIGURACIÓN",
+    id: "catalogo_campo",
+    title: "CONSULTA TÉCNICA",
     items: [
-      { href: "/menu",   icon: Settings,  label: "Centro de Ajustes" },
-      { href: "/equipo", icon: UserCheck, label: "Mi Equipo & Roles", permiso: "administracion.roles" },
-      { href: "/perfil", icon: UserIcon,  label: "Mi Perfil" },
+      { href: "/inventario",   icon: Package,        label: "Catálogo de Equipos" },
+      { href: "/servicios",    icon: Wrench,         label: "Servicios & Mano de Obra" },
+    ],
+  },
+  {
+    id: "cuenta",
+    title: "MI CUENTA",
+    items: [
+      { href: "/perfil",       icon: UserIcon,       label: "Mi Perfil Técnico" },
+    ],
+  },
+];
+
+// ── Configuración Exclusiva para Técnicos Aliados B2B (tec.somostecnosmart.com) ─
+const SECCIONES_TECNICO_ALIADO: SidebarSection[] = [
+  {
+    id: "aliado_b2b",
+    title: "PORTAL TÉCNICO ALIADO",
+    items: [
+      { href: "/ordenes",      icon: Wrench,         label: "Mis Obras & Clientes" },
+      { href: "/herramientas", icon: Calculator,     label: "Cálculos CCTV & Campo" },
+      { href: "/inventario",   icon: Package,        label: "Catálogo Mayorista (-15%)" },
+      { href: "/soporte",      icon: LifeBuoy,       label: "Soporte & Garantías" },
+    ],
+  },
+  {
+    id: "cuenta",
+    title: "MI CUENTA",
+    items: [
+      { href: "/perfil",       icon: UserIcon,       label: "Mi Perfil Aliado" },
     ],
   },
 ];
@@ -285,12 +239,29 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
   const router    = useRouter();
   const searchParams = useSearchParams();
   const { theme, setTheme } = useTheme();
-  const { usuario } = useUsuario();
+  const {
+    usuario,
+    usuarioReal,
+    rolSimulado,
+    setRolSimulado,
+    esSimulando,
+    loading: cargandoUsuario
+  } = useUsuario();
   const [mounted, setMounted] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerSearch, setDrawerSearch] = useState("");
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const [activePlaceholder, setActivePlaceholder] = useState<PlaceholderInfo | null>(null);
+  const [isTecHost, setIsTecHost] = useState(false);
+  const [sosModalOpen, setSosModalOpen] = useState(false);
+
+  // Detección de subdominio tec. (producción o tec.localhost:3000)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname.toLowerCase();
+      setIsTecHost(host.startsWith("tec.") || host.startsWith("tec.localhost"));
+    }
+  }, []);
 
   // Secciones expandidas en el Sidebar Desktop
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -299,6 +270,9 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
     inventario: true,
     suscripciones: true,
     proyectos: true,
+    operaciones_campo: true,
+    catalogo_campo: true,
+    cuenta: true,
     finanzas: false,
     soporte: false,
     marketing: false,
@@ -307,6 +281,19 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
 
   // Permisos efectivos del usuario activo
   const permisosUsuario: string[] = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
+
+  // Perfil Técnico Operativo / Subdominio tec.
+  const esTecnicoAliado = usuario?.rol_id === "tecnico_aliado";
+  const esModoTecnico = isTecHost || esTecnicoAliado || usuario?.rol_id === "tecnico" || usuario?.rol_id === "lider_tecnico" || (!tienePermiso(permisosUsuario, "ventas.cotizar") && tienePermiso(permisosUsuario, "proyectos.ver_propias"));
+
+  // Catálogo de secciones según contexto (Aliado B2B vs Campo Interno vs ERP Central)
+  const seccionesActivas = esTecnicoAliado
+    ? SECCIONES_TECNICO_ALIADO
+    : esModoTecnico
+    ? SECCIONES_TECNICO
+    : SIDEBAR_SECTIONS;
+
+  const esSuperAdminReal = usuarioReal?.rol_id === "admin" || (usuarioReal?.roles?.permisos || []).includes("*");
 
   // Evitar hydration mismatch
   useEffect(() => {
@@ -322,7 +309,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
 
   // Auto-expandir la sección correspondiente a la ruta activa
   useEffect(() => {
-    for (const section of SIDEBAR_SECTIONS) {
+    for (const section of seccionesActivas) {
       const match = section.items.some(it => {
         if (it.isPlaceholder) return false;
         const [cleanHref] = it.href.split("?");
@@ -350,9 +337,35 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
+    if (href === "/crm" && pathname === "/nueva") return true;
     const [pathPart, queryPart] = href.split("?");
     const pathMatches = pathname === pathPart || (pathPart !== "/dashboard" && pathname.startsWith(pathPart));
     if (!pathMatches) return false;
+
+    // Distinción precisa para CRM Pipeline vs Historial de Cotizaciones
+    if (pathPart === "/crm") {
+      const currentView = searchParams ? searchParams.get("view") : null;
+      if (queryPart === "view=list") {
+        return currentView === "list";
+      }
+      if (queryPart === "view=kanban") {
+        return currentView === "kanban" || !currentView;
+      }
+      // Enlace general a /crm (ej: pestaña móvil "Ventas")
+      return true;
+    }
+
+    // Distinción precisa para pestañas de Suscripciones
+    if (pathPart === "/suscripciones") {
+      const currentTab = searchParams ? searchParams.get("tab") : null;
+      if (queryPart) {
+        const expectedTab = queryPart.replace("tab=", "");
+        if (currentTab) return currentTab === expectedTab;
+        return expectedTab === "starlink";
+      }
+      return !currentTab || currentTab === "starlink";
+    }
+
     if (queryPart && searchParams) {
       const currentQuery = searchParams.toString();
       return currentQuery.includes(queryPart);
@@ -379,7 +392,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       permiso: "ventas.cotizar",
     },
     {
-      label: "Facturación SENIAT",
+      label: "Facturación",
       desc: "Emitir factura o venta",
       href: "/facturacion",
       icon: Receipt,
@@ -444,7 +457,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
             
             {/* Header del Sidebar: Logo */}
             <div className="p-4 flex items-center justify-between border-b border-[var(--ts-border)]">
-              <Link href="/dashboard" className="flex items-center gap-2.5 group">
+              <Link href={esModoTecnico ? "/ordenes" : "/dashboard"} className="flex items-center gap-2.5 group">
                 <Image
                   src="/brands/isotipo/isotipo-rojo.png"
                   alt="TecnoSmart"
@@ -457,17 +470,21 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                     <span className="font-black text-sm tracking-tight text-[var(--ts-text-primary)]">
                       Tecno<span className="text-[var(--ts-red)]">Smart</span>
                     </span>
-                    <span className="bg-[var(--ts-red-subtle)] text-[var(--ts-red)] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ml-1">
-                      ERP
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ml-1 ${
+                      esModoTecnico ? "bg-[var(--ts-red)] text-white" : "bg-[var(--ts-red-subtle)] text-[var(--ts-red)]"
+                    }`}>
+                      {esModoTecnico ? "CAMPO" : "ERP"}
                     </span>
                   </div>
-                  <span className="text-[9px] text-[var(--ts-text-muted)] font-semibold mt-0.5">Venezuela</span>
+                  <span className="text-[9px] text-[var(--ts-text-muted)] font-semibold mt-0.5">
+                    {esModoTecnico ? "Técnicos & Obras" : "Venezuela"}
+                  </span>
                 </div>
               </Link>
             </div>
 
-            {/* Botón CTA Superior: + Nueva Cotización */}
-            {tienePermiso(permisosUsuario, "ventas.cotizar") && (
+            {/* Botón CTA Superior: + Nueva Cotización (Solo en ERP Administrativo) */}
+            {!esModoTecnico && tienePermiso(permisosUsuario, "ventas.cotizar") && (
               <div className="p-3 pb-2">
                 <Link
                   href="/nueva"
@@ -479,9 +496,9 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               </div>
             )}
 
-            {/* Navegación Modular por Categorías (Acordeón ERP) */}
+            {/* Navegación Modular por Categorías (Acordeón ERP / Campo) */}
             <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2.5 scrollbar-thin">
-              {SIDEBAR_SECTIONS.map((section) => {
+              {seccionesActivas.map((section) => {
                 const itemsVisibles = section.items.filter((item) => {
                   if (!item.permiso) return true;
                   return tienePermiso(permisosUsuario, item.permiso);
@@ -588,15 +605,22 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                       <span>{usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : "TS"}</span>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[var(--ts-text-primary)] truncate group-hover:text-[var(--ts-red)] transition-colors">
-                      {usuario?.nombre || "admintecno"}
-                    </p>
-                    <p className="text-[10px] text-[var(--ts-text-muted)] truncate flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      <span>{usuario?.roles?.nombre || "Admin Principal"}</span>
-                    </p>
-                  </div>
+                  {cargandoUsuario ? (
+                    <div className="space-y-1 py-1">
+                      <div className="h-3 w-20 bg-[var(--ts-border)] rounded animate-pulse" />
+                      <div className="h-2 w-14 bg-[var(--ts-border)]/60 rounded animate-pulse" />
+                    </div>
+                  ) : (
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[var(--ts-text-primary)] truncate group-hover:text-[var(--ts-red)] transition-colors">
+                        {usuario?.nombre || "Usuario"}
+                      </p>
+                      <p className="text-[10px] text-[var(--ts-text-muted)] truncate flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span>{usuario?.roles?.nombre || "Personal"}</span>
+                      </p>
+                    </div>
+                  )}
                 </Link>
 
                 <div className="flex items-center gap-1">
@@ -631,7 +655,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
             
             {/* Header Móvil Superior (Sticky) */}
             <header className="flex md:hidden h-14 bg-[var(--ts-surface)] border-b border-[var(--ts-border)] px-3 items-center justify-between sticky top-0 z-30 shadow-xs">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setDrawerOpen(true)}
                   className="p-2 -ml-1 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-xl transition-colors active:scale-95"
@@ -639,37 +663,52 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 >
                   <Menu className="w-5 h-5" />
                 </button>
-                <Link href="/dashboard" className="flex items-center gap-2">
+                <Link href={esModoTecnico ? "/ordenes" : "/dashboard"} className="flex items-center gap-1.5">
                   <Image
                     src="/brands/isotipo/isotipo-rojo.png"
                     alt="TecnoSmart"
-                    width={28}
-                    height={28}
+                    width={26}
+                    height={26}
                     className="h-6 w-auto object-contain"
                     priority
                   />
                   <span className="font-black text-sm tracking-tight text-[var(--ts-text-primary)]">
                     Tecno<span className="text-[var(--ts-red)]">Smart</span>
                   </span>
-                  <span className="bg-[var(--ts-red-subtle)] text-[var(--ts-red)] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">
-                    ERP
+                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest ${
+                    esModoTecnico ? "bg-[var(--ts-red)] text-white" : "bg-[var(--ts-red-subtle)] text-[var(--ts-red)]"
+                  }`}>
+                    {esModoTecnico ? "CAMPO" : "ERP"}
                   </span>
                 </Link>
               </div>
 
               <div className="flex items-center gap-1.5">
-                {/* Theme Toggle rápido móvil */}
-                <button
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  className="p-2 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-xl transition-colors"
-                  title="Alternar tema"
+                {/* Botón SOS / Incidencia Operativa para Técnicos */}
+                {esModoTecnico && (
+                  <button
+                    type="button"
+                    onClick={() => setSosModalOpen(true)}
+                    className="flex items-center gap-1 px-2.5 h-8 rounded-lg bg-red-600/15 hover:bg-red-600/25 border border-red-600/40 text-red-500 font-black text-[11px] active:scale-95 transition-all shadow-xs"
+                    title="SOS / Soporte a Ingeniería"
+                  >
+                    <AlertOctagon className="w-3.5 h-3.5 animate-pulse text-red-500" />
+                    <span>SOS</span>
+                  </button>
+                )}
+
+                {/* Acceso Rápido a Herramientas de Cálculo */}
+                <Link
+                  href="/herramientas"
+                  className={`p-2 rounded-xl transition-colors ${
+                    isActive("/herramientas")
+                      ? "bg-[var(--ts-red-subtle)] text-[var(--ts-red)]"
+                      : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)]"
+                  }`}
+                  title="Cálculos Técnicos CCTV"
                 >
-                  {mounted ? (
-                    theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />
-                  ) : (
-                    <div className="w-4 h-4" />
-                  )}
-                </button>
+                  <Calculator className="w-4 h-4" />
+                </Link>
 
                 {/* Avatar Perfil Móvil */}
                 <Link
@@ -698,6 +737,42 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               </div>
 
               <div className="flex items-center gap-3">
+                {/* CONMUTADOR / SIMULADOR DE ROLES (Exclusivo Super Admin) */}
+                {esSuperAdminReal && (
+                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-xs transition-all ${
+                    esSimulando
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-500"
+                      : "bg-[var(--ts-surface-2)] border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:border-[var(--ts-red)]/50"
+                  }`}>
+                    <Eye className={`w-3.5 h-3.5 ${esSimulando ? "animate-pulse text-amber-500" : "text-[var(--ts-red)]"}`} />
+                    <span className="text-[10px] font-black uppercase tracking-wider hidden lg:inline">
+                      {esSimulando ? "Simulando:" : "Vista:"}
+                    </span>
+                    <select
+                      value={rolSimulado || "real"}
+                      onChange={(e) => setRolSimulado(e.target.value === "real" ? null : e.target.value)}
+                      className="bg-transparent text-xs font-bold text-[var(--ts-text-primary)] focus:outline-none cursor-pointer"
+                      title="Probar cómo ve el ERP cada rol de la empresa"
+                    >
+                      <option value="real">Super Admin (Real)</option>
+                      <option value="administrador">Administración & Finanzas</option>
+                      <option value="vendedor">Asesor Comercial</option>
+                      <option value="gerente">Gerente Operativo</option>
+                      <option value="tecnico">Técnico Cuadrilla</option>
+                      <option value="tecnico_aliado">Técnico Aliado B2B</option>
+                    </select>
+                    {esSimulando && (
+                      <button
+                        onClick={() => setRolSimulado(null)}
+                        className="ml-0.5 p-0.5 rounded hover:bg-amber-500/20 text-amber-500 hover:text-white transition-colors"
+                        title="Restablecer a Super Admin"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 <Link
                   href="/"
                   target="_blank"
@@ -729,6 +804,24 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             </header>
+
+            {/* Franja de Alerta de Simulación Activa */}
+            {esSimulando && (
+              <div className="bg-gradient-to-r from-amber-600 to-amber-700 text-white px-4 py-2 text-xs font-bold flex items-center justify-between sticky top-14 z-20 shadow-md">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-4 h-4 animate-pulse shrink-0" />
+                  <span>
+                    Modo Simulación Activo: Estás navegando como <strong>{usuario?.roles?.nombre}</strong>. El menú y las rutas están restringidas a lo que este rol puede ver.
+                  </span>
+                </div>
+                <button
+                  onClick={() => setRolSimulado(null)}
+                  className="bg-black/30 hover:bg-black/50 px-3 py-1 rounded-lg text-[11px] font-black transition-all cursor-pointer shrink-0"
+                >
+                  ✕ Salir de Simulación
+                </button>
+              </div>
+            )}
 
             {/* Main Content Area */}
             <main className="flex-1 min-w-0">
@@ -805,8 +898,42 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            {/* CTA Nueva Cotización en Drawer */}
-            {tienePermiso(permisosUsuario, "ventas.cotizar") && (
+            {/* Simulador de Rol en Móvil (Exclusivo Super Admin) */}
+            {esSuperAdminReal && (
+              <div className="px-3 pt-2">
+                <div className={`p-2 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                  esSimulando ? "bg-amber-500/15 border-amber-500/40" : "bg-[var(--ts-surface-2)] border-[var(--ts-border)]"
+                }`}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Eye className={`w-3.5 h-3.5 shrink-0 ${esSimulando ? "text-amber-500 animate-pulse" : "text-[var(--ts-red)]"}`} />
+                    <span className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase shrink-0">Vista:</span>
+                    <select
+                      value={rolSimulado || "real"}
+                      onChange={(e) => setRolSimulado(e.target.value === "real" ? null : e.target.value)}
+                      className="bg-transparent text-xs font-bold text-[var(--ts-text-primary)] focus:outline-none min-w-0 truncate"
+                    >
+                      <option value="real">Super Admin</option>
+                      <option value="administrador">Administradora</option>
+                      <option value="vendedor">Vendedor</option>
+                      <option value="gerente">Gerente</option>
+                      <option value="tecnico">Técnico Cuadrilla</option>
+                      <option value="tecnico_aliado">Técnico Aliado B2B</option>
+                    </select>
+                  </div>
+                  {esSimulando && (
+                    <button
+                      onClick={() => setRolSimulado(null)}
+                      className="text-[10px] font-black text-amber-500 px-1.5 py-0.5 rounded bg-amber-500/20 shrink-0"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* CTA Nueva Cotización en Drawer (Solo ERP) */}
+            {!esModoTecnico && tienePermiso(permisosUsuario, "ventas.cotizar") && (
               <div className="p-3 pb-1">
                 <Link
                   href="/nueva"
@@ -821,7 +948,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
 
             {/* Lista Modular con Filtro */}
             <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 scrollbar-thin">
-              {SIDEBAR_SECTIONS.map((section) => {
+              {seccionesActivas.map((section) => {
                 const itemsVisibles = section.items.filter((item) => {
                   if (item.permiso && !tienePermiso(permisosUsuario, item.permiso)) return false;
                   if (!drawerSearch) return true;
@@ -915,15 +1042,22 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                       <span>{usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : "TS"}</span>
                     )}
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-[var(--ts-text-primary)] truncate group-hover:text-[var(--ts-red)] transition-colors">
-                      {usuario?.nombre || "admintecno"}
-                    </p>
-                    <p className="text-[10px] text-[var(--ts-text-muted)] truncate flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      <span>{usuario?.roles?.nombre || "Usuario"}</span>
-                    </p>
-                  </div>
+                  {cargandoUsuario ? (
+                    <div className="space-y-1 py-1">
+                      <div className="h-3 w-20 bg-[var(--ts-border)] rounded animate-pulse" />
+                      <div className="h-2 w-14 bg-[var(--ts-border)]/60 rounded animate-pulse" />
+                    </div>
+                  ) : (
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[var(--ts-text-primary)] truncate group-hover:text-[var(--ts-red)] transition-colors">
+                        {usuario?.nombre || "Usuario"}
+                      </p>
+                      <p className="text-[10px] text-[var(--ts-text-muted)] truncate flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        <span>{usuario?.roles?.nombre || "Personal"}</span>
+                      </p>
+                    </div>
+                  )}
                 </Link>
 
                 <button
@@ -944,15 +1078,82 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
           BOTTOM NAV MÓVIL (ERGONOMÍA CON ACCIONES RÁPIDAS)
       ══════════════════════════════════════════════ */}
       {!isLoginPage && (() => {
-        const esTecnico = usuario?.rol_id === "tecnico" || (!tienePermiso(permisosUsuario, "ventas.cotizar") && tienePermiso(permisosUsuario, "proyectos.ver_propias"));
+        if (esModoTecnico) {
+          // Bottom Navigation Bar dedicada para Técnicos e Instaladores (5 accesos de campo)
+          return (
+            <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[#131318]/95 backdrop-blur-md border-t border-[#22222c] z-40 shadow-2xl">
+              <div className="flex items-center justify-around h-16 px-1">
+                {/* 1. Misiones */}
+                <Link
+                  href="/ordenes"
+                  className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] gap-1 transition-all active:scale-95"
+                >
+                  <div className={`p-1.5 rounded-xl transition-all ${isActive("/ordenes") ? "bg-[rgba(201,36,43,0.18)]" : ""}`}>
+                    <Wrench className={`w-5 h-5 transition-colors ${isActive("/ordenes") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`} />
+                  </div>
+                  <span className={`text-[10px] font-bold tracking-tight transition-colors ${isActive("/ordenes") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`}>
+                    Misiones
+                  </span>
+                </Link>
 
-        const tab2 = esTecnico
-          ? { href: "/ordenes", icon: Wrench, label: "Misiones" }
-          : { href: "/crm", icon: Kanban, label: "Ventas", permiso: "ventas.crm" };
+                {/* 2. Materiales */}
+                <Link
+                  href="/materiales"
+                  className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] gap-1 transition-all active:scale-95"
+                >
+                  <div className={`p-1.5 rounded-xl transition-all ${isActive("/materiales") ? "bg-[rgba(201,36,43,0.18)]" : ""}`}>
+                    <Boxes className={`w-5 h-5 transition-colors ${isActive("/materiales") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`} />
+                  </div>
+                  <span className={`text-[10px] font-bold tracking-tight transition-colors ${isActive("/materiales") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`}>
+                    Materiales
+                  </span>
+                </Link>
 
-        const tab4 = esTecnico
-          ? { href: "/agenda", icon: Calendar, label: "Agenda" }
-          : { href: "/inventario", icon: Package, label: "Stock", permiso: "inventario.ver" };
+                {/* 3. Cálculos CCTV & Campo */}
+                <Link
+                  href="/herramientas"
+                  className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] gap-1 transition-all active:scale-95"
+                >
+                  <div className={`p-1.5 rounded-xl transition-all ${isActive("/herramientas") ? "bg-[rgba(201,36,43,0.18)]" : ""}`}>
+                    <Calculator className={`w-5 h-5 transition-colors ${isActive("/herramientas") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`} />
+                  </div>
+                  <span className={`text-[10px] font-bold tracking-tight transition-colors ${isActive("/herramientas") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`}>
+                    Cálculos
+                  </span>
+                </Link>
+
+                {/* 4. Agenda */}
+                <Link
+                  href="/agenda"
+                  className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] gap-1 transition-all active:scale-95"
+                >
+                  <div className={`p-1.5 rounded-xl transition-all ${isActive("/agenda") ? "bg-[rgba(201,36,43,0.18)]" : ""}`}>
+                    <Calendar className={`w-5 h-5 transition-colors ${isActive("/agenda") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`} />
+                  </div>
+                  <span className={`text-[10px] font-bold tracking-tight transition-colors ${isActive("/agenda") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`}>
+                    Agenda
+                  </span>
+                </Link>
+
+                {/* 5. Actas */}
+                <Link
+                  href="/actas"
+                  className="flex flex-col items-center justify-center flex-1 h-full min-h-[48px] gap-1 transition-all active:scale-95"
+                >
+                  <div className={`p-1.5 rounded-xl transition-all ${isActive("/actas") ? "bg-[rgba(201,36,43,0.18)]" : ""}`}>
+                    <ClipboardCheck className={`w-5 h-5 transition-colors ${isActive("/actas") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`} />
+                  </div>
+                  <span className={`text-[10px] font-bold tracking-tight transition-colors ${isActive("/actas") ? "text-[#c9242b]" : "text-[#a5a5b2]"}`}>
+                    Actas
+                  </span>
+                </Link>
+              </div>
+            </nav>
+          );
+        }
+
+        const tab2 = { href: "/crm", icon: Kanban, label: "Ventas", permiso: "ventas.crm" };
+        const tab4 = { href: "/inventario", icon: Package, label: "Stock", permiso: "inventario.ver" };
 
         return (
           <nav className="md:hidden fixed bottom-0 left-0 w-full bg-[var(--ts-surface)] border-t border-[var(--ts-border)] z-40 shadow-[var(--ts-shadow)]">
@@ -971,7 +1172,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 </span>
               </Link>
 
-              {/* Tab 2: Ventas / Misiones */}
+              {/* Tab 2: Ventas */}
               <Link
                 href={tab2.href}
                 className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
@@ -997,7 +1198,7 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 <span className="text-[9px] font-black text-[var(--ts-red)] mt-0.5">Acción</span>
               </div>
 
-              {/* Tab 4: Stock / Agenda */}
+              {/* Tab 4: Stock */}
               <Link
                 href={tab4.href}
                 className="flex flex-col items-center justify-center flex-1 h-full gap-0.5 transition-colors"
@@ -1120,6 +1321,75 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
               Entendido
             </button>
 
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════
+          MODAL SOS: ASISTENCIA TÉCNICA E INCIDENCIAS EN CAMPO
+      ══════════════════════════════════════════════ */}
+      {sosModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#131318] border border-red-500/40 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative text-center space-y-4">
+            
+            <button
+              onClick={() => setSosModalOpen(false)}
+              className="absolute top-4 right-4 text-[#a5a5b2] hover:text-white p-2 rounded-xl"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-14 h-14 rounded-2xl bg-red-600/20 border border-red-600/40 text-red-500 flex items-center justify-center mx-auto">
+              <AlertOctagon className="w-8 h-8 animate-pulse" />
+            </div>
+
+            <div>
+              <h3 className="text-base font-black text-white">
+                Soporte de Ingeniería en Obra
+              </h3>
+              <p className="text-xs text-[#a5a5b2] mt-1">
+                ¿Tienes un bloqueo técnico en sitio (falta de energía, corte de cable, sin línea de vista Starlink)?
+              </p>
+            </div>
+
+            <div className="space-y-2.5 pt-2">
+              <a
+                href={`https://wa.me/584120000000?text=${encodeURIComponent(
+                  `*🚨 REPORTE DE INCIDENCIA EN CAMPO - TECNOSMART VZL*\n*Técnico:* ${usuario?.nombre || "Técnico en Campo"}\n*Estado:* Bloqueo operativo en obra / Solicito asistencia técnica urgente con ingeniería.`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-emerald-900/30"
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>WhatsApp a Base de Ingenieros</span>
+              </a>
+
+              <a
+                href="tel:+584120000000"
+                className="w-full h-12 bg-[#22222c] hover:bg-[#2a2a36] text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-[#333342] active:scale-95 transition-all"
+              >
+                <PhoneCall className="w-4 h-4 text-[#c9242b]" />
+                <span>Llamada Directa a Central</span>
+              </a>
+
+              <Link
+                href="/herramientas"
+                onClick={() => setSosModalOpen(false)}
+                className="w-full h-12 bg-[#16161f] hover:bg-[#22222c] text-[#a5a5b2] hover:text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 border border-[#22222c] transition-all"
+              >
+                <Calculator className="w-4 h-4 text-[#c9242b]" />
+                <span>Abrir Calculadora CCTV & Voltajes</span>
+              </Link>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setSosModalOpen(false)}
+              className="text-[11px] font-semibold text-[#6e6e78] hover:text-white pt-2 block mx-auto"
+            >
+              Cerrar y volver a la misión
+            </button>
           </div>
         </div>
       )}

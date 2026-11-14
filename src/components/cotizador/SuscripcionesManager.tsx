@@ -323,16 +323,13 @@ export default function SuscripcionesManager() {
     monto: 0,
   });
 
-  // Auto-seleccionar filtro del socio basado en el usuario logueado
+  // Vista Global por defecto: los gerentes y administradores ven todas las suscripciones
   useEffect(() => {
-    if (usuario && !filtroInicializado && perfilesEquipo.length > 0) {
-      const esDelEquipo = perfilesEquipo.find((m) => m.id === usuario.id);
-      if (esDelEquipo) {
-        setFiltroSocio(esDelEquipo.id);
-      }
+    if (!filtroInicializado) {
+      setFiltroSocio("todos");
       setFiltroInicializado(true);
     }
-  }, [usuario, filtroInicializado, perfilesEquipo]);
+  }, [filtroInicializado]);
 
   useEffect(() => {
     fetchData();
@@ -1858,6 +1855,60 @@ export default function SuscripcionesManager() {
               );
             })}
           </div>
+
+          {/* BARRA DE FILTRO POR SOCIO / RESPONSABLE (VISTA GLOBAL POR DEFECTO) */}
+          {perfilesEquipo.length > 0 && (
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[var(--ts-text-muted)] shrink-0 px-1 flex items-center gap-1">
+                <Users className="w-3 h-3 text-[var(--ts-red)]" /> Socio:
+              </span>
+
+              <button
+                onClick={() => setFiltroSocio("todos")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border ${
+                  filtroSocio === "todos"
+                    ? "bg-[var(--ts-red)] text-white border-[var(--ts-red)] shadow-sm"
+                    : "bg-[var(--ts-surface)] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)]"
+                }`}
+              >
+                <span>🏢 Todos los Socios</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                  filtroSocio === "todos" ? "bg-white/20 text-white" : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)]"
+                }`}>
+                  {suscripciones.filter(s => filtroServicio === "todos" || s.servicio_id === filtroServicio).length}
+                </span>
+              </button>
+
+              {perfilesEquipo.map((socio) => {
+                const count = suscripciones.filter(
+                  (s) => (filtroServicio === "todos" || s.servicio_id === filtroServicio) && doesSocioParticipate(s, socio.id)
+                ).length;
+                const isSelected = filtroSocio === socio.id;
+                return (
+                  <button
+                    key={socio.id}
+                    onClick={() => setFiltroSocio(socio.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-1.5 border ${
+                      isSelected
+                        ? "bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] border-[var(--ts-red)] shadow-sm font-bold"
+                        : "bg-[var(--ts-surface)] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)]"
+                    }`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: socio.color }}
+                    />
+                    <span>{socio.nombre.split(" ")[0]}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-md ${
+                      isSelected ? "bg-[var(--ts-red-subtle)] text-[var(--ts-red)] font-bold" : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)]"
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* SUB-TOOLBAR: MODALIDAD (Cobro vs Acompañamiento) & TOGGLE DE VISTA (Financiera vs Bóveda) */}
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-[var(--ts-surface)] border border-[var(--ts-border)] p-2.5 rounded-2xl">

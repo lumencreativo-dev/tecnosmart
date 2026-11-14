@@ -117,9 +117,18 @@ function sanitizarPayload(data: Record<string, any>) {
 
 export default function InventarioManager() {
   const { usuario } = useUsuario();
+  const [isTecHost, setIsTecHost] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname.toLowerCase();
+      setIsTecHost(host.startsWith("tec.") || host.startsWith("tec.localhost"));
+    }
+  }, []);
+
   const permisosUsuario: string[] = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
   const puedeGestionarStock = tienePermiso(permisosUsuario, "inventario.gestionar");
-  const puedeVerCostos = tienePermiso(permisosUsuario, "inventario.costos");
+  // Ocultar estrictamente costos y márgenes en tec. o si el rol no tiene el permiso explícito
+  const puedeVerCostos = !isTecHost && tienePermiso(permisosUsuario, "inventario.costos");
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -647,6 +656,7 @@ export default function InventarioManager() {
       </div>
 
       {/* ── MOTOR DE MÁRGENES Y FIJACIÓN DE PRECIOS CENTRALIZADO ── */}
+      {puedeVerCostos && (
       <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl p-5 shadow-sm space-y-5">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--ts-border)]">
           <div>
@@ -798,6 +808,7 @@ export default function InventarioManager() {
           )}
         </div>
       </div>
+      )}
 
       {/* ── Barra de Herramientas y Filtros ── */}
       <div className="bg-[var(--ts-surface)] rounded-2xl border border-[var(--ts-border)] p-4 space-y-4 shadow-sm">
@@ -878,10 +889,10 @@ export default function InventarioManager() {
                 <th className="px-4 py-3.5">SKU / Modelo</th>
                 <th className="px-4 py-3.5">Marca & Categoría</th>
                 <th className="px-4 py-3.5">Nombre & Descripción</th>
-                <th className="px-4 py-3.5 text-center">Costo Prov.</th>
-                <th className="px-4 py-3.5 text-center">P. Venta</th>
+                {puedeVerCostos && <th className="px-4 py-3.5 text-center">Costo Prov.</th>}
+                <th className="px-4 py-3.5 text-center">P. Venta (Sugerido)</th>
                 <th className="px-4 py-3.5 text-center">P. Técnico</th>
-                <th className="px-4 py-3.5 text-center">Margen (%)</th>
+                {puedeVerCostos && <th className="px-4 py-3.5 text-center">Margen (%)</th>}
                 <th className="px-4 py-3.5 text-center">Estatus</th>
                 <th className="px-4 py-3.5 text-center w-24">Acciones</th>
               </tr>
@@ -890,7 +901,7 @@ export default function InventarioManager() {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 9 }).map((_, j) => (
+                    {Array.from({ length: puedeVerCostos ? 9 : 7 }).map((_, j) => (
                       <td key={j} className="px-4 py-4">
                         <div className="h-4 bg-[var(--ts-surface-2)] rounded animate-pulse w-full"></div>
                       </td>
@@ -899,7 +910,7 @@ export default function InventarioManager() {
                 ))
               ) : productosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-6 py-12 text-center text-[var(--ts-text-muted)]">
+                  <td colSpan={puedeVerCostos ? 9 : 7} className="px-6 py-12 text-center text-[var(--ts-text-muted)]">
                     <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p className="font-medium text-white">No se encontraron productos en el inventario</p>
                     <p className="text-xs mt-1">Ajusta los filtros o crea un nuevo producto.</p>
@@ -967,9 +978,9 @@ export default function InventarioManager() {
                         />
                       </td>
 
-                      {/* COSTO PROV. */}
-                      <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
-                        {puedeVerCostos ? (
+                      {/* COSTO PROV. (Solo visible si tiene permiso explícito y no está en tec.) */}
+                      {puedeVerCostos && (
+                        <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
                           <input
                             type="number"
                             step="0.01"
@@ -980,15 +991,10 @@ export default function InventarioManager() {
                             onChange={(e) => handleCostoChange(p, e.target.value)}
                             className="w-20 px-2 py-1.5 bg-[#18181b] border border-[var(--ts-border)] rounded-xl text-xs font-mono font-bold text-center text-white focus:outline-none focus:border-[var(--ts-red)]"
                           />
-                        ) : (
-                          <span className="text-[10px] text-[var(--ts-text-muted)] font-mono flex items-center justify-center gap-1">
-                            <Lock className="w-3 h-3" />
-                            Bloqueado
-                          </span>
-                        )}
-                      </td>
+                        </td>
+                      )}
 
-                      {/* P. VENTA (VERDE ESMERALDA) */}
+                      {/* P. VENTA (SUGERIDO) */}
                       <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
                         <input
                           type="number"
@@ -1016,24 +1022,26 @@ export default function InventarioManager() {
                         />
                       </td>
 
-                      {/* MARGEN INDIVIDUAL EDITABLE EN FILA */}
-                      <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
-                        <div className="inline-flex items-center justify-center gap-0.5 bg-[#18181b] border border-emerald-500/30 rounded-xl px-2 py-1 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/50 transition-all">
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            max="99"
-                            disabled={!puedeGestionarStock}
-                            value={margenFilaValor}
-                            placeholder="0"
-                            onChange={(e) => handleMargenFilaChange(p, e.target.value)}
-                            className="w-11 bg-transparent text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none"
-                            title="Modificar margen individual para este producto (%)"
-                          />
-                          <span className="text-xs font-mono font-bold text-emerald-400/80">%</span>
-                        </div>
-                      </td>
+                      {/* MARGEN INDIVIDUAL (Solo visible si puede ver costos) */}
+                      {puedeVerCostos && (
+                        <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
+                          <div className="inline-flex items-center justify-center gap-0.5 bg-[#18181b] border border-emerald-500/30 rounded-xl px-2 py-1 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/50 transition-all">
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              max="99"
+                              disabled={!puedeGestionarStock}
+                              value={margenFilaValor}
+                              placeholder="0"
+                              onChange={(e) => handleMargenFilaChange(p, e.target.value)}
+                              className="w-11 bg-transparent text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none"
+                              title="Modificar margen individual para este producto (%)"
+                            />
+                            <span className="text-xs font-mono font-bold text-emerald-400/80">%</span>
+                          </div>
+                        </td>
+                      )}
 
                       {/* ESTATUS Y STOCK */}
                       <td className="px-4 py-3 align-middle text-center whitespace-nowrap">

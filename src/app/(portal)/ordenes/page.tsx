@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function OrdenesPage() {
   return (
     <ProtectedView
-      permiso="proyectos.ver_propias"
+      permiso={["proyectos.ver_propias", "proyectos.crear_ordenes"]}
       modulo="Órdenes de Trabajo"
     >
       <OrdenesTrabajoManager />
