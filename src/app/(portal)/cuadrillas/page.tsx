@@ -3,6 +3,8 @@ import { Metadata } from "next";
 import ProtectedView from "@/components/cotizador/ProtectedView";
 import CuadrillasManager from "@/components/cotizador/CuadrillasManager";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Cuadrillas & Técnicos | TecnoSmart VZL",
 };

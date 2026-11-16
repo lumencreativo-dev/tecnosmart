@@ -12,6 +12,8 @@ import {
 } from "@/lib/supabase/servicios";
 import type { ServicioManoObra } from "@/lib/types";
 import { formatUSD } from "@/lib/utils";
+import { useUsuario } from "@/hooks/useUsuario";
+import { tienePermiso } from "@/lib/permissions";
 
 const UNIDADES_SUGERIDAS = [
   "punto",
@@ -47,6 +49,13 @@ const CAT_COLORS: Record<string, { text: string; bg: string; border: string }> =
 };
 
 export default function ServiciosManager() {
+  const { usuario } = useUsuario();
+  const permisos = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
+  const esTecnico = usuario?.rol_id === "tecnico" || usuario?.rol_id === "tecnico_aliado" || usuario?.rol_id === "lider_tecnico";
+  const esAdmin = usuario?.rol_id === "admin" || permisos.includes("*");
+  // Los técnicos bajo ninguna circunstancia pueden editar servicios o tarifas
+  const puedeGestionarServicios = !esTecnico && (esAdmin || tienePermiso(permisos, "inventario.gestionar"));
+
   const [servicios, setServicios] = useState<ServicioManoObra[]>([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState("");
@@ -132,6 +141,10 @@ export default function ServiciosManager() {
 
   // Guardar cambio inline de precio base o técnico
   const handleGuardarInline = async (s: ServicioManoObra) => {
+    if (!puedeGestionarServicios) {
+      alert("Acceso denegado: Los técnicos no tienen permisos para modificar tarifas de servicios.");
+      return;
+    }
     const edicion = preciosEditados[s.id];
     if (!edicion) return;
 
@@ -164,6 +177,7 @@ export default function ServiciosManager() {
 
   // Abrir Modal para Crear
   const abrirCrear = () => {
+    if (!puedeGestionarServicios) return;
     setEditingServicio(null);
     setFormCodigo("");
     setFormConcepto("");
@@ -179,6 +193,7 @@ export default function ServiciosManager() {
 
   // Abrir Modal para Editar
   const abrirEditar = (s: ServicioManoObra) => {
+    if (!puedeGestionarServicios) return;
     setEditingServicio(s);
     setFormCodigo(s.codigo);
     setFormConcepto(s.concepto);
@@ -218,6 +233,10 @@ export default function ServiciosManager() {
   // Guardar Modal
   const handleSubmitModal = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!puedeGestionarServicios) {
+      alert("Acceso denegado: Los técnicos no tienen permisos para crear o modificar servicios.");
+      return;
+    }
     if (!formConcepto.trim()) {
       alert("Por favor indica el nombre o concepto del servicio.");
       return;
@@ -268,7 +287,7 @@ export default function ServiciosManager() {
 
   // Eliminar
   const handleConfirmarEliminar = async () => {
-    if (!deleteConfirm) return;
+    if (!puedeGestionarServicios || !deleteConfirm) return;
     setDeleting(true);
     try {
       await eliminarServicio(deleteConfirm.id);
@@ -285,6 +304,7 @@ export default function ServiciosManager() {
 
   // Restaurar Predeterminados
   const handleRestaurar = async () => {
+    if (!puedeGestionarServicios) return;
     if (!confirm("¿Deseas recargar la lista de los 15 servicios estándar iniciales de TecnoSmart?")) return;
     setLoading(true);
     try {
@@ -318,27 +338,44 @@ export default function ServiciosManager() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleRestaurar}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-[var(--ts-text-muted)] hover:text-white bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl transition-all"
-            title="Cargar los 15 servicios estándar predeterminados de TecnoSmart"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Restaurar Iniciales</span>
-          </button>
+        {puedeGestionarServicios ? (
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleRestaurar}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-[var(--ts-text-muted)] hover:text-white bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl transition-all"
+              title="Cargar los 15 servicios estándar predeterminados de TecnoSmart"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Restaurar Iniciales</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={abrirCrear}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[var(--ts-red)] hover:bg-red-700 rounded-xl transition-all shadow-md shadow-red-900/20 active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            <span>+ Nuevo Servicio</span>
-          </button>
-        </div>
+            <button
+              type="button"
+              onClick={abrirCrear}
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-[var(--ts-red)] hover:bg-red-700 rounded-xl transition-all shadow-md shadow-red-900/20 active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Nuevo Servicio</span>
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-3.5 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs font-bold text-blue-400">
+            <ShieldCheck className="w-4 h-4 text-blue-400" />
+            <span>Modo Consulta (Solo Lectura)</span>
+          </div>
+        )}
       </div>
+
+      {/* BANNER INFORMATIVO PARA TÉCNICOS */}
+      {!puedeGestionarServicios && (
+        <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center gap-2.5 text-xs text-blue-300">
+          <ShieldCheck className="w-4 h-4 shrink-0 text-blue-400" />
+          <span>
+            <strong>Tarifario de Referencia Oficial:</strong> Consulta las tarifas autorizadas por la gerencia para mano de obra, puntos de red e instalaciones. Tu perfil cuenta con acceso en <strong>modo lectura</strong> para elaboración de propuestas.
+          </span>
+        </div>
+      )}
 
       {/* AVISO DE ÉXITO */}
       {avisoExito && (
@@ -509,52 +546,64 @@ export default function ServiciosManager() {
 
                       {/* Precio Base (con edición rápida inline) */}
                       <td className="p-3.5 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5 justify-end">
-                          <span className="text-[10px] text-[var(--ts-text-muted)] font-mono">$</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={edicion?.base !== undefined ? edicion.base : s.precio_base}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              setPreciosEditados(prev => ({
-                                ...prev,
-                                [s.id]: { ...prev[s.id], base: val }
-                              }));
-                            }}
-                            className={`w-20 text-right bg-[var(--ts-surface-2)] border rounded-lg px-2 py-1 text-xs font-mono font-bold text-emerald-400 focus:outline-none focus:border-[var(--ts-red)] ${
-                              edicion?.base !== undefined && edicion.base !== s.precio_base
-                                ? "border-amber-500 bg-amber-500/10"
-                                : "border-[var(--ts-border)]"
-                            }`}
-                          />
-                        </div>
+                        {puedeGestionarServicios ? (
+                          <div className="inline-flex items-center gap-1.5 justify-end">
+                            <span className="text-[10px] text-[var(--ts-text-muted)] font-mono">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={edicion?.base !== undefined ? edicion.base : s.precio_base}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setPreciosEditados(prev => ({
+                                  ...prev,
+                                  [s.id]: { ...prev[s.id], base: val }
+                                }));
+                              }}
+                              className={`w-20 text-right bg-[var(--ts-surface-2)] border rounded-lg px-2 py-1 text-xs font-mono font-bold text-emerald-400 focus:outline-none focus:border-[var(--ts-red)] ${
+                                edicion?.base !== undefined && edicion.base !== s.precio_base
+                                  ? "border-amber-500 bg-amber-500/10"
+                                  : "border-[var(--ts-border)]"
+                              }`}
+                            />
+                          </div>
+                        ) : (
+                          <span className="font-mono font-bold text-emerald-400 text-xs">
+                            {formatUSD(s.precio_base)}
+                          </span>
+                        )}
                       </td>
 
                       {/* Precio Técnico */}
                       <td className="p-3.5 text-right whitespace-nowrap">
-                        <div className="inline-flex items-center gap-1.5 justify-end">
-                          <span className="text-[10px] text-[var(--ts-text-muted)] font-mono">$</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={edicion?.tecnico !== undefined ? edicion.tecnico : (s.precio_tecnico ?? s.precio_base)}
-                            onChange={(e) => {
-                              const val = parseFloat(e.target.value) || 0;
-                              setPreciosEditados(prev => ({
-                                ...prev,
-                                [s.id]: { ...prev[s.id], tecnico: val }
-                              }));
-                            }}
-                            className={`w-20 text-right bg-[var(--ts-surface-2)] border rounded-lg px-2 py-1 text-xs font-mono font-bold text-purple-300 focus:outline-none focus:border-[var(--ts-red)] ${
-                              edicion?.tecnico !== undefined && edicion.tecnico !== s.precio_tecnico
-                                ? "border-amber-500 bg-amber-500/10"
-                                : "border-[var(--ts-border)]"
-                            }`}
-                          />
-                        </div>
+                        {puedeGestionarServicios ? (
+                          <div className="inline-flex items-center gap-1.5 justify-end">
+                            <span className="text-[10px] text-[var(--ts-text-muted)] font-mono">$</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={edicion?.tecnico !== undefined ? edicion.tecnico : (s.precio_tecnico ?? s.precio_base)}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setPreciosEditados(prev => ({
+                                  ...prev,
+                                  [s.id]: { ...prev[s.id], tecnico: val }
+                                }));
+                              }}
+                              className={`w-20 text-right bg-[var(--ts-surface-2)] border rounded-lg px-2 py-1 text-xs font-mono font-bold text-purple-300 focus:outline-none focus:border-[var(--ts-red)] ${
+                                edicion?.tecnico !== undefined && edicion.tecnico !== s.precio_tecnico
+                                  ? "border-amber-500 bg-amber-500/10"
+                                  : "border-[var(--ts-border)]"
+                              }`}
+                            />
+                          </div>
+                        ) : (
+                          <span className="font-mono font-bold text-purple-300 text-xs">
+                            {formatUSD(s.precio_tecnico ?? s.precio_base)}
+                          </span>
+                        )}
                       </td>
 
                       {/* Estado */}
@@ -571,37 +620,43 @@ export default function ServiciosManager() {
 
                       {/* Acciones */}
                       <td className="p-3.5 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {hayCambios ? (
-                            <button
-                              type="button"
-                              onClick={() => handleGuardarInline(s)}
-                              disabled={guardandoInline === s.id}
-                              className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm"
-                              title="Guardar cambios de tarifa"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => abrirEditar(s)}
-                              className="p-1.5 rounded-lg text-[var(--ts-text-muted)] hover:text-white hover:bg-[var(--ts-surface-2)] border border-transparent hover:border-[var(--ts-border)] transition-all"
-                              title="Editar servicio completo"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                        {puedeGestionarServicios ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            {hayCambios ? (
+                              <button
+                                type="button"
+                                onClick={() => handleGuardarInline(s)}
+                                disabled={guardandoInline === s.id}
+                                className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition-all shadow-sm"
+                                title="Guardar cambios de tarifa"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => abrirEditar(s)}
+                                className="p-1.5 rounded-lg text-[var(--ts-text-muted)] hover:text-white hover:bg-[var(--ts-surface-2)] border border-transparent hover:border-[var(--ts-border)] transition-all"
+                                title="Editar servicio completo"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
 
-                          <button
-                            type="button"
-                            onClick={() => setDeleteConfirm(s)}
-                            className="p-1.5 rounded-lg text-[var(--ts-text-muted)] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all"
-                            title="Eliminar del catálogo"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteConfirm(s)}
+                              className="p-1.5 rounded-lg text-[var(--ts-text-muted)] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/30 transition-all"
+                              title="Eliminar del catálogo"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-[var(--ts-text-muted)] font-mono px-2 py-0.5 rounded bg-white/5 border border-white/5">
+                            Lectura
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

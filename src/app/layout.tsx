@@ -16,6 +16,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.somostecnosmart.com"),
   title: {
     default: "TecnoSmart VZL | Tu seguridad es nuestra prioridad",
     template: "%s | TecnoSmart VZL",

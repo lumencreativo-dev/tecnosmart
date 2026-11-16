@@ -17,7 +17,7 @@ import { inferirMarcaPorSKU } from "@/lib/skuMatcher";
 // TIPOS DE DATOS
 // ─────────────────────────────────────────────────────────────
 
-export interface ProductoStaging {
+interface ProductoStaging {
   id: string;
   codigo_sku: string;
   nombre: string;
@@ -41,17 +41,17 @@ export interface ProductoStaging {
   precio_manual?: boolean;
 }
 
-export type TipoMargen = "utilidad" | "markup";
+type TipoMargen = "utilidad" | "markup";
 
-export interface MargenConfig {
+interface MargenConfig {
   tipo: TipoMargen;
   porcentaje: number;           // Default: 28%
   descuentoTecnicoPct: number;  // Default: 15%
 }
 
-export type FiltroEstado = "TODOS" | "NUEVO" | "CAMBIO_PRECIO" | "SIN_CAMBIOS" | "DUPLICADO_ARCHIVO";
+type FiltroEstado = "TODOS" | "NUEVO" | "CAMBIO_PRECIO" | "SIN_CAMBIOS" | "DUPLICADO_ARCHIVO";
 
-export type ModoImportacion = "completo" | "solo_cambios" | "solo_nuevos";
+type ModoImportacion = "completo" | "solo_cambios" | "solo_nuevos";
 
 // ─────────────────────────────────────────────────────────────
 // LISTAS DE MARCAS Y CATEGORÍAS
@@ -156,7 +156,7 @@ function parsearNumeroMoneda(str: string): number | null {
 // ─────────────────────────────────────────────────────────────
 // MOTOR DE MÁRGENES MATEMÁTICO
 // ─────────────────────────────────────────────────────────────
-export function calcularPrecios(
+function calcularPrecios(
   costo: number,
   tipoMargen: TipoMargen,
   porcentajeMargen: number,

@@ -111,12 +111,21 @@ const FORM_VACIO = {
 
 export default function OrdenesTrabajoManager() {
   const { usuario } = useUsuario();
+  const [isTecHost, setIsTecHost] = useState(false);
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname.toLowerCase();
+      setIsTecHost(host.startsWith("tec.") || host.startsWith("tec.localhost"));
+    }
+  }, []);
+
   const permisosUsuario: string[] = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
   const esAdmin = usuario?.rol_id === "admin" || permisosUsuario.includes("*") || tienePermiso(permisosUsuario, "proyectos.eliminar_ordenes");
-  const puedeCrear = tienePermiso(permisosUsuario, "proyectos.crear_ordenes");
+  const esTecnicoAliado = usuario?.rol_id === "tecnico_aliado" || isTecHost;
+  const puedeCrear = tienePermiso(permisosUsuario, "proyectos.crear_ordenes") || esTecnicoAliado;
   const puedeAsignar = tienePermiso(permisosUsuario, "proyectos.asignar_cuadrillas");
   const puedeMateriales = tienePermiso(permisosUsuario, "proyectos.materiales");
-  const puedeVerPropias = tienePermiso(permisosUsuario, "proyectos.ver_propias");
+  const puedeVerPropias = tienePermiso(permisosUsuario, "proyectos.ver_propias") || esTecnicoAliado;
   const puedeInformes = tienePermiso(permisosUsuario, "proyectos.actas");
 
   const [ordenes, setOrdenes] = useState<OrdenTrabajo[]>([]);
@@ -131,6 +140,11 @@ export default function OrdenesTrabajoManager() {
   const [form, setForm] = useState(FORM_VACIO);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Registro ágil de clientes para técnicos aliados y campo
+  const [modoNuevoCliente, setModoNuevoCliente] = useState(false);
+  const [nuevoClienteNombre, setNuevoClienteNombre] = useState("");
+  const [nuevoClienteTelefono, setNuevoClienteTelefono] = useState("");
 
   // Precarga y vinculación
   const [origenPrecarga, setOrigenPrecarga] = useState<OrigenPrecarga>("cotizacion");
@@ -155,8 +169,8 @@ export default function OrdenesTrabajoManager() {
         .order("created_at", { ascending: false })
         .limit(300);
 
-      if (!puedeCrear && puedeVerPropias && usuario) {
-        q = q.or(`tecnico_lider_id.eq.${usuario.id},ayudantes.cs.{${usuario.id}}`);
+      if ((!esAdmin && puedeVerPropias && usuario) || (esTecnicoAliado && !esAdmin && usuario)) {
+        q = q.or(`tecnico_lider_id.eq.${usuario.id},ayudantes.cs.{${usuario.id}},creado_por.eq.${usuario.id}`);
       }
 
       const { data, error: qErr } = await q;
@@ -413,6 +427,28 @@ export default function OrdenesTrabajoManager() {
     setError(null);
 
     const esMock = !usuario?.id || usuario.id === "00000000-0000-0000-0000-000000000000";
+
+    // Si se escribió un cliente nuevo de campo, crearlo en el directorio central
+    let finalClienteId = form.cliente_id || null;
+    if (modoNuevoCliente && nuevoClienteNombre.trim()) {
+      try {
+        const { data: newCli } = await supabase
+          .from("clientes")
+          .insert({
+            contacto: nuevoClienteNombre.trim(),
+            telefono: nuevoClienteTelefono.trim() || null,
+            direccion: form.direccion_obra || null,
+          })
+          .select("id")
+          .single();
+        if (newCli) {
+          finalClienteId = newCli.id;
+        }
+      } catch (cliE) {
+        console.error("Error creando cliente rápido:", cliE);
+      }
+    }
+
     const payload = {
       tipo_flujo: form.tipo_flujo,
       estado: form.estado,
@@ -423,7 +459,8 @@ export default function OrdenesTrabajoManager() {
       notas_internas: form.notas_internas,
       cotizacion_id: form.cotizacion_id || null,
       creado_por: esMock ? null : usuario.id,
-      cliente_id: form.cliente_id || null,
+      tecnico_lider_id: ordenActual?.tecnico_lider_id || (!esMock && usuario?.id ? usuario.id : null),
+      cliente_id: finalClienteId,
       fecha_visita: form.fecha_visita || null,
       fecha_ejecucion: form.fecha_ejecucion || null,
     };
@@ -519,7 +556,10 @@ export default function OrdenesTrabajoManager() {
     setForm(FORM_VACIO);
     setCotizacionElegida("");
     setFacturaElegida("");
-    setOrigenPrecarga("cotizacion");
+    setOrigenPrecarga(esTecnicoAliado ? "manual" : "cotizacion");
+    setModoNuevoCliente(esTecnicoAliado);
+    setNuevoClienteNombre("");
+    setNuevoClienteTelefono("");
     setModal("nueva");
   };
 
@@ -1306,28 +1346,73 @@ export default function OrdenesTrabajoManager() {
             </div>
           </div>
 
-          {/* Cliente */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs font-bold ts-text-muted uppercase">Cliente (Directorio)</label>
-              <span className="text-[10px] ts-text-muted">Autocompleta dirección si existe</span>
+          {/* Cliente & Contacto */}
+          <div className="p-3.5 rounded-xl bg-[var(--ts-surface-2)] border ts-border space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold ts-text-muted uppercase">Cliente / Propietario de la Obra</label>
+              <div className="flex items-center gap-1 bg-[var(--ts-surface)] p-0.5 rounded-lg border ts-border text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setModoNuevoCliente(false)}
+                  className={`px-2 py-0.5 rounded font-bold transition-all ${
+                    !modoNuevoCliente ? "bg-[var(--ts-red)] text-white shadow-xs" : "ts-text-muted hover:ts-text"
+                  }`}
+                >
+                  Directorio
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModoNuevoCliente(true)}
+                  className={`px-2 py-0.5 rounded font-bold transition-all ${
+                    modoNuevoCliente ? "bg-[var(--ts-red)] text-white shadow-xs" : "ts-text-muted hover:ts-text"
+                  }`}
+                >
+                  + Nuevo Cliente
+                </button>
+              </div>
             </div>
-            <select
-              value={form.cliente_id}
-              onChange={e => {
-                const cId = e.target.value;
-                const cli = clientes.find(c => c.id === cId);
-                setForm(f => ({
-                  ...f,
-                  cliente_id: cId,
-                  direccion_obra: cli?.direccion || f.direccion_obra,
-                }));
-              }}
-              className="w-full text-xs rounded-lg border ts-border bg-[var(--ts-surface-2)] ts-text px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[var(--ts-red)]"
-            >
-              <option value="">Sin cliente asignado</option>
-              {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-            </select>
+
+            {modoNuevoCliente ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[10px] font-bold ts-text-muted uppercase mb-1 block">Nombre / Empresa *</label>
+                  <input
+                    type="text"
+                    value={nuevoClienteNombre}
+                    onChange={e => setNuevoClienteNombre(e.target.value)}
+                    placeholder="Ej. Res. Las Trinitarias / Carlos Mendoza"
+                    className="w-full text-xs rounded-lg border ts-border bg-[var(--ts-surface)] ts-text px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[var(--ts-red)]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold ts-text-muted uppercase mb-1 block">Teléfono / WhatsApp</label>
+                  <input
+                    type="tel"
+                    value={nuevoClienteTelefono}
+                    onChange={e => setNuevoClienteTelefono(e.target.value)}
+                    placeholder="Ej. 0412-1234567"
+                    className="w-full text-xs rounded-lg border ts-border bg-[var(--ts-surface)] ts-text px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[var(--ts-red)]"
+                  />
+                </div>
+              </div>
+            ) : (
+              <select
+                value={form.cliente_id}
+                onChange={e => {
+                  const cId = e.target.value;
+                  const cli = clientes.find(c => c.id === cId);
+                  setForm(f => ({
+                    ...f,
+                    cliente_id: cId,
+                    direccion_obra: cli?.direccion || f.direccion_obra,
+                  }));
+                }}
+                className="w-full text-xs rounded-lg border ts-border bg-[var(--ts-surface)] ts-text px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[var(--ts-red)]"
+              >
+                <option value="">Selecciona del directorio...</option>
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            )}
           </div>
 
           {/* Descripción / Alcance */}
@@ -1432,31 +1517,58 @@ export default function OrdenesTrabajoManager() {
   // ── Render Principal ────────────────────────────────────────────────────────
   return (
     <div className="p-4 md:p-6 space-y-4">
-      {/* Banner BETA */}
-      <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/40">
-        <span className="text-amber-500 text-lg leading-none shrink-0">⚗️</span>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-wide">
-            Módulo en Beta — Úsalo con precaución
-          </p>
-          <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5 leading-relaxed">
-            Gestión completa de Órdenes de Trabajo, precarga desde Cotizaciones Aprobadas/Facturas, y Papelera de seguridad de 30 días para Administradores.
-          </p>
+      {/* Banner de la Comunidad para Técnicos Aliados */}
+      {esTecnicoAliado ? (
+        <div className="p-4 bg-gradient-to-r from-[#1c1c24] via-[var(--ts-surface)] to-[var(--ts-surface)] border border-[#282836] rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-md animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[var(--ts-red)]/15 border border-[var(--ts-red)]/30 flex items-center justify-center text-[var(--ts-red)] shrink-0">
+              <Zap className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black text-white">Canal Aliados TecnoSmart</span>
+                <span className="text-[9px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Comunidad Activa
+                </span>
+              </div>
+              <p className="text-xs text-[var(--ts-text-muted)] mt-0.5">
+                Registra aquí tus instalaciones independientes para llevar el control de tus clientes, solicitar tus equipos con el 15% de descuento mayorista y emitir reportes de entrega profesionales.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-bold text-white bg-black/40 border border-[#333344] px-3.5 py-2 rounded-xl shrink-0">
+            <Calendar className="w-4 h-4 text-amber-400" />
+            <span>Próx. Taller: Fibra & Starlink (Sábado)</span>
+          </div>
         </div>
-        <span className="shrink-0 text-[9px] font-black uppercase px-2 py-1 rounded-full bg-amber-200 dark:bg-amber-800/50 text-amber-700 dark:text-amber-400 tracking-widest">
-          BETA
-        </span>
-      </div>
+      ) : (
+        /* Banner BETA */
+        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-50 dark:bg-amber-900/15 border border-amber-200 dark:border-amber-800/40">
+          <span className="text-amber-500 text-lg leading-none shrink-0">⚗️</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-black text-amber-700 dark:text-amber-400 uppercase tracking-wide">
+              Módulo en Beta — Úsalo con precaución
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-500 mt-0.5 leading-relaxed">
+              Gestión completa de Órdenes de Trabajo, precarga desde Cotizaciones Aprobadas/Facturas, y Papelera de seguridad de 30 días para Administradores.
+            </p>
+          </div>
+          <span className="shrink-0 text-[9px] font-black uppercase px-2 py-1 rounded-full bg-amber-200 dark:bg-amber-800/50 text-amber-700 dark:text-amber-400 tracking-widest">
+            BETA
+          </span>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-black ts-text flex items-center gap-2">
-            <Wrench className="w-5 h-5 text-[var(--ts-red)]" /> Órdenes de Trabajo
+            <Wrench className="w-5 h-5 text-[var(--ts-red)]" /> {esTecnicoAliado ? "Mis Obras & Clientes" : "Órdenes de Trabajo"}
           </h1>
           <p className="text-xs ts-text-muted mt-0.5">
-            {ordenes.length} orden{ordenes.length !== 1 ? "es" : ""} activas
-            {esAdmin && papelera.length > 0 && ` · ${papelera.length} en papelera`}
+            {esTecnicoAliado
+              ? `${ordenes.length} obra${ordenes.length !== 1 ? "s" : ""} registrada${ordenes.length !== 1 ? "s" : ""} en tu cuaderno digital de campo`
+              : `${ordenes.length} orden${ordenes.length !== 1 ? "es" : ""} activas${esAdmin && papelera.length > 0 ? ` · ${papelera.length} en papelera` : ""}`}
           </p>
         </div>
 
@@ -1517,7 +1629,7 @@ export default function OrdenesTrabajoManager() {
               onClick={abrirNueva}
               className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg bg-[var(--ts-red)] text-white hover:bg-red-700 transition-colors font-bold shadow-xs"
             >
-              <Plus className="w-3.5 h-3.5" /> Nueva Orden
+              <Plus className="w-3.5 h-3.5" /> {esTecnicoAliado ? "+ Anotar Obra / Cliente" : "Nueva Orden"}
             </button>
           )}
         </div>

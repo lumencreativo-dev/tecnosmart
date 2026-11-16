@@ -129,6 +129,8 @@ export default function InventarioManager() {
   const puedeGestionarStock = tienePermiso(permisosUsuario, "inventario.gestionar");
   // Ocultar estrictamente costos y márgenes en tec. o si el rol no tiene el permiso explícito
   const puedeVerCostos = !isTecHost && tienePermiso(permisosUsuario, "inventario.costos");
+  const esTecnicoAliado = usuario?.rol_id === "tecnico_aliado" || isTecHost;
+  const esTecnico = usuario?.rol_id === "tecnico" || usuario?.rol_id === "tecnico_aliado" || usuario?.rol_id === "lider_tecnico";
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -655,6 +657,28 @@ export default function InventarioManager() {
         </div>
       </div>
 
+      {/* ── BANNER PARA TÉCNICOS ALIADOS (CATÁLOGO MAYORISTA) ── */}
+      {esTecnicoAliado && (
+        <div className="p-4 bg-gradient-to-r from-emerald-950/40 via-[var(--ts-surface)] to-[var(--ts-surface)] border border-emerald-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white flex items-center gap-2">
+                Catálogo Mayorista de Equipos & Materiales
+                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                  15% Descuento Aliado
+                </span>
+              </p>
+              <p className="text-xs text-[var(--ts-text-muted)] mt-0.5">
+                Precios con descuento especial para tus proyectos e instalaciones. Garantía oficial TecnoSmart y soporte de ingeniería disponible.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── MOTOR DE MÁRGENES Y FIJACIÓN DE PRECIOS CENTRALIZADO ── */}
       {puedeVerCostos && (
       <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-2xl p-5 shadow-sm space-y-5">
@@ -890,11 +914,11 @@ export default function InventarioManager() {
                 <th className="px-4 py-3.5">Marca & Categoría</th>
                 <th className="px-4 py-3.5">Nombre & Descripción</th>
                 {puedeVerCostos && <th className="px-4 py-3.5 text-center">Costo Prov.</th>}
-                <th className="px-4 py-3.5 text-center">P. Venta (Sugerido)</th>
-                <th className="px-4 py-3.5 text-center">P. Técnico</th>
+                <th className="px-4 py-3.5 text-center">{esTecnicoAliado ? "PVP Referencial" : "P. Venta (Sugerido)"}</th>
+                <th className="px-4 py-3.5 text-center">{esTecnicoAliado ? "P. Aliado (-15%)" : "P. Técnico"}</th>
                 {puedeVerCostos && <th className="px-4 py-3.5 text-center">Margen (%)</th>}
                 <th className="px-4 py-3.5 text-center">Estatus</th>
-                <th className="px-4 py-3.5 text-center w-24">Acciones</th>
+                <th className="px-4 py-3.5 text-center w-24">{puedeGestionarStock ? "Acciones" : "Acceso"}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--ts-border)]">
@@ -968,14 +992,19 @@ export default function InventarioManager() {
 
                       {/* NOMBRE & DESCRIPCIÓN */}
                       <td className="px-4 py-3 align-middle min-w-[200px]">
-                        <input
-                          type="text"
-                          disabled={!puedeGestionarStock}
-                          value={nombreVal}
-                          onChange={(e) => actualizarCampoInline(p.id, "nombre", e.target.value)}
-                          className="w-full text-xs font-bold text-white bg-transparent border-b border-transparent hover:border-[var(--ts-border)] focus:border-[var(--ts-red)] focus:bg-[var(--ts-surface-2)] px-1.5 py-1 rounded transition-colors focus:outline-none"
-                          title={nombreVal}
-                        />
+                        {puedeGestionarStock ? (
+                          <input
+                            type="text"
+                            value={nombreVal}
+                            onChange={(e) => actualizarCampoInline(p.id, "nombre", e.target.value)}
+                            className="w-full text-xs font-bold text-white bg-transparent border-b border-transparent hover:border-[var(--ts-border)] focus:border-[var(--ts-red)] focus:bg-[var(--ts-surface-2)] px-1.5 py-1 rounded transition-colors focus:outline-none"
+                            title={nombreVal}
+                          />
+                        ) : (
+                          <p className="text-xs font-bold text-white px-1.5 py-1" title={nombreVal}>
+                            {nombreVal}
+                          </p>
+                        )}
                       </td>
 
                       {/* COSTO PROV. (Solo visible si tiene permiso explícito y no está en tec.) */}
@@ -996,30 +1025,47 @@ export default function InventarioManager() {
 
                       {/* P. VENTA (SUGERIDO) */}
                       <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          disabled={!puedeGestionarStock}
-                          value={pVentaVal === 0 ? "" : pVentaVal}
-                          placeholder="0.00"
-                          onChange={(e) => handlePrecioVentaChange(p, e.target.value)}
-                          className="w-24 px-2 py-1.5 bg-[#18181b] border border-emerald-500/30 rounded-xl text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                        />
+                        {puedeGestionarStock ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={pVentaVal === 0 ? "" : pVentaVal}
+                            placeholder="0.00"
+                            onChange={(e) => handlePrecioVentaChange(p, e.target.value)}
+                            className="w-24 px-2 py-1.5 bg-[#18181b] border border-emerald-500/30 rounded-xl text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                          />
+                        ) : (
+                          <span className={`font-mono text-xs ${esTecnicoAliado ? "text-[var(--ts-text-muted)] line-through" : "text-emerald-400 font-bold"}`}>
+                            {formatUSD(pVentaVal)}
+                          </span>
+                        )}
                       </td>
 
                       {/* P. TÉCNICO */}
                       <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          disabled={!puedeGestionarStock}
-                          value={pTecVal === 0 ? "" : pTecVal}
-                          placeholder="0.00"
-                          onChange={(e) => handlePrecioTecnicoChange(p, e.target.value)}
-                          className="w-20 px-2 py-1.5 bg-[#18181b] border border-[var(--ts-border)] rounded-xl text-xs font-mono font-semibold text-center text-gray-300 focus:outline-none focus:border-[var(--ts-red)]"
-                        />
+                        {puedeGestionarStock ? (
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={pTecVal === 0 ? "" : pTecVal}
+                            placeholder="0.00"
+                            onChange={(e) => handlePrecioTecnicoChange(p, e.target.value)}
+                            className="w-20 px-2 py-1.5 bg-[#18181b] border border-[var(--ts-border)] rounded-xl text-xs font-mono font-semibold text-center text-gray-300 focus:outline-none focus:border-[var(--ts-red)]"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <span className="font-mono font-bold text-emerald-400 text-xs">
+                              {formatUSD(pTecVal > 0 ? pTecVal : (pVentaVal > 0 ? Math.round(pVentaVal * 0.85 * 100) / 100 : 0))}
+                            </span>
+                            {esTecnicoAliado && (
+                              <span className="text-[9px] font-black uppercase text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 rounded mt-0.5">
+                                -15% Aliado
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
 
                       {/* MARGEN INDIVIDUAL (Solo visible si puede ver costos) */}
@@ -1045,24 +1091,33 @@ export default function InventarioManager() {
 
                       {/* ESTATUS Y STOCK */}
                       <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                        {puedeGestionarStock ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border ${
+                              stockVal > 0
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : "bg-red-500/10 text-red-400 border-red-500/30"
+                            }`}>
+                              {stockVal > 0 ? "DISPONIBLE" : "AGOTADO"}
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={stockVal}
+                              onChange={(e) => handleStockChange(p, e.target.value)}
+                              className="w-12 px-1.5 py-0.5 bg-[#18181b] border border-[var(--ts-border)] rounded-lg text-xs font-mono font-bold text-center text-white focus:outline-none focus:border-[var(--ts-red)]"
+                              title="Cantidad en Stock"
+                            />
+                          </div>
+                        ) : (
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md border ${
                             stockVal > 0
                               ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                               : "bg-red-500/10 text-red-400 border-red-500/30"
                           }`}>
-                            {stockVal > 0 ? "DISPONIBLE" : "AGOTADO"}
+                            {stockVal > 0 ? `DISPONIBLE (${stockVal})` : "AGOTADO"}
                           </span>
-                          <input
-                            type="number"
-                            min="0"
-                            disabled={!puedeGestionarStock}
-                            value={stockVal}
-                            onChange={(e) => handleStockChange(p, e.target.value)}
-                            className="w-12 px-1.5 py-0.5 bg-[#18181b] border border-[var(--ts-border)] rounded-lg text-xs font-mono font-bold text-center text-white focus:outline-none focus:border-[var(--ts-red)]"
-                            title="Cantidad en Stock"
-                          />
-                        </div>
+                        )}
                       </td>
 
                       {/* ACCIONES */}
@@ -1112,7 +1167,9 @@ export default function InventarioManager() {
                                   </button>
                                 </>
                               ) : (
-                                <Lock className="w-3.5 h-3.5 text-[var(--ts-text-muted)] opacity-50 mx-auto" />
+                                <span className="text-[10px] text-[var(--ts-text-muted)] font-mono px-2 py-0.5 rounded bg-white/5 border border-white/5">
+                                  Catálogo
+                                </span>
                               )}
                             </>
                           )}

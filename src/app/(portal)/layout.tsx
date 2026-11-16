@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import NavShell from "@/components/cotizador/NavShell";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: {
@@ -18,5 +21,9 @@ export const metadata: Metadata = {
 };
 
 export default function CotizadorLayout({ children }: { children: React.ReactNode }) {
-  return <NavShell>{children}</NavShell>;
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[var(--ts-bg)]" />}>
+      <NavShell>{children}</NavShell>
+    </Suspense>
+  );
 }
