@@ -8,7 +8,7 @@ import {
   Plus, MapPin, ExternalLink, Calculator, Percent, FileText, ChevronRight,
   Check, X, RefreshCw, Briefcase, Award, Zap, Building2, CreditCard,
   Layers, FileCheck, HelpCircle, AlertCircle, ShoppingCart, Target,
-  Compass, Radio, Flame
+  Compass, Radio, Flame, Pencil
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
@@ -266,6 +266,11 @@ export default function DashboardManager() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [configSuccess, setConfigSuccess] = useState(false);
 
+  // Quick inline edit for Meta Mensual
+  const [editandoMeta, setEditandoMeta] = useState(false);
+  const [tempMetaUSD, setTempMetaUSD] = useState("");
+  const [guardandoMetaRapida, setGuardandoMetaRapida] = useState(false);
+
   const cargarDatos = async () => {
     setLoading(true);
 
@@ -405,6 +410,23 @@ export default function DashboardManager() {
     setConfigSuccess(true);
     setTimeout(() => setConfigSuccess(false), 3000);
     setSavingConfig(false);
+  };
+
+  const handleGuardarMetaRapida = async () => {
+    const valorLimpio = tempMetaUSD.trim();
+    if (!valorLimpio || isNaN(Number(valorLimpio)) || Number(valorLimpio) <= 0) return;
+    setGuardandoMetaRapida(true);
+    try {
+      await supabase.from("configuracion").upsert([
+        { clave: "meta_mensual_usd", valor: valorLimpio }
+      ]);
+      setMetaMensualUSD(valorLimpio);
+      setEditandoMeta(false);
+    } catch (err) {
+      console.error("Error al guardar meta mensual rápida:", err);
+    } finally {
+      setGuardandoMetaRapida(false);
+    }
   };
 
   // ── CÁLCULO DE TASAS EN TIEMPO REAL ──
@@ -807,26 +829,86 @@ export default function DashboardManager() {
             </div>
 
             {/* Meta Mensual USD */}
-            <div className="ts-surface ts-radius p-5 border ts-border flex flex-col justify-between">
+            <div className="ts-surface ts-radius p-5 border ts-border flex flex-col justify-between relative group">
               <div>
                 <div className="flex items-center justify-between ts-text-muted mb-2">
                   <div className="flex items-center gap-2">
                     <Target className="w-4 h-4 text-amber-500" />
                     <span className="text-[11px] font-bold uppercase tracking-wider">Meta Mensual</span>
                   </div>
-                  <span className="text-xs font-black text-amber-500">
-                    {Math.min(100, Math.round((stats.facturadoMesUSD / (Number(metaMensualUSD) || 10000)) * 100))}%
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-black text-amber-500">
+                      {Math.min(100, Math.round((stats.facturadoMesUSD / (Number(metaMensualUSD) || 10000)) * 100))}%
+                    </span>
+                    {puedeConfigurar && (
+                      <button
+                        onClick={() => {
+                          setTempMetaUSD(metaMensualUSD);
+                          setEditandoMeta(!editandoMeta);
+                        }}
+                        className="p-1 rounded-md text-[var(--ts-text-muted)] hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                        title={editandoMeta ? "Cerrar edición" : "Editar meta mensual"}
+                        type="button"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <p className="text-3xl font-black ts-text tracking-tight">
-                  {formatUSD(Number(metaMensualUSD) || 10000)}
-                </p>
-                <div className="w-full h-2 bg-[var(--ts-surface-2)] rounded-full overflow-hidden border border-[var(--ts-border)] mt-2">
-                  <div
-                    className="h-full bg-amber-500 rounded-full transition-all duration-700"
-                    style={{ width: `${Math.min(100, (stats.facturadoMesUSD / (Number(metaMensualUSD) || 10000)) * 100)}%` }}
-                  />
-                </div>
+
+                {editandoMeta ? (
+                  <div className="my-2 p-2.5 rounded-xl bg-[var(--ts-surface-2)] border border-amber-500/30 space-y-2">
+                    <label className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase block">
+                      Ajustar Meta ($ USD):
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <div className="relative flex-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--ts-text-muted)]">$</span>
+                        <input
+                          type="number"
+                          autoFocus
+                          value={tempMetaUSD}
+                          onChange={(e) => setTempMetaUSD(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleGuardarMetaRapida();
+                            if (e.key === "Escape") setEditandoMeta(false);
+                          }}
+                          placeholder="10000"
+                          className="w-full pl-6 pr-2 py-1.5 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg text-xs font-bold text-[var(--ts-text-primary)] focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                      <button
+                        onClick={handleGuardarMetaRapida}
+                        disabled={guardandoMetaRapida || !tempMetaUSD}
+                        className="p-1.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-black font-bold rounded-lg text-xs flex items-center justify-center transition-all shadow-sm"
+                        title="Guardar meta"
+                        type="button"
+                      >
+                        {guardandoMetaRapida ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      <button
+                        onClick={() => setEditandoMeta(false)}
+                        className="p-1.5 bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)] rounded-lg text-xs flex items-center justify-center border border-[var(--ts-border)] transition-all"
+                        title="Cancelar"
+                        type="button"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-3xl font-black ts-text tracking-tight">
+                      {formatUSD(Number(metaMensualUSD) || 10000)}
+                    </p>
+                    <div className="w-full h-2 bg-[var(--ts-surface-2)] rounded-full overflow-hidden border border-[var(--ts-border)] mt-2">
+                      <div
+                        className="h-full bg-amber-500 rounded-full transition-all duration-700"
+                        style={{ width: `${Math.min(100, (stats.facturadoMesUSD / (Number(metaMensualUSD) || 10000)) * 100)}%` }}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
               <p className="text-[10px] ts-text-muted mt-3">
                 Faltan {formatUSD(Math.max(0, (Number(metaMensualUSD) || 10000) - stats.facturadoMesUSD))} para el objetivo
