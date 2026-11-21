@@ -28,7 +28,7 @@ export const GRUPOS_PERMISOS: GrupoPermisos[] = [
       { id: "ventas.anular", nombre: "Anular facturas", descripcion: "Procedimiento de reversión y nota de anulación SENIAT" },
       { id: "ventas.ver_global", nombre: "Ver historial global de facturas", descripcion: "Consultar todas las facturas de la empresa, no solo las propias" },
       { id: "ventas.crm", nombre: "Acceso al CRM Pipeline", descripcion: "Mover oportunidades comerciales por las etapas de venta" },
-      { id: "ventas.clientes", nombre: "Gestionar clientes", descripcion: "Crear, editar y clasificar empresas y contactos VIP" },
+      { id: "ventas.clientes", nombre: "Directorio de clientes", descripcion: "Consultar cartera de clientes y crear prospectos (Edición reservada a Gerentes o Super Admin)" },
     ],
   },
   {
@@ -163,7 +163,7 @@ export const ROLES_PREDETERMINADOS: RolDef[] = [
   {
     id: "vendedor",
     nombre: "Asesor Comercial",
-    descripcion: "Cotizaciones, CRM Pipeline, directorio de clientes y catálogo.",
+    descripcion: "Cotizaciones, CRM Pipeline, directorio de clientes (lectura/registro) y catálogo.",
     color: "#059669",
     es_sistema: true,
     permisos: [

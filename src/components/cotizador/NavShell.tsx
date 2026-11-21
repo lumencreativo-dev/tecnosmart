@@ -47,6 +47,30 @@ export interface SidebarSection {
   items: SidebarItem[];
 }
 
+const MODULE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  "/dashboard": { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/30" },
+  "/crm": { bg: "bg-amber-500/15", text: "text-amber-400", border: "border-amber-500/30" },
+  "/facturacion": { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30" },
+  "/historial-facturas": { bg: "bg-teal-500/15", text: "text-teal-400", border: "border-teal-500/30" },
+  "/clientes": { bg: "bg-cyan-500/15", text: "text-cyan-400", border: "border-cyan-500/30" },
+  "/suscripciones": { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30" },
+  "/ordenes": { bg: "bg-purple-500/15", text: "text-purple-400", border: "border-purple-500/30" },
+  "/agenda": { bg: "bg-indigo-500/15", text: "text-indigo-400", border: "border-indigo-500/30" },
+  "/cuadrillas": { bg: "bg-orange-500/15", text: "text-orange-400", border: "border-orange-500/30" },
+  "/materiales": { bg: "bg-rose-500/15", text: "text-rose-400", border: "border-rose-500/30" },
+  "/actas": { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30" },
+  "/herramientas": { bg: "bg-sky-500/15", text: "text-sky-400", border: "border-sky-500/30" },
+  "/inventario": { bg: "bg-blue-500/15", text: "text-blue-400", border: "border-blue-500/30" },
+  "/servicios": { bg: "bg-violet-500/15", text: "text-violet-400", border: "border-violet-500/30" },
+  "/importar": { bg: "bg-slate-500/15", text: "text-slate-300", border: "border-slate-500/30" },
+  "/finanzas": { bg: "bg-emerald-500/15", text: "text-emerald-400", border: "border-emerald-500/30" },
+  "/soporte": { bg: "bg-red-500/15", text: "text-red-400", border: "border-red-500/30" },
+  "/marketing": { bg: "bg-pink-500/15", text: "text-pink-400", border: "border-pink-500/30" },
+  "/equipo": { bg: "bg-yellow-500/15", text: "text-yellow-400", border: "border-yellow-500/30" },
+  "/novedades": { bg: "bg-cyan-500/15", text: "text-cyan-400", border: "border-cyan-500/30" },
+  "/perfil": { bg: "bg-gray-500/15", text: "text-gray-300", border: "border-gray-500/30" },
+};
+
 // ── Configuración Maestra de Módulos (Sidebar ERP Desktop & Móvil) ─
 const SIDEBAR_SECTIONS: SidebarSection[] = [
   // ── 1. PANEL PRINCIPAL ───────────────────────────────
@@ -837,239 +861,230 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* ══════════════════════════════════════════════
-          DRAWER LATERAL MÓVIL DESLIZABLE (APP MODULAR)
+          MENÚ MÓVIL ADAPTADO (APP LAUNCHER NATIVO)
       ══════════════════════════════════════════════ */}
       {drawerOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop oscurecido */}
-          <div
-            onClick={() => setDrawerOpen(false)}
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"
-          />
-
-          {/* Panel Deslizable */}
-          <div className="relative w-80 max-w-[86vw] bg-[var(--ts-surface)] border-r border-[var(--ts-border)] z-50 flex flex-col h-full shadow-2xl animate-in slide-in-from-left duration-250">
-            
-            {/* Header del Drawer Móvil */}
-            <div className="p-4 flex items-center justify-between border-b border-[var(--ts-border)] bg-[var(--ts-surface)]">
-              <Link href="/dashboard" onClick={() => setDrawerOpen(false)} className="flex items-center gap-2">
-                <Image
-                  src="/brands/isotipo/isotipo-rojo.png"
-                  alt="TecnoSmart"
-                  width={28}
-                  height={28}
-                  className="h-6 w-auto object-contain"
-                />
-                <span className="font-black text-sm tracking-tight text-[var(--ts-text-primary)]">
-                  Tecno<span className="text-[var(--ts-red)]">Smart</span>
-                </span>
-                <span className="bg-[var(--ts-red-subtle)] text-[var(--ts-red)] px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest">
-                  ERP
-                </span>
-              </Link>
-              <button
-                onClick={() => setDrawerOpen(false)}
-                className="p-1.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] hover:bg-[var(--ts-surface-2)] rounded-lg transition-colors"
-                aria-label="Cerrar menú"
+        <div className="md:hidden fixed inset-0 z-50 bg-[var(--ts-bg)]/98 backdrop-blur-2xl flex flex-col h-full w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          {/* Header Superior del Menú Móvil */}
+          <div className="p-4 border-b border-[var(--ts-border)] bg-[var(--ts-surface)]/90 backdrop-blur-md flex items-center justify-between shrink-0">
+            {/* Perfil & Rol Activo */}
+            <div className="flex items-center gap-3 min-w-0">
+              <div
+                className="w-10 h-10 rounded-2xl flex items-center justify-center text-white text-xs font-black shrink-0 overflow-hidden shadow-sm border border-white/10"
+                style={{ backgroundColor: usuario?.roles?.color || "var(--ts-red)" }}
               >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Buscador Rápido de Módulos en Móvil */}
-            <div className="p-3 border-b border-[var(--ts-border)] bg-[var(--ts-surface-2)]">
-              <div className="relative flex items-center">
-                <Search className="w-3.5 h-3.5 text-[var(--ts-text-muted)] absolute left-3 pointer-events-none" />
-                <input
-                  type="text"
-                  value={drawerSearch}
-                  onChange={(e) => setDrawerSearch(e.target.value)}
-                  placeholder="Buscar módulo o función..."
-                  className="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg border border-[var(--ts-border)] bg-[var(--ts-surface)] text-[var(--ts-text-primary)] placeholder:text-[var(--ts-text-muted)] focus:outline-none focus:border-[var(--ts-red)]"
-                />
-                {drawerSearch && (
-                  <button
-                    onClick={() => setDrawerSearch("")}
-                    className="absolute right-2.5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
+                {usuario?.avatar_url ? (
+                  <img src={usuario.avatar_url} alt={usuario.nombre} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : "TS"}</span>
                 )}
               </div>
+              <div className="min-w-0">
+                <p className="text-sm font-black text-[var(--ts-text-primary)] truncate leading-tight">
+                  {usuario?.nombre || "Usuario TecnoSmart"}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span
+                    className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full text-white"
+                    style={{ backgroundColor: usuario?.roles?.color || "var(--ts-red)" }}
+                  >
+                    {usuario?.roles?.nombre || usuario?.rol_id || "Personal"}
+                  </span>
+                  {esSimulando && (
+                    <span className="text-[9px] font-bold text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 rounded-full">
+                      Simulado
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Botón Cerrar (X) con área táctil cómoda */}
+            <button
+              onClick={() => setDrawerOpen(false)}
+              className="w-10 h-10 rounded-2xl bg-[var(--ts-surface-2)] border border-[var(--ts-border)] flex items-center justify-center text-[var(--ts-text-muted)] hover:text-white transition-all active:scale-90"
+              aria-label="Cerrar menú"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Buscador & Simulador de Rol (Super Admin) */}
+          <div className="p-3.5 border-b border-[var(--ts-border)] bg-[var(--ts-surface-2)]/60 space-y-2 shrink-0">
+            <div className="relative flex items-center">
+              <Search className="w-4 h-4 text-[var(--ts-text-muted)] absolute left-3.5 pointer-events-none" />
+              <input
+                type="text"
+                value={drawerSearch}
+                onChange={(e) => setDrawerSearch(e.target.value)}
+                placeholder="Buscar módulo, función o herramienta..."
+                className="w-full text-xs pl-10 pr-4 py-2.5 rounded-xl border border-[var(--ts-border)] bg-[var(--ts-surface)] text-[var(--ts-text-primary)] placeholder:text-[var(--ts-text-muted)] focus:outline-none focus:border-[var(--ts-red)] shadow-xs"
+              />
+              {drawerSearch && (
+                <button
+                  onClick={() => setDrawerSearch("")}
+                  className="absolute right-3 text-xs text-[var(--ts-text-muted)] hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
             {/* Simulador de Rol en Móvil (Exclusivo Super Admin) */}
             {esSuperAdminReal && (
-              <div className="px-3 pt-2">
-                <div className={`p-2 rounded-xl border text-xs flex items-center justify-between gap-2 ${
-                  esSimulando ? "bg-amber-500/15 border-amber-500/40" : "bg-[var(--ts-surface-2)] border-[var(--ts-border)]"
-                }`}>
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <Eye className={`w-3.5 h-3.5 shrink-0 ${esSimulando ? "text-amber-500 animate-pulse" : "text-[var(--ts-red)]"}`} />
-                    <span className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase shrink-0">Vista:</span>
-                    <select
-                      value={rolSimulado || "real"}
-                      onChange={(e) => setRolSimulado(e.target.value === "real" ? null : e.target.value)}
-                      className="bg-transparent text-xs font-bold text-[var(--ts-text-primary)] focus:outline-none min-w-0 truncate"
-                    >
-                      <option value="real">Super Admin</option>
-                      <option value="administrador">Administradora</option>
-                      <option value="vendedor">Vendedor</option>
-                      <option value="gerente">Gerente</option>
-                      <option value="tecnico">Técnico Cuadrilla</option>
-                      <option value="tecnico_aliado">Técnico Aliado B2B</option>
-                    </select>
-                  </div>
-                  {esSimulando && (
-                    <button
-                      onClick={() => setRolSimulado(null)}
-                      className="text-[10px] font-black text-amber-500 px-1.5 py-0.5 rounded bg-amber-500/20 shrink-0"
-                    >
-                      Reset
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* CTA Nueva Cotización en Drawer (Solo ERP) */}
-            {!esModoTecnico && tienePermiso(permisosUsuario, "ventas.cotizar") && (
-              <div className="p-3 pb-1">
-                <Link
-                  href="/nueva"
-                  onClick={() => setDrawerOpen(false)}
-                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white font-bold text-xs py-2 px-3 rounded-xl transition-all shadow-md active:scale-95"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Nueva Cotización</span>
-                </Link>
-              </div>
-            )}
-
-            {/* Lista Modular con Filtro */}
-            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 scrollbar-thin">
-              {seccionesActivas.map((section) => {
-                const itemsVisibles = section.items.filter((item) => {
-                  if (item.permiso && !tienePermiso(permisosUsuario, item.permiso)) return false;
-                  if (!drawerSearch) return true;
-                  const term = drawerSearch.toLowerCase();
-                  return item.label.toLowerCase().includes(term) || section.title.toLowerCase().includes(term);
-                });
-
-                if (itemsVisibles.length === 0) return null;
-
-                return (
-                  <div key={section.id} className="bg-[var(--ts-surface-2)]/50 rounded-xl p-2 border border-[var(--ts-border)]/50">
-                    <div className="flex items-center justify-between mb-1.5 px-1">
-                      <span className="text-[10px] font-black tracking-wider text-[var(--ts-text-muted)] uppercase">
-                        {section.title}
-                      </span>
-                      {section.badge && (
-                        <span className={`text-[7px] font-black uppercase px-1.5 py-0.2 border rounded-full ${badgeStyles(section.badgeColor)}`}>
-                          {section.badge}
-                        </span>
-                      )}
-                    </div>
-                    <div className="space-y-0.5">
-                      {itemsVisibles.map((item, itemIdx) => {
-                        const Icon = item.icon;
-                        const isPlaceholder = Boolean(item.isPlaceholder);
-                        const active = !isPlaceholder && isActive(item.href);
-
-                        if (isPlaceholder) {
-                          return (
-                            <button
-                              key={itemIdx}
-                              onClick={() => {
-                                setDrawerOpen(false);
-                                setActivePlaceholder(item.placeholder || null);
-                              }}
-                              className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface)] hover:text-[var(--ts-text-primary)] transition-all text-left group"
-                            >
-                              <div className="flex items-center gap-2">
-                                <Icon className="w-4 h-4 opacity-60 group-hover:opacity-100 transition-opacity shrink-0" />
-                                <span>{item.label}</span>
-                              </div>
-                              <span className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-[var(--ts-border)] text-[var(--ts-text-muted)]">
-                                {item.badge || "Próx"}
-                              </span>
-                            </button>
-                          );
-                        }
-
-                        return (
-                          <Link
-                            key={itemIdx}
-                            href={item.href}
-                            onClick={() => setDrawerOpen(false)}
-                            className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-xs transition-all ${
-                              active
-                                ? "bg-[var(--ts-red)] text-white font-bold shadow-xs"
-                                : "font-medium text-[var(--ts-text-muted)] hover:bg-[var(--ts-surface)] hover:text-[var(--ts-text-primary)]"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <Icon className={`w-4 h-4 ${active ? "text-white" : "opacity-70"}`} />
-                              <span>{item.label}</span>
-                            </div>
-                            {active && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
-                            )}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Footer del Drawer */}
-            <div className="p-3 border-t border-[var(--ts-border)] bg-[var(--ts-surface-2)]">
-              <div className="flex items-center justify-between">
-                <Link
-                  href="/perfil"
-                  onClick={() => setDrawerOpen(false)}
-                  className="flex items-center gap-2.5 min-w-0 p-1 rounded-xl hover:bg-[var(--ts-surface)] transition-all flex-1 group"
-                >
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-black shrink-0 overflow-hidden shadow-2xs"
-                    style={{ backgroundColor: usuario?.roles?.color || "var(--ts-red)" }}
+              <div className={`p-2.5 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                esSimulando ? "bg-amber-500/15 border-amber-500/40" : "bg-[var(--ts-surface)] border-[var(--ts-border)]"
+              }`}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Eye className={`w-4 h-4 shrink-0 ${esSimulando ? "text-amber-400 animate-pulse" : "text-[var(--ts-red)]"}`} />
+                  <span className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase shrink-0">Simulador de Rol:</span>
+                  <select
+                    value={rolSimulado || "real"}
+                    onChange={(e) => setRolSimulado(e.target.value === "real" ? null : e.target.value)}
+                    className="bg-transparent text-xs font-bold text-[var(--ts-text-primary)] focus:outline-none min-w-0 truncate cursor-pointer"
                   >
-                    {usuario?.avatar_url ? (
-                      <img src={usuario.avatar_url} alt={usuario.nombre} className="w-full h-full object-cover" />
-                    ) : (
-                      <span>{usuario?.nombre ? usuario.nombre.substring(0, 2).toUpperCase() : "TS"}</span>
+                    <option value="real">Super Admin (Real)</option>
+                    <option value="administrador">Administración & Finanzas</option>
+                    <option value="vendedor">Asesor Comercial</option>
+                    <option value="gerente">Gerente Operativo</option>
+                    <option value="tecnico">Técnico Cuadrilla</option>
+                    <option value="tecnico_aliado">Técnico Aliado B2B</option>
+                  </select>
+                </div>
+                {esSimulando && (
+                  <button
+                    onClick={() => setRolSimulado(null)}
+                    className="text-[10px] font-black text-amber-400 px-2 py-0.5 rounded-md bg-amber-500/20 shrink-0"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Cuadrícula de Aplicaciones (App Launcher Grid Nativo) */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-5 scrollbar-thin">
+            {seccionesActivas.map((section) => {
+              const itemsVisibles = section.items.filter((item) => {
+                if (item.permiso && !tienePermiso(permisosUsuario, item.permiso)) return false;
+                if (!drawerSearch) return true;
+                const term = drawerSearch.toLowerCase();
+                return item.label.toLowerCase().includes(term) || section.title.toLowerCase().includes(term);
+              });
+
+              if (itemsVisibles.length === 0) return null;
+
+              return (
+                <div key={section.id} className="space-y-2.5">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-[10px] font-black tracking-widest text-[var(--ts-text-muted)] uppercase">
+                      {section.title}
+                    </span>
+                    {section.badge && (
+                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 border rounded-full ${badgeStyles(section.badgeColor)}`}>
+                        {section.badge}
+                      </span>
                     )}
                   </div>
-                  {cargandoUsuario ? (
-                    <div className="space-y-1 py-1">
-                      <div className="h-3 w-20 bg-[var(--ts-border)] rounded animate-pulse" />
-                      <div className="h-2 w-14 bg-[var(--ts-border)]/60 rounded animate-pulse" />
-                    </div>
-                  ) : (
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-[var(--ts-text-primary)] truncate group-hover:text-[var(--ts-red)] transition-colors">
-                        {usuario?.nombre || "Usuario"}
-                      </p>
-                      <p className="text-[10px] text-[var(--ts-text-muted)] truncate flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                        <span>{usuario?.roles?.nombre || "Personal"}</span>
-                      </p>
-                    </div>
-                  )}
-                </Link>
 
-                <button
-                  onClick={handleLogout}
-                  className="p-2 rounded-lg text-[var(--ts-text-muted)] hover:text-[var(--ts-red)] hover:bg-[var(--ts-surface)] transition-colors"
-                  title="Cerrar sesión"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                    {itemsVisibles.map((item, itemIdx) => {
+                      const Icon = item.icon;
+                      const isPlaceholder = Boolean(item.isPlaceholder);
+                      const active = !isPlaceholder && isActive(item.href);
+                      const colorStyle = MODULE_COLORS[item.href] || { bg: "bg-red-500/10", text: "text-red-400", border: "border-red-500/20" };
+
+                      if (isPlaceholder) {
+                        return (
+                          <button
+                            key={itemIdx}
+                            onClick={() => {
+                              setDrawerOpen(false);
+                              setActivePlaceholder(item.placeholder || null);
+                            }}
+                            className="bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:border-[var(--ts-red)]/50 rounded-2xl p-3 flex flex-col justify-between text-left transition-all active:scale-95 shadow-xs group min-h-[96px]"
+                          >
+                            <div className="flex items-center justify-between w-full">
+                              <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-[var(--ts-text-muted)] group-hover:text-white transition-colors">
+                                <Icon className="w-5 h-5" />
+                              </div>
+                              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-white/5 text-[var(--ts-text-muted)]">
+                                {item.badge || "Próx"}
+                              </span>
+                            </div>
+                            <span className="text-xs font-bold text-[var(--ts-text-muted)] group-hover:text-[var(--ts-text-primary)] mt-2 line-clamp-2">
+                              {item.label}
+                            </span>
+                          </button>
+                        );
+                      }
+
+                      return (
+                        <Link
+                          key={itemIdx}
+                          href={item.href}
+                          onClick={() => setDrawerOpen(false)}
+                          className={`rounded-2xl p-3 flex flex-col justify-between text-left transition-all active:scale-95 shadow-xs border ${
+                            active
+                              ? "bg-gradient-to-b from-[var(--ts-surface-2)] to-[var(--ts-surface)] border-[var(--ts-red)] ring-1 ring-[var(--ts-red)]/50"
+                              : "bg-[var(--ts-surface)] border-[var(--ts-border)] hover:border-[var(--ts-red)]/40 hover:bg-[var(--ts-surface-2)]"
+                          } min-h-[96px]`}
+                        >
+                          <div className="flex items-center justify-between w-full">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${colorStyle.bg} ${colorStyle.text} ${colorStyle.border}`}>
+                              <Icon className="w-5 h-5" />
+                            </div>
+                            {active ? (
+                              <span className="w-2 h-2 rounded-full bg-[var(--ts-red)] shadow-sm animate-pulse" />
+                            ) : item.badge ? (
+                              <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)] border border-[var(--ts-border)]">
+                                {item.badge}
+                              </span>
+                            ) : null}
+                          </div>
+                          <span className={`text-xs mt-2 line-clamp-2 ${active ? "font-black text-white" : "font-bold text-[var(--ts-text-primary)]"}`}>
+                            {item.label}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer de Utilidades Móvil */}
+          <div className="p-3.5 border-t border-[var(--ts-border)] bg-[var(--ts-surface)]/95 backdrop-blur-md shrink-0 flex items-center justify-between gap-3">
+            <Link
+              href="/perfil"
+              onClick={() => setDrawerOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[var(--ts-surface-2)] border border-[var(--ts-border)] text-xs font-bold text-[var(--ts-text-primary)] hover:border-[var(--ts-red)] transition-all active:scale-95"
+            >
+              <UserIcon className="w-4 h-4 text-[var(--ts-red)]" />
+              <span>Mi Perfil</span>
+            </Link>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                className="p-2.5 rounded-xl bg-[var(--ts-surface-2)] border border-[var(--ts-border)] text-[var(--ts-text-muted)] hover:text-white transition-all active:scale-95"
+                title="Cambiar tema claro/oscuro"
+              >
+                {theme === "dark" ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-blue-400" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-400 hover:bg-red-500/20 transition-all active:scale-95"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Salir</span>
+              </button>
             </div>
-
           </div>
         </div>
       )}

@@ -17,8 +17,8 @@ export default function FacturacionPage() {
                   <FileCheck className="w-5 h-5 text-[var(--ts-red)]" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-[var(--ts-text-primary)] tracking-tight">Módulo de Facturación</h1>
-                  <p className="text-[var(--ts-text-muted)] text-xs">Convierte cotizaciones aprobadas o servicios en facturas SENIAT.</p>
+                  <h1 className="text-xl font-bold text-[var(--ts-text-primary)] tracking-tight">Módulo de Ventas & Facturación</h1>
+                  <p className="text-[var(--ts-text-muted)] text-xs">Convierte cotizaciones aprobadas o servicios en facturas y notas de entrega.</p>
                 </div>
               </div>
               {/* Acceso rápido al historial */}

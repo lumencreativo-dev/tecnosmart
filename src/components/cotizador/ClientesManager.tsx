@@ -4,10 +4,11 @@ import { useState, useEffect, useMemo } from "react";
 import {
   Search, ArrowUpDown, X, Save, Phone, Mail,
   MapPin, FileText, TrendingUp, Calendar, Edit2,
-  ChevronDown, Star, Users, RefreshCw, Edit, ExternalLink, GitBranch
+  ChevronDown, Star, Users, RefreshCw, Edit, ExternalLink, GitBranch, Lock
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, formatFecha } from "@/lib/utils";
+import { useUsuario } from "@/hooks/useUsuario";
 
 type Cliente = any;
 type Cotizacion = any;
@@ -30,6 +31,15 @@ function getRango(total: number) {
 type SortKey = "nombre" | "total" | "cotizaciones" | "reciente";
 
 export default function ClientesManager() {
+  const { usuario } = useUsuario();
+  const permisosUsuario: string[] = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
+  const esSuperAdmin = usuario?.rol_id === "admin" || permisosUsuario.includes("*");
+  const esGerente = usuario?.rol_id === "gerente";
+
+  // REGLA DE NEGOCIO: Solo Gerentes o Super Admins pueden editar datos del cliente.
+  // El Asesor Comercial (vendedor) y demás colaboradores tienen acceso de solo lectura.
+  const puedeEditarCliente = esSuperAdmin || esGerente;
+
   const [clientes, setClientes]         = useState<Cliente[]>([]);
   const [cotByCliente, setCotByCliente] = useState<Record<string, Cotizacion[]>>({});
   const [susByCliente, setSusByCliente] = useState<Record<string, any[]>>({});
@@ -133,6 +143,11 @@ export default function ClientesManager() {
   };
 
   const handleSave = async () => {
+    if (!puedeEditarCliente) {
+      alert("Acceso denegado: Solo los gerentes o super administradores tienen permisos para editar clientes.");
+      setEditMode(false);
+      return;
+    }
     setSaving(true);
     const { error } = await supabase.from("clientes").update({
       empresa:    form.empresa,
@@ -394,12 +409,19 @@ export default function ClientesManager() {
                 <div className="flex justify-between items-center mb-3">
                   <h3 className="text-xs font-bold text-[var(--ts-text-muted)] uppercase tracking-wide">Datos del Cliente</h3>
                   {!editMode ? (
-                    <button
-                      onClick={() => setEditMode(true)}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ts-red)] hover:underline"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" /> Editar
-                    </button>
+                    puedeEditarCliente ? (
+                      <button
+                        onClick={() => setEditMode(true)}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-[var(--ts-red)] hover:underline"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" /> Editar
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-[var(--ts-text-muted)] bg-[var(--ts-surface-2)] px-2.5 py-1 rounded-lg border border-[var(--ts-border)]">
+                        <Lock className="w-3 h-3 text-amber-500" />
+                        <span>Edición solo por Gerencia / Admin</span>
+                      </div>
+                    )
                   ) : (
                     <div className="flex gap-2">
                       <button

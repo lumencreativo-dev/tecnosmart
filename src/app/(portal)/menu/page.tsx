@@ -33,7 +33,7 @@ const CATALOGO_MODULOS = [
     permiso: "ventas.cotizar",
     items: [
       { href: "/crm",                icon: FileEdit, label: "Cotizaciones & CRM", desc: "Wizard de presupuestos multidivisa y pipeline Kanban" },
-      { href: "/facturacion",        icon: Receipt,  label: "Facturación SENIAT", desc: "Emisión de facturas fiscales y notas de entrega" },
+      { href: "/facturacion",        icon: Receipt,  label: "Ventas & Facturación", desc: "Emisión de facturas fiscales y notas de entrega" },
       { href: "/historial-facturas", icon: History,  label: "Historial de Facturas", desc: "Libro de ventas, cobros y retenciones" },
       { href: "/clientes",          icon: Users,    label: "Directorio de Clientes", desc: "Ficha 360°, RIFs y clientes frecuentes" },
       { href: "/suscripciones",     icon: Globe,    label: "Suscripciones (MRR)", desc: "Flota Starlink, streaming y contratos recurrentes" },

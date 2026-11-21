@@ -6,12 +6,19 @@ import {
   Trash2, RefreshCw, Filter, Sliders, TrendingUp, TrendingDown,
   DollarSign, ArrowUpRight, ArrowDownRight, Check, X, Copy,
   FileText, ShieldCheck, ChevronDown, Layers, Sparkles, HelpCircle,
-  Percent, ArrowRight
+  Percent, ArrowRight, FileSpreadsheet, Download
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD } from "@/lib/utils";
 import ProtectedView from "@/components/cotizador/ProtectedView";
 import { inferirMarcaPorSKU } from "@/lib/skuMatcher";
+import {
+  descargarPlantillaExcel,
+  descargarPlantillaCSV,
+  exportarProductosAExcel,
+  MARCAS_CATALOGO,
+  CATEGORIAS_CATALOGO
+} from "@/lib/plantillaExcel";
 
 // ─────────────────────────────────────────────────────────────
 // TIPOS DE DATOS
@@ -261,6 +268,13 @@ export default function ImportarPage() {
   const [modoImportacion, setModoImportacion] = useState<ModoImportacion>("completo");
   const [guardando, setGuardando] = useState(false);
   const [resultadoGuardado, setResultadoGuardado] = useState<{ actualizados: number; creados: number; omitidos: number } | null>(null);
+
+  // Información del archivo procesado actualmente
+  const [archivoInfo, setArchivoInfo] = useState<{
+    nombre: string;
+    tipo: "excel" | "csv" | "pdf";
+    cantidad: number;
+  } | null>(null);
 
   // ── 1. Cargar catálogo existente de Supabase ────────────────
   const cargarInventarioDB = async () => {
@@ -615,15 +629,233 @@ export default function ImportarPage() {
 
       setItems(itemsExtraidos);
       setEstado(itemsExtraidos.length > 0 ? "listo" : "error");
+      if (itemsExtraidos.length > 0) {
+        setArchivoInfo({
+          nombre: file.name,
+          tipo: "pdf",
+          cantidad: itemsExtraidos.length
+        });
+      }
       setMensaje(
         itemsExtraidos.length > 0
-          ? `✓ Se extrajeron y conciliaron ${itemsExtraidos.length} productos con éxito.`
+          ? `✓ Se extrajeron y conciliaron ${itemsExtraidos.length} productos con éxito desde PDF.`
           : "No se pudieron detectar productos estructurados. Verifica que el archivo contenga texto seleccionable."
       );
     } catch (err: any) {
       console.error("Error procesando PDF:", err);
       setEstado("error");
       setMensaje(`Error al procesar el documento PDF: ${err.message || "Estructura no compatible"}`);
+    }
+  };
+
+  // ── 4.1 Parser Inteligente para Excel (.xlsx, .xls) y CSV (.csv) ──
+  const procesarExcel = async (file: File) => {
+    setEstado("cargando");
+    setMensaje(`Leyendo hoja de cálculo: ${file.name}...`);
+    setResultadoGuardado(null);
+
+    try {
+      const XLSX = await import("xlsx");
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+
+      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+        setEstado("error");
+        setMensaje("El archivo no contiene ninguna hoja de datos.");
+        return;
+      }
+
+      // Priorizar hoja 'PRODUCTOS' (o similar) o tomar la primera hoja
+      const sheetName =
+        workbook.SheetNames.find(n => n.trim().toUpperCase() === "PRODUCTOS") ||
+        workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+
+      if (!worksheet) {
+        setEstado("error");
+        setMensaje(`No se pudo leer la hoja '${sheetName}' del archivo.`);
+        return;
+      }
+
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: "" });
+
+      if (rawRows.length === 0) {
+        setEstado("error");
+        setMensaje(`La hoja '${sheetName}' está vacía o no tiene datos de productos debajo de los encabezados.`);
+        return;
+      }
+
+      // Helper para buscar valores en columnas con nombres flexibles
+      const buscarClave = (row: Record<string, any>, posibles: string[]): string => {
+        const rowKeys = Object.keys(row);
+        // 1. Prioridad: Coincidencia exacta normalizada
+        for (const p of posibles) {
+          const pNorm = p.toLowerCase().trim().replace(/[\s_\-\.\/]/g, "");
+          const match = rowKeys.find(k => k.toLowerCase().trim().replace(/[\s_\-\.\/]/g, "") === pNorm);
+          if (match !== undefined && row[match] !== undefined && row[match] !== null && String(row[match]).trim() !== "") {
+            return String(row[match]).trim();
+          }
+        }
+        // 2. Coincidencia parcial (substring)
+        for (const p of posibles) {
+          const pNorm = p.toLowerCase().trim().replace(/[\s_\-\.\/]/g, "");
+          const match = rowKeys.find(k => k.toLowerCase().trim().replace(/[\s_\-\.\/]/g, "").includes(pNorm));
+          if (match !== undefined && row[match] !== undefined && row[match] !== null && String(row[match]).trim() !== "") {
+            return String(row[match]).trim();
+          }
+        }
+        return "";
+      };
+
+      const buscarNumero = (row: Record<string, any>, posibles: string[]): number | null => {
+        const valStr = buscarClave(row, posibles);
+        if (!valStr) return null;
+        return parsearNumeroMoneda(valStr);
+      };
+
+      // Validar si el archivo contiene encabezados comprensibles
+      const primerFila = rawRows[0] || {};
+      const tieneSKU = !!buscarClave(primerFila, ["codigo_sku", "sku", "modelo", "codigo", "código", "part_number", "part number", "referencia", "item"]);
+      const tieneNombre = !!buscarClave(primerFila, ["nombre", "producto", "title", "name", "articulo", "artículo", "descripcion", "descripción", "detalle", "concepto"]);
+
+      if (!tieneSKU && !tieneNombre) {
+        const columnasEncontradas = Object.keys(primerFila).filter(k => !k.startsWith("__EMPTY")).join(", ");
+        setEstado("error");
+        setMensaje(`Encabezados no reconocidos en la hoja '${sheetName}'. Columnas encontradas: [${columnasEncontradas || "Ninguna"}]. Te recomendamos usar el botón 'Descargar Plantilla Excel' para asegurar los nombres de columna correctos.`);
+        return;
+      }
+
+      const itemsExtraidos: ProductoStaging[] = [];
+      const skusEnEsteArchivo = new Set<string>();
+      let filasOmitidasSinSKU = 0;
+
+      for (let idx = 0; idx < rawRows.length; idx++) {
+        const row = rawRows[idx];
+
+        const skuRaw = buscarClave(row, ["codigo_sku", "sku", "modelo", "codigo", "código", "part_number", "part number", "referencia", "item"]);
+        const nombreRaw = buscarClave(row, ["nombre", "producto", "title", "name", "articulo", "artículo", "descripcion", "descripción", "detalle", "concepto"]);
+
+        // Si la fila está totalmente vacía
+        if (!skuRaw && !nombreRaw) continue;
+
+        if (!skuRaw) {
+          filasOmitidasSinSKU++;
+          continue;
+        }
+
+        const cleanSku = skuRaw.trim().toUpperCase();
+        const cleanNombre = nombreRaw || cleanSku;
+
+        // Costo proveedor (si está vacío o en 0, se importa con costo 0 sin omitir)
+        const costoNum = buscarNumero(row, ["precio_costo", "costo", "costo_prov", "costo prov", "precio", "costo_usd", "costo usd", "cost", "price"]) ?? 0;
+
+        // Stock
+        const stockVal = buscarNumero(row, ["stock", "cantidad", "cant", "qty", "inventario", "existencia"]);
+        const stockNum = stockVal !== null ? Math.round(stockVal) : null;
+
+        // Estatus proveedor
+        let estatus = buscarClave(row, ["estatus", "status", "disponibilidad", "estado"]) || "DISPONIBLE";
+        const estatusUp = estatus.toUpperCase();
+        if (estatusUp.includes("TRANSIT")) estatus = "EN TRANSITO";
+        else if (estatusUp.includes("NO DISPON") || estatusUp.includes("AGOTAD")) estatus = "NO DISPONIBLE";
+        else estatus = "DISPONIBLE";
+
+        // Marca y Categoría
+        const marcaEnFila = buscarClave(row, ["marca", "brand", "fabricante", "vendor"]);
+        const catEnFila = buscarClave(row, ["categoria", "categoría", "category", "familia", "rubro", "tipo"]);
+
+        const skuKey = cleanSku.replace(/\s+/g, "");
+        const prodExistente = dbIndexMap.get(skuKey);
+
+        let marcaFinal = "";
+        let catFinal = "";
+
+        if (marcaEnFila && marcaEnFila !== "Otra" && marcaEnFila !== "Huawei") {
+          marcaFinal = marcaEnFila;
+        } else if (prodExistente && prodExistente.marca && prodExistente.marca !== "Otra" && prodExistente.marca !== "Huawei") {
+          marcaFinal = prodExistente.marca;
+        } else {
+          const inferencia = inferirMarcaPorSKU(cleanSku, cleanNombre);
+          marcaFinal = inferencia.marca;
+        }
+
+        if (catEnFila) {
+          catFinal = catEnFila;
+        } else if (prodExistente && prodExistente.categoria) {
+          catFinal = prodExistente.categoria;
+        } else {
+          const inferencia = inferirMarcaPorSKU(cleanSku, cleanNombre);
+          catFinal = inferencia.categoria;
+        }
+
+        // Conciliación con BD
+        const conciliacion = conciliarProducto(cleanSku, costoNum, dbIndexMap, skusEnEsteArchivo);
+        skusEnEsteArchivo.add(skuKey);
+
+        // Precios con motor de márgenes
+        const calcs = calcularPrecios(
+          costoNum,
+          margenConfig.tipo,
+          margenConfig.porcentaje,
+          margenConfig.descuentoTecnicoPct
+        );
+
+        const notas = buscarClave(row, ["notas", "observaciones", "observacion", "detalles"]);
+
+        itemsExtraidos.push({
+          id: `stag-excel-${Date.now()}-${itemsExtraidos.length}`,
+          codigo_sku: cleanSku,
+          nombre: cleanNombre,
+          descripcion: notas || cleanNombre,
+          marca: marcaFinal,
+          categoria: catFinal,
+          precio_costo: costoNum,
+          precio_venta: calcs.precioVenta,
+          precio_tecnico: calcs.precioTecnico,
+          estatus_proveedor: estatus,
+          cantidad_proveedor: stockNum,
+          estado_conciliacion: conciliacion.estado,
+          db_producto_id: conciliacion.dbProd?.id,
+          costo_anterior: conciliacion.costoAnterior,
+          precio_venta_anterior: conciliacion.precioVentaAnterior,
+          variacion_costo_pct: conciliacion.variacionPct,
+          seleccionado: true,
+        });
+      }
+
+      setItems(itemsExtraidos);
+      setEstado(itemsExtraidos.length > 0 ? "listo" : "error");
+
+      const esCSV = file.name.toLowerCase().endsWith(".csv");
+      setArchivoInfo({
+        nombre: file.name,
+        tipo: esCSV ? "csv" : "excel",
+        cantidad: itemsExtraidos.length
+      });
+
+      let msg = `✓ Se importaron y procesaron ${itemsExtraidos.length} productos desde ${esCSV ? "CSV" : "Excel"}.`;
+      if (filasOmitidasSinSKU > 0) {
+        msg += ` (${filasOmitidasSinSKU} filas omitidas por no tener SKU).`;
+      }
+      setMensaje(itemsExtraidos.length > 0 ? msg : "No se encontraron productos válidos en el archivo.");
+    } catch (err: any) {
+      console.error("Error procesando Excel/CSV:", err);
+      setEstado("error");
+      setMensaje(`Error al leer el archivo de hoja de cálculo: ${err.message || "Formato no válido"}`);
+    }
+  };
+
+  // ── 4.2 Despachador Universal de Archivos (Excel / CSV / PDF) ──
+  const procesarArchivo = (file: File) => {
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".csv")) {
+      procesarExcel(file);
+    } else if (name.endsWith(".pdf")) {
+      procesarPDF(file);
+    } else {
+      setEstado("error");
+      setMensaje("Formato no soportado. Por favor sube un archivo Excel (.xlsx, .xls), CSV (.csv) o PDF (.pdf).");
     }
   };
 
@@ -796,42 +1028,148 @@ export default function ImportarPage() {
           </div>
         </div>
 
-        {/* ── ZONA DE CARGA DEL ARCHIVO PDF ── */}
+        {/* ── BARRA DE PLANTILLAS Y ACCIONES OFICIALES ── */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-[var(--ts-surface)] border border-[var(--ts-border)] p-4 sm:p-5 rounded-3xl shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 bg-emerald-500/15 text-emerald-400 rounded-2xl">
+              <FileSpreadsheet className="w-5 h-5" />
+            </span>
+            <div>
+              <p className="text-xs sm:text-sm font-bold text-white">Plantilla Estandarizada TecnoSmart (Excel & CSV)</p>
+              <p className="text-[11px] text-[var(--ts-text-muted)]">
+                Descarga el formato oficial con columnas predefinidas y catálogo de marcas para garantizar cero errores en la ingesta.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={descargarPlantillaExcel}
+              className="flex items-center gap-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2.5 rounded-xl transition-all shadow-md shadow-emerald-950/40"
+              title="Descargar plantilla de Excel oficial con 3 hojas: Productos, Instrucciones y Marcas"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Plantilla Excel (.xlsx)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={descargarPlantillaCSV}
+              className="flex items-center gap-2 text-xs font-bold text-[var(--ts-text-muted)] hover:text-white bg-[var(--ts-surface-2)] border border-[var(--ts-border)] hover:border-[var(--ts-border-2)] px-3 py-2.5 rounded-xl transition-all"
+              title="Descargar plantilla en formato CSV UTF-8"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Plantilla CSV (.csv)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => exportarProductosAExcel(dbProductos)}
+              disabled={dbProductos.length === 0}
+              className="flex items-center gap-2 text-xs font-bold text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/40 border border-cyan-800/50 px-3.5 py-2.5 rounded-xl transition-all disabled:opacity-40"
+              title="Exporta tu catálogo actual de Supabase a Excel para modificar precios o stock y volver a importar"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Exportar Inventario ({dbProductos.length})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* ── ZONA DE CARGA MULTIFORMATO (EXCEL / CSV / PDF) ── */}
         <div
           onClick={() => inputRef.current?.click()}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
             const f = e.dataTransfer.files[0];
-            if (f) procesarPDF(f);
+            if (f) procesarArchivo(f);
           }}
-          className="border-2 border-dashed border-[var(--ts-border)] hover:border-[var(--ts-red)]/60 bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)]/50 rounded-3xl py-10 px-6 text-center cursor-pointer transition-all group shadow-sm"
+          className="border-2 border-dashed border-[var(--ts-border)] hover:border-emerald-500/60 bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)]/50 rounded-3xl py-10 px-6 text-center cursor-pointer transition-all group shadow-sm"
         >
-          <div className="w-14 h-14 bg-[var(--ts-red)]/10 text-[var(--ts-red)] rounded-2xl flex items-center justify-center mx-auto mb-3 group-hover:scale-105 transition-transform">
-            <Upload className="w-7 h-7" />
+          <div className="flex items-center justify-center gap-3 mb-3">
+            <div className="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <FileSpreadsheet className="w-6 h-6" />
+            </div>
+            <div className="w-12 h-12 bg-[var(--ts-red)]/10 text-[var(--ts-red)] rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+              <FileText className="w-6 h-6" />
+            </div>
           </div>
+
           <p className="text-sm font-bold text-[var(--ts-text-primary)]">
-            Haz clic o arrastra un catálogo PDF de proveedor aquí
+            Haz clic o arrastra tu archivo <span className="text-emerald-400">Excel (.xlsx / .xls)</span>, <span className="text-blue-400">CSV (.csv)</span> o <span className="text-[var(--ts-red)]">PDF</span> aquí
           </p>
-          <p className="text-xs text-[var(--ts-text-muted)] mt-1 max-w-lg mx-auto">
-            Soporta catálogos multiesquema: Huawei FTTH, CDP / Hikvision UPS, Conectividad de Fibra, CCTV EZVIZ y Almacenamiento PC con precios en formato europeo o estadounidense.
+          <p className="text-xs text-[var(--ts-text-muted)] mt-1.5 max-w-xl mx-auto">
+            Compatible con hojas de cálculo de <strong>Excel</strong> y <strong>Google Sheets</strong> (exportadas como .xlsx), así como catálogos PDF de mayoristas (Huawei, CDP, EZVIZ, Fibra, etc.).
           </p>
+
+          <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              📊 Recomendado: Excel (.xlsx)
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-300 border border-blue-500/30">
+              📑 CSV UTF-8
+            </span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full bg-red-500/15 text-red-300 border border-red-500/30">
+              📄 Catálogo PDF
+            </span>
+          </div>
+
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf"
+            accept=".xlsx,.xls,.csv,.pdf"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) procesarPDF(f);
+              if (f) procesarArchivo(f);
             }}
           />
         </div>
 
+        {/* ── BANNER DE ARCHIVO ACTIVO ── */}
+        {archivoInfo && items.length > 0 && (
+          <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] px-5 py-3 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3">
+              <span className={`p-2 rounded-xl ${
+                archivoInfo.tipo === "excel"
+                  ? "bg-emerald-500/15 text-emerald-400"
+                  : archivoInfo.tipo === "csv"
+                  ? "bg-blue-500/15 text-blue-400"
+                  : "bg-red-500/15 text-red-400"
+              }`}>
+                {archivoInfo.tipo === "pdf" ? <FileText className="w-4 h-4" /> : <FileSpreadsheet className="w-4 h-4" />}
+              </span>
+              <div>
+                <p className="font-bold text-white">
+                  Archivo activo: <span className="font-mono text-emerald-400">{archivoInfo.nombre}</span>
+                </p>
+                <p className="text-[11px] text-[var(--ts-text-muted)]">
+                  Formato: <strong>{archivoInfo.tipo.toUpperCase()}</strong> · {archivoInfo.cantidad} productos extraídos para conciliación
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setItems([]);
+                setArchivoInfo(null);
+                setEstado("idle");
+                setMensaje("");
+                if (inputRef.current) inputRef.current.value = "";
+              }}
+              className="text-xs text-[var(--ts-text-muted)] hover:text-red-400 transition-colors underline"
+            >
+              Cargar otro archivo
+            </button>
+          </div>
+        )}
+
         {/* ── ESTADO DEL PROCESAMIENTO ── */}
         {estado !== "idle" && (
           <div
-            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-xs font-semibold border ${
+            className={`flex items-center justify-between gap-3 px-5 py-3.5 rounded-2xl text-xs font-semibold border ${
               estado === "cargando"
                 ? "bg-blue-500/10 text-blue-300 border-blue-500/30"
                 : estado === "listo"
@@ -839,10 +1177,23 @@ export default function ImportarPage() {
                 : "bg-red-500/10 text-red-300 border-red-500/30"
             }`}
           >
-            {estado === "cargando" && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
-            {estado === "listo" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
-            {estado === "error" && <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
-            <span>{mensaje}</span>
+            <div className="flex items-center gap-3">
+              {estado === "cargando" && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+              {estado === "listo" && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+              {estado === "error" && <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />}
+              <span>{mensaje}</span>
+            </div>
+
+            {estado === "error" && (
+              <button
+                type="button"
+                onClick={descargarPlantillaExcel}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-white rounded-xl text-xs font-bold transition-all border border-red-500/40"
+              >
+                <Download className="w-3 h-3" />
+                <span>Descargar Plantilla Oficial</span>
+              </button>
+            )}
           </div>
         )}
 

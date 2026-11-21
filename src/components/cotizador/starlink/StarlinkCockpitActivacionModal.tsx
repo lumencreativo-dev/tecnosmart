@@ -76,6 +76,7 @@ export default function StarlinkCockpitActivacionModal({
   const [activando, setActivando] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [fotoZoom, setFotoZoom] = useState<string | null>(null);
+  const [descargandoFoto, setDescargandoFoto] = useState<string | null>(null);
 
   // Pool de Alias Cloudflare
   const [poolDisponibles, setPoolDisponibles] = useState<StarlinkEmailAlias[]>([]);
@@ -116,6 +117,58 @@ export default function StarlinkCockpitActivacionModal({
     navigator.clipboard.writeText(texto);
     setCopiado(clave);
     setTimeout(() => setCopiado(null), 2000);
+  };
+
+  const getNombreArchivoDescarga = (tipo: "anverso" | "reverso" | "frontal" | "trasera") => {
+    const cleanId = (solicitud?.cedula_rif || solicitud?.nombre_completo || "cliente")
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, "_");
+    const label = tipo === "frontal" || tipo === "anverso" ? "Anverso" : "Reverso";
+    return `Cedula_${label}_${cleanId}.jpg`;
+  };
+
+  const handleDescargarFoto = async (url: string, tipo: "anverso" | "reverso" | "frontal" | "trasera") => {
+    if (!url) return;
+    setDescargandoFoto(tipo);
+    const nombre = getNombreArchivoDescarga(tipo);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Error en red al descargar");
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = nombre;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      // Fallback: abrir en nueva ventana/pestaña si hay restricciones CORS o error
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.download = nombre;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } finally {
+      setDescargandoFoto(null);
+    }
+  };
+
+  const handleDescargarAmbas = async () => {
+    if (!solicitud) return;
+    setDescargandoFoto("ambas");
+    if (solicitud.cedula_frontal_url) {
+      await handleDescargarFoto(solicitud.cedula_frontal_url, "frontal");
+    }
+    if (solicitud.cedula_trasera_url) {
+      setTimeout(() => {
+        handleDescargarFoto(solicitud.cedula_trasera_url!, "trasera");
+      }, 600);
+    }
   };
 
   // Guardar correcciones en la base de datos
@@ -687,50 +740,100 @@ export default function StarlinkCockpitActivacionModal({
               )}
             </div>
 
-            {/* Fotos de Cédula (Visor) */}
+            {/* Fotos de Cédula (Visor y Descarga) */}
             <div className="pt-2">
-              <span className="text-[11px] font-bold text-[var(--ts-text-muted)] block uppercase mb-2">
-                Fotos de Cédula Adjuntas
-              </span>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-bold text-[var(--ts-text-muted)] block uppercase">
+                  Fotos de Cédula Adjuntas
+                </span>
+                {solicitud.cedula_frontal_url && solicitud.cedula_trasera_url && (
+                  <button
+                    type="button"
+                    onClick={handleDescargarAmbas}
+                    disabled={!!descargandoFoto}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 font-bold flex items-center gap-1.5 transition-colors px-2 py-0.5 rounded-md bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 active:scale-95 disabled:opacity-50"
+                  >
+                    <Download className={`w-3 h-3 ${descargandoFoto === "ambas" ? "animate-bounce" : ""}`} />
+                    <span>{descargandoFoto === "ambas" ? "Descargando..." : "Descargar ambas fotos"}</span>
+                  </button>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
-                {/* Frontal */}
-                <div className="space-y-1">
-                  <span className="text-[10px] text-[var(--ts-text-muted)]">Cara Frontal:</span>
+                {/* Frontal (Anverso) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold">Anverso (Frontal):</span>
+                    {solicitud.cedula_frontal_url && (
+                      <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                        Lista
+                      </span>
+                    )}
+                  </div>
                   {solicitud.cedula_frontal_url ? (
-                    <div
-                      onClick={() => setFotoZoom(solicitud.cedula_frontal_url!)}
-                      className="aspect-[3/2] rounded-xl overflow-hidden border border-[var(--ts-border)] cursor-pointer hover:border-[var(--ts-red)] transition-all relative group bg-black"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={solicitud.cedula_frontal_url} alt="Frontal" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold">
-                        Click para ampliar 🔍
+                    <div className="space-y-1.5">
+                      <div
+                        onClick={() => setFotoZoom(solicitud.cedula_frontal_url!)}
+                        className="aspect-[3/2] rounded-xl overflow-hidden border border-[var(--ts-border)] cursor-pointer hover:border-[var(--ts-red)] transition-all relative group bg-black"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={solicitud.cedula_frontal_url} alt="Anverso Cédula" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold pointer-events-none">
+                          Click para ampliar 🔍
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDescargarFoto(solicitud.cedula_frontal_url!, "frontal")}
+                        disabled={!!descargandoFoto}
+                        className="w-full py-1.5 px-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] hover:text-blue-400 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-98 disabled:opacity-50"
+                      >
+                        <Download className={`w-3.5 h-3.5 ${descargandoFoto === "frontal" ? "animate-bounce" : ""}`} />
+                        <span>{descargandoFoto === "frontal" ? "Descargando..." : "Descargar Anverso"}</span>
+                      </button>
                     </div>
                   ) : (
                     <div className="aspect-[3/2] rounded-xl border border-dashed border-[var(--ts-border)] flex items-center justify-center text-[10px] text-[var(--ts-text-muted)]">
-                      Sin foto frontal
+                      Sin foto anverso
                     </div>
                   )}
                 </div>
 
-                {/* Trasera */}
-                <div className="space-y-1">
-                  <span className="text-[10px] text-[var(--ts-text-muted)]">Cara Trasera:</span>
+                {/* Trasera (Reverso) */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold">Reverso (Trasera):</span>
+                    {solicitud.cedula_trasera_url && (
+                      <span className="text-[9px] text-emerald-400 font-bold bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                        Lista
+                      </span>
+                    )}
+                  </div>
                   {solicitud.cedula_trasera_url ? (
-                    <div
-                      onClick={() => setFotoZoom(solicitud.cedula_trasera_url!)}
-                      className="aspect-[3/2] rounded-xl overflow-hidden border border-[var(--ts-border)] cursor-pointer hover:border-[var(--ts-red)] transition-all relative group bg-black"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={solicitud.cedula_trasera_url} alt="Trasera" className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold">
-                        Click para ampliar 🔍
+                    <div className="space-y-1.5">
+                      <div
+                        onClick={() => setFotoZoom(solicitud.cedula_trasera_url!)}
+                        className="aspect-[3/2] rounded-xl overflow-hidden border border-[var(--ts-border)] cursor-pointer hover:border-[var(--ts-red)] transition-all relative group bg-black"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={solicitud.cedula_trasera_url} alt="Reverso Cédula" className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-xs font-bold pointer-events-none">
+                          Click para ampliar 🔍
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDescargarFoto(solicitud.cedula_trasera_url!, "trasera")}
+                        disabled={!!descargandoFoto}
+                        className="w-full py-1.5 px-2 bg-[var(--ts-surface)] border border-[var(--ts-border)] hover:bg-[var(--ts-surface-2)] text-[var(--ts-text-primary)] hover:text-blue-400 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-98 disabled:opacity-50"
+                      >
+                        <Download className={`w-3.5 h-3.5 ${descargandoFoto === "trasera" ? "animate-bounce" : ""}`} />
+                        <span>{descargandoFoto === "trasera" ? "Descargando..." : "Descargar Reverso"}</span>
+                      </button>
                     </div>
                   ) : (
                     <div className="aspect-[3/2] rounded-xl border border-dashed border-[var(--ts-border)] flex items-center justify-center text-[10px] text-[var(--ts-text-muted)]">
-                      Sin foto trasera
+                      Sin foto reverso
                     </div>
                   )}
                 </div>
@@ -977,13 +1080,46 @@ export default function StarlinkCockpitActivacionModal({
         {/* Modal de Zoom para fotos de cédula */}
         {fotoZoom && (
           <div
-            className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+            className="fixed inset-0 z-60 bg-black/90 backdrop-blur-md flex items-center justify-center p-4"
             onClick={() => setFotoZoom(null)}
           >
-            <div className="max-w-3xl max-h-[90vh] relative">
+            <div
+              className="max-w-3xl max-h-[90vh] relative flex flex-col items-center"
+              onClick={(e) => e.stopPropagation()}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={fotoZoom} alt="Zoom Cédula" className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl" />
-              <p className="text-center text-xs text-slate-400 mt-2">Click en cualquier lugar para cerrar</p>
+              <img
+                src={fotoZoom}
+                alt="Zoom Cédula"
+                className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+              />
+              <div className="flex items-center gap-3 mt-3">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleDescargarFoto(
+                      fotoZoom,
+                      fotoZoom === solicitud.cedula_frontal_url ? "anverso" : "reverso"
+                    )
+                  }
+                  disabled={!!descargandoFoto}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                >
+                  <Download className={`w-4 h-4 ${descargandoFoto ? "animate-bounce" : ""}`} />
+                  <span>
+                    {descargandoFoto
+                      ? "Descargando..."
+                      : `Descargar ${fotoZoom === solicitud.cedula_frontal_url ? "Anverso" : "Reverso"}`}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFotoZoom(null)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition-all"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
           </div>
         )}

@@ -122,7 +122,9 @@ export default function OrdenesTrabajoManager() {
   const permisosUsuario: string[] = usuario?.roles?.permisos || (usuario?.rol_id === "admin" ? ["*"] : []);
   const esAdmin = usuario?.rol_id === "admin" || permisosUsuario.includes("*") || tienePermiso(permisosUsuario, "proyectos.eliminar_ordenes");
   const esTecnicoAliado = usuario?.rol_id === "tecnico_aliado" || isTecHost;
-  const puedeCrear = tienePermiso(permisosUsuario, "proyectos.crear_ordenes") || esTecnicoAliado;
+  const esTecnico = usuario?.rol_id === "tecnico" || usuario?.rol_id === "lider_tecnico";
+  const esGerente = usuario?.rol_id === "gerente";
+  const puedeCrear = tienePermiso(permisosUsuario, "proyectos.crear_ordenes") || esTecnicoAliado || esGerente;
   const puedeAsignar = tienePermiso(permisosUsuario, "proyectos.asignar_cuadrillas");
   const puedeMateriales = tienePermiso(permisosUsuario, "proyectos.materiales");
   const puedeVerPropias = tienePermiso(permisosUsuario, "proyectos.ver_propias") || esTecnicoAliado;
@@ -238,55 +240,90 @@ export default function OrdenesTrabajoManager() {
       clientesMapeados.forEach(c => { mapaClientes[c.id] = c; });
     }
 
-    // 2. Cotizaciones (desacoplado de foreign keys)
-    const { data: cotData, error: errCot } = await supabase
-      .from("cotizaciones")
-      .select("id, numero_cotizacion, cliente_id, total, estado, notas, created_at")
-      .or("eliminada.is.null,eliminada.eq.false")
-      .order("created_at", { ascending: false })
-      .limit(200);
+    // 2. Cotizaciones: Solo para roles comerciales o administrativos que precargan órdenes
+    // Técnicos de cuadrilla y técnicos aliados NO deben consultar ni ver cotizaciones corporativas
+    const puedeConsultarCotizaciones = (esAdmin || esGerente || tienePermiso(permisosUsuario, "ventas.cotizar")) && !esTecnico && !esTecnicoAliado;
 
-    if (errCot) console.error("Error al cargar cotizaciones:", errCot);
+    let cotDataResult: any[] = [];
+    if (puedeConsultarCotizaciones) {
+      try {
+        let { data: cotData, error: errCot } = await supabase
+          .from("cotizaciones")
+          .select("id, numero_cotizacion, cliente_id, total, estado, notas, created_at")
+          .or("eliminada.is.null,eliminada.eq.false")
+          .order("created_at", { ascending: false })
+          .limit(200);
 
-    if (cotData) {
-      const cotsMapeadas: ItemCotizacion[] = cotData.map((c: any) => ({
-        ...c,
-        total: Number(c.total || 0),
-        cliente: c.cliente_id && mapaClientes[c.cliente_id] ? mapaClientes[c.cliente_id] : undefined,
-      }));
-      setCotizaciones(cotsMapeadas);
+        // Fallback si RLS en Supabase restringe la consulta a cotizaciones propias del usuario
+        if (errCot && usuario?.id) {
+          const { data: ownCotData } = await supabase
+            .from("cotizaciones")
+            .select("id, numero_cotizacion, cliente_id, total, estado, notas, created_at")
+            .eq("usuario_id", usuario.id)
+            .order("created_at", { ascending: false })
+            .limit(100);
+
+          if (ownCotData) {
+            cotData = ownCotData;
+            errCot = null;
+          }
+        }
+
+        if (!errCot && cotData) {
+          cotDataResult = cotData;
+          const cotsMapeadas: ItemCotizacion[] = cotData.map((c: any) => ({
+            ...c,
+            total: Number(c.total || 0),
+            cliente: c.cliente_id && mapaClientes[c.cliente_id] ? mapaClientes[c.cliente_id] : undefined,
+          }));
+          setCotizaciones(cotsMapeadas);
+        }
+      } catch {
+        setCotizaciones([]);
+      }
+    } else {
+      setCotizaciones([]);
     }
 
-    // 3. Facturas (columnas reales: subtotal_usd, cliente_nombre, cotizacion_id)
-    const { data: factData, error: errFact } = await supabase
-      .from("facturas")
-      .select("id, numero_factura, cotizacion_id, subtotal_usd, total_bs, cliente_nombre, created_at, estado")
-      .neq("estado", "anulada")
-      .order("created_at", { ascending: false })
-      .limit(200);
+    // 3. Facturas: Solo Administrador o roles con facultades de facturación
+    // Técnicos y Técnicos Aliados no ven montos de facturación
+    const puedeConsultarFacturas = (esAdmin || tienePermiso(permisosUsuario, "ventas.ver_global") || tienePermiso(permisosUsuario, "ventas.facturar")) && !esTecnico && !esTecnicoAliado;
 
-    if (errFact) console.error("Error al cargar facturas:", errFact);
+    if (puedeConsultarFacturas) {
+      try {
+        const { data: factData, error: errFact } = await supabase
+          .from("facturas")
+          .select("id, numero_factura, cotizacion_id, subtotal_usd, total_bs, cliente_nombre, created_at, estado")
+          .neq("estado", "anulada")
+          .order("created_at", { ascending: false })
+          .limit(200);
 
-    if (factData) {
-      const factsMapeadas: ItemFactura[] = factData.map((f: any) => {
-        const cotVinculada = cotData?.find((c: any) => c.id === f.cotizacion_id);
-        const cliVinculado = cotVinculada?.cliente_id && mapaClientes[cotVinculada.cliente_id];
+        if (!errFact && factData) {
+          const factsMapeadas: ItemFactura[] = factData.map((f: any) => {
+            const cotVinculada = cotDataResult?.find((c: any) => c.id === f.cotizacion_id);
+            const cliVinculado = cotVinculada?.cliente_id && mapaClientes[cotVinculada.cliente_id];
 
-        return {
-          id: f.id,
-          numero_factura: f.numero_factura,
-          cliente_id: cotVinculada?.cliente_id || null,
-          cotizacion_id: f.cotizacion_id || null,
-          total: Number(f.subtotal_usd || 0),
-          created_at: f.created_at,
-          cliente: {
-            nombre: f.cliente_nombre || cliVinculado?.nombre || "Cliente",
-            direccion: cliVinculado?.direccion || "",
-            telefono: cliVinculado?.telefono || "",
-          },
-        };
-      });
-      setFacturas(factsMapeadas);
+            return {
+              id: f.id,
+              numero_factura: f.numero_factura,
+              cliente_id: cotVinculada?.cliente_id || null,
+              cotizacion_id: f.cotizacion_id || null,
+              total: Number(f.subtotal_usd || 0),
+              created_at: f.created_at,
+              cliente: {
+                nombre: f.cliente_nombre || cliVinculado?.nombre || "Cliente",
+                direccion: cliVinculado?.direccion || "",
+                telefono: cliVinculado?.telefono || "",
+              },
+            };
+          });
+          setFacturas(factsMapeadas);
+        }
+      } catch {
+        setFacturas([]);
+      }
+    } else {
+      setFacturas([]);
     }
   };
 
