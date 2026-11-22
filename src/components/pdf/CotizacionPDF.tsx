@@ -514,9 +514,9 @@ function CotizacionDocument({
             "• Instalación: 2 años de garantía bajo materiales y mano de obra TecnoSmart.",
             "• Redes estructuradas: Hasta 5 años de garantía bajo protocolo TecnoSmart.",
             "• Cotización válida por 15 días hábiles a partir de la fecha de emisión.",
-            isVES && currentTasaBcv > 0
-              ? `• Precios expresados en Bolívares (Bs.) calculados según tasa oficial del Banco Central de Venezuela (BCV: Bs. ${currentTasaBcv.toFixed(2)} / USD).`
-              : "• Los precios están expresados en dólares americanos (USD). En caso de pago en bolívares, se calculará a la tasa oficial del Banco Central de Venezuela (BCV) del día de pago.",
+            ...(isVES && currentTasaBcv > 0
+              ? [`• Precios expresados en Bolívares (Bs.) calculados según tasa oficial del Banco Central de Venezuela (BCV: Bs. ${currentTasaBcv.toFixed(2)} / USD).`]
+              : []),
           ].map((g) => (
             <Text key={g} style={S.garantiaItem}>
               {g}
