@@ -118,4 +118,103 @@
   .field-input:focus {
     box-shadow: 0 0 0 2px var(--ts-red);
   }
+
+  /* ── Animaciones Dinámicas para Landing Page ── */
+  @keyframes floatSlow {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-7px); }
+  }
+
+  @keyframes floatSlowReverse {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(7px); }
+  }
+
+  @keyframes pulseGlow {
+    0%, 100% {
+      opacity: 0.6;
+      filter: drop-shadow(0 0 12px rgba(201, 36, 43, 0.4));
+    }
+    50% {
+      opacity: 1;
+      filter: drop-shadow(0 0 24px rgba(201, 36, 43, 0.8));
+    }
+  }
+
+  @keyframes radarPing {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    50% { transform: scale(1.6); opacity: 0; }
+    100% { transform: scale(0.9); opacity: 0; }
+  }
+
+  @keyframes shineSweep {
+    0% { transform: translateX(-100%) rotate(45deg); }
+    100% { transform: translateX(200%) rotate(45deg); }
+  }
+
+  .animate-float-slow {
+    animation: floatSlow 4s ease-in-out infinite;
+  }
+
+  .animate-float-reverse {
+    animation: floatSlowReverse 5s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulseGlow 3s ease-in-out infinite;
+  }
+
+  .animate-radar-ping {
+    animation: radarPing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+
+  .group-hover-shine:hover::after {
+    animation: shineSweep 0.8s ease-in-out;
+  }
+
+  /* ── Modal Pop & Slide Transitions (UI/UX Micro-Interactions) ── */
+  @keyframes modalEnter {
+    0% {
+      opacity: 0;
+      transform: scale(0.92) translateY(24px);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+
+  @keyframes modalExit {
+    0% {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.94) translateY(18px);
+    }
+  }
+
+  @keyframes stepFadeSlide {
+    0% {
+      opacity: 0;
+      transform: translateX(14px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .animate-modal-enter {
+    animation: modalEnter 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .animate-modal-exit {
+    animation: modalExit 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+  }
+
+  .animate-step-enter {
+    animation: stepFadeSlide 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 }

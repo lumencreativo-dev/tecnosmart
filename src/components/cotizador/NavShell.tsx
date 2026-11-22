@@ -202,6 +202,7 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
       { href: "/equipo", icon: UserCheck, label: "Mi Equipo & Roles", permiso: "administracion.roles" },
       { href: "/menu",   icon: Settings,  label: "Ajustes de Empresa", permiso: "administracion.configuracion" },
       { href: "/perfil", icon: UserIcon,  label: "Mi Perfil" },
+      { href: "/novedades", icon: Sparkles, label: "Novedades & Versiones" },
     ],
   },
 ];
@@ -798,6 +799,17 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
                 )}
 
                 <Link
+                  href="/novedades"
+                  className="flex items-center gap-1.5 text-xs text-[var(--ts-text-muted)] hover:text-cyan-600 dark:hover:text-cyan-400 px-2.5 py-1.5 rounded-lg hover:bg-[var(--ts-surface-2)] transition-colors"
+                  title="Historial de Novedades y Versiones del Sistema"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400" />
+                  <span className="hidden lg:inline font-medium">Novedades</span>
+                </Link>
+
+                <div className="h-4 w-[1px] bg-[var(--ts-border)] hidden lg:block" />
+
+                <Link
                   href="/"
                   target="_blank"
                   className="flex items-center gap-1.5 text-xs text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] px-2.5 py-1.5 rounded-lg hover:bg-[var(--ts-surface-2)] transition-colors"
@@ -1344,8 +1356,8 @@ export default function NavShell({ children }: { children: React.ReactNode }) {
           MODAL SOS: ASISTENCIA TÉCNICA E INCIDENCIAS EN CAMPO
       ══════════════════════════════════════════════ */}
       {sosModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-[#131318] border border-red-500/40 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative text-center space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-[#131318] border border-red-500/40 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative text-center space-y-4 animate-modal-enter">
             
             <button
               onClick={() => setSosModalOpen(false)}

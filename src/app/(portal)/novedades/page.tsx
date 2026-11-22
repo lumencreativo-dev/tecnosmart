@@ -19,6 +19,20 @@ interface Version {
 
 const CHANGELOG: Version[] = [
   {
+    version: "3.4",
+    fecha: "22 Nov 2026",
+    titulo: "Mesa de Ayuda Omnicanal, Worker Inbound en Cloudflare, CRM 360° & Separación de Cola Activa",
+    entradas: [
+      { tipo: "importante", texto: "Mesa de Ayuda & Soporte Omnicanal: captura automatizada de incidencias técnicas desde el formulario web público y por correo directo a soporte@somostecnosmart.com con correlativos oficiales TCK-2026-XXX." },
+      { tipo: "importante", texto: "Worker de Correo Inbound Serverless (Cloudflare): arquitectura en tiempo real que procesa correos entrantes, limpia la encriptación MIME/multipart, reenvía copia de respaldo a Gmail y despacha acuses de recibo oficiales vía Resend con SLA de 24 horas hábiles." },
+      { tipo: "nueva", texto: "Separación Inteligente de Cola Activa y Archivo de Resueltos: vista enfocada por defecto que oculta casos finalizados para mantener despejada la bandeja principal, y pestaña dedicada 'Atendidos & Resueltos' con soluciones aplicadas y botón de reapertura en 1 clic." },
+      { tipo: "nueva", texto: "Motor de Priorización Automática Multicapa: clasificación de prioridad algorítmica (Urgente para suscriptores Plan $5/mes o Starlink 24/7, Alta para fallas críticas/interrupciones totales, Alta con marco dorado para clientes VIP en CRM, y Media para consultas generales con SLA de ~24 horas en días hábiles)." },
+      { tipo: "nueva", texto: "Gestión y Vinculación CRM 360° In-App: registro de nuevos clientes, edición de fichas y enlace manual a clientes existentes directamente desde el ticket, sin perder el contexto técnico ni redirigir a otra pantalla." },
+      { tipo: "nueva", texto: "Protocolo Inbound para Atención por WhatsApp: identificación visual de correos directos con botón de contacto inmediato pre-redactado hacia el WhatsApp del cliente." },
+      { tipo: "mejora", texto: "Módulo de Garantías Oficiales de 1 Año en CCTV: registro auditable de seriales de hardware con fecha de instalación, factura asociada y trazabilidad contra defectos de fábrica." },
+    ],
+  },
+  {
     version: "3.3",
     fecha: "04 Nov 2026",
     titulo: "Facturación Bimonetaria (Dólares / Bolívares) & Supresión de Leyenda BCV",

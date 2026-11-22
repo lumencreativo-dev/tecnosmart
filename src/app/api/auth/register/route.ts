@@ -41,7 +41,13 @@ export async function POST(req: NextRequest) {
     });
 
     if (authError || !authData.user) {
-      return NextResponse.json({ ok: false, error: authError?.message || "Error al registrar en Supabase Auth." }, { status: 400 });
+      let mensajeError = authError?.message || "Error al registrar en el sistema de autenticación.";
+      if (mensajeError.toLowerCase().includes("user already registered")) {
+        mensajeError = `El correo ${inv.email} ya tiene un usuario registrado en la plataforma. Puedes ir a Iniciar Sesión.`;
+      } else if (mensajeError.toLowerCase().includes("password")) {
+        mensajeError = "La contraseña debe tener al menos 6 caracteres.";
+      }
+      return NextResponse.json({ ok: false, error: mensajeError }, { status: 400 });
     }
 
     // 4. Crear el perfil en la base de datos

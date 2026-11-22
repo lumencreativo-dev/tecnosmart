@@ -12,6 +12,7 @@ import TrabajosTestimoniosSection from "@/components/landing/TrabajosTestimonios
 import CoberturaSection from "@/components/landing/CoberturaSection";
 import FormularioAsesoria from "@/components/landing/FormularioAsesoria";
 import Footer from "@/components/landing/Footer";
+import FloatingWhatsApp from "@/components/landing/FloatingWhatsApp";
 
 export const metadata: Metadata = {
   title: "TecnoSmart VZL | Tu seguridad es nuestra prioridad",
@@ -86,6 +87,9 @@ export default function HomePage() {
 
       {/* 13. Footer (contacto, RIF, dirección) */}
       <Footer />
+
+      {/* Botón flotante interactivo de WhatsApp */}
+      <FloatingWhatsApp />
     </div>
   );
 }

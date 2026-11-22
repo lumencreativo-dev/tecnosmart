@@ -384,6 +384,30 @@ export default function StarlinkCockpitActivacionModal({
         fechaEmision: new Date(),
       });
 
+      // 8. Despachar automáticamente la Ficha Técnica por Correo Oficial al cliente
+      if (emailCliente.trim()) {
+        try {
+          await fetch("/api/starlink/send-ficha", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              toEmail: emailCliente.trim(),
+              clientName: nombreCompleto.trim(),
+              modalidad: feeSoporte > 0 || montoTotal > 0 ? "flota_administrada" : "cuenta_propia",
+              kitSerial: kitSerial.trim(),
+              wifiSsid: wifiSsid.trim() || "Starlink",
+              wifiPassword: wifiPassword.trim() || "Configurado en sitio",
+              diaCorte: diaCorte,
+              planNombre: planNombre,
+              montoMensual: montoTotal,
+              ubicacion: direccion.trim(),
+            }),
+          });
+        } catch (mailErr) {
+          console.warn("Aviso: No se pudo enviar el email automático de la ficha Starlink:", mailErr);
+        }
+      }
+
       onActivated();
       onClose();
     } catch (err: any) {

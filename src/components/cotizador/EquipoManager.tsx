@@ -81,10 +81,13 @@ export default function EquipoManager() {
 
   // Modal de Invitación
   const [modalInvitar, setModalInvitar] = useState(false);
+  const [invitarNombre, setInvitarNombre] = useState("");
   const [invitarEmail, setInvitarEmail] = useState("");
   const [invitarRolId, setInvitarRolId] = useState("vendedor");
   const [generandoInvitacion, setGenerandoInvitacion] = useState(false);
   const [invitacionGenerada, setInvitacionGenerada] = useState<string | null>(null);
+  const [emailEnviadoStatus, setEmailEnviadoStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [reenviandoEmailId, setReenviandoEmailId] = useState<string | null>(null);
   const [copiado, setCopiado] = useState(false);
   const [copiadoId, setCopiadoId] = useState<string | null>(null);
   const [cancelandoId, setCancelandoId] = useState<string | null>(null);
@@ -191,11 +194,87 @@ export default function EquipoManager() {
 
     if (!error) {
       const baseUrl = window.location.origin;
-      const urlFinal = `${baseUrl}/registro?token=${token}`;
+      const nombreParam = invitarNombre.trim() ? `&nombre=${encodeURIComponent(invitarNombre.trim())}` : "";
+      const urlFinal = `${baseUrl}/registro?token=${token}${nombreParam}`;
       setInvitacionGenerada(urlFinal);
+      setEmailEnviadoStatus(null);
       cargarDatos();
+
+      // Enviar automáticamente el correo de invitación con el enlace mágico vía Resend
+      try {
+        const res = await fetch("/api/team/invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: emailLimpio,
+            nombre: invitarNombre.trim() || undefined,
+            token,
+            rolId: invitarRolId,
+            inviterName: usuarioActual?.nombre || "Administración TecnoSmart",
+          }),
+        });
+
+        const rawText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(`Respuesta no válida del servidor (${res.status}): ${rawText.slice(0, 100)}`);
+        }
+
+        if (res.ok && data.ok) {
+          setEmailEnviadoStatus({
+            ok: true,
+            msg: `Correo con enlace mágico enviado a ${emailLimpio} desde soporte@somostecnosmart.com`,
+          });
+        } else {
+          setEmailEnviadoStatus({
+            ok: false,
+            msg: data.error || `Error del servidor (${res.status}). Puedes copiar el enlace manualmente.`,
+          });
+        }
+      } catch (err: any) {
+        setEmailEnviadoStatus({
+          ok: false,
+          msg: `Aviso: ${err?.message || "No se pudo conectar con el servidor de correo"}. Copia el enlace abajo.`,
+        });
+      }
     } else {
       alert("Error al generar invitación: " + error.message);
+    }
+  };
+
+  const handleReenviarInvitacionEmail = async (inv: Invitacion) => {
+    setReenviandoEmailId(inv.id);
+    try {
+      const res = await fetch("/api/team/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: inv.email,
+          token: inv.token,
+          rolId: inv.rol_id,
+          inviterName: usuarioActual?.nombre || "Administración TecnoSmart",
+        }),
+      });
+
+      const rawText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(`Respuesta no válida (${res.status}): ${rawText.slice(0, 100)}`);
+      }
+
+      if (res.ok && data.ok) {
+        alert(`¡Correo con enlace mágico reenviado con éxito a "${inv.email}" desde soporte@somostecnosmart.com!`);
+      } else {
+        alert(`Aviso de envío: ${data.error || "No se pudo entregar el correo."}\n\nPuedes copiar el enlace y enviárselo directamente por WhatsApp.`);
+      }
+    } catch (err: any) {
+      alert(`Error al intentar reenviar el correo: ${err?.message || "Fallo de conexión"}`);
+    } finally {
+      setReenviandoEmailId(null);
     }
   };
 
@@ -611,6 +690,9 @@ export default function EquipoManager() {
           <button
             onClick={() => {
               setInvitacionGenerada(null);
+              setEmailEnviadoStatus(null);
+              setInvitarNombre("");
+              setInvitarEmail("");
               setModalInvitar(true);
             }}
             className="flex items-center gap-2 bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)] border border-[var(--ts-border)] text-[var(--ts-text-primary)] text-xs font-bold px-3.5 py-2 rounded-xl transition-all shadow-xs active:scale-95"
@@ -655,6 +737,10 @@ export default function EquipoManager() {
               <button
                 type="button"
                 onClick={() => {
+                  setInvitacionGenerada(null);
+                  setEmailEnviadoStatus(null);
+                  setInvitarNombre("");
+                  setInvitarEmail("");
                   setInvitarRolId("tecnico_aliado");
                   setModalInvitar(true);
                 }}
@@ -864,6 +950,21 @@ export default function EquipoManager() {
                       </div>
 
                       <div className="flex items-center gap-2 self-end sm:self-auto">
+                        {/* Botón Reenviar Correo */}
+                        <button
+                          onClick={() => handleReenviarInvitacionEmail(inv)}
+                          disabled={reenviandoEmailId === inv.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-[var(--ts-surface)] hover:bg-[var(--ts-border)] text-[var(--ts-text-primary)] border border-[var(--ts-border)] transition-all active:scale-95 disabled:opacity-50"
+                          title="Reenviar correo de invitación oficial al empleado desde soporte@somostecnosmart.com"
+                        >
+                          {reenviandoEmailId === inv.id ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-[var(--ts-red)]" />
+                          ) : (
+                            <Mail className="w-3.5 h-3.5 text-[var(--ts-navy)]" />
+                          )}
+                          <span>Reenviar Correo</span>
+                        </button>
+
                         {/* Botón Copiar / Reenviar */}
                         <button
                           onClick={() => copiarEnlace(url, inv.id)}
@@ -1094,6 +1195,22 @@ export default function EquipoManager() {
               <form onSubmit={handleCrearInvitacion} className="space-y-4">
                 <div>
                   <label className="text-xs font-bold text-[var(--ts-text-primary)] block mb-1.5">
+                    Nombre y Apellido del Empleado <span className="text-[var(--ts-text-muted)] font-normal">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={invitarNombre}
+                    onChange={(e) => setInvitarNombre(e.target.value)}
+                    placeholder="Ej: Carlos Mendoza"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--ts-border)] bg-[var(--ts-surface-2)] text-xs text-[var(--ts-text-primary)] focus:outline-none focus:border-[var(--ts-red)]"
+                  />
+                  <p className="text-[10px] text-[var(--ts-text-muted)] mt-1">
+                    Personaliza el saludo en el correo y pre-llenará su formulario de registro.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[var(--ts-text-primary)] block mb-1.5">
                     Correo Electrónico del Empleado *
                   </label>
                   <input
@@ -1144,7 +1261,14 @@ export default function EquipoManager() {
               <div className="space-y-4">
                 <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center gap-2.5">
                   <CheckCircle2 className="w-5 h-5 shrink-0" />
-                  <p className="text-xs font-bold">¡Enlace de invitación generado con éxito!</p>
+                  <div>
+                    <p className="text-xs font-bold">¡Invitación generada con éxito!</p>
+                    {emailEnviadoStatus && (
+                      <p className={`text-[11px] mt-0.5 ${emailEnviadoStatus.ok ? "text-emerald-700 font-medium" : "text-amber-600 font-semibold"}`}>
+                        {emailEnviadoStatus.msg}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div className="p-3 bg-[var(--ts-surface-2)] rounded-xl border border-[var(--ts-border)]">

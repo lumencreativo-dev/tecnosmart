@@ -14,14 +14,20 @@ function RegistroContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = searchParams.get("token");
+  const nombreParam = searchParams.get("nombre") || "";
 
   const [validando, setValidando] = useState(true);
   const [errorToken, setErrorToken] = useState<string | null>(null);
   const [invitacion, setInvitacion] = useState<any>(null);
 
-  // Formulario
-  const [nombre, setNombre] = useState("");
-  const [username, setUsername] = useState("");
+  // Formulario con pre-llenado inteligente si viene en la invitación
+  const [nombre, setNombre] = useState(nombreParam);
+  const [username, setUsername] = useState(() => {
+    if (nombreParam) {
+      return nombreParam.toLowerCase().trim().replace(/\s+/g, ".").replace(/[^a-z0-9._-]/g, "");
+    }
+    return "";
+  });
   const [cedula, setCedula] = useState("");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");

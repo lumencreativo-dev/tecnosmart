@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+/public/landing/material_bruto/
 
 # debug
 npm-debug.log*

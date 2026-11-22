@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Send, CheckCircle2, AlertCircle, Phone, ArrowRight, UserCheck, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
+import ScrollReveal from "./ScrollReveal";
 
 export default function FormularioAsesoria() {
   const [nombre, setNombre] = useState("");
@@ -56,27 +57,30 @@ export default function FormularioAsesoria() {
   };
 
   return (
-    <section id="asesoria-gratuita" className="py-24 bg-[#0a0a0d] text-white">
+    <section id="asesoria-gratuita" className="py-24 bg-[#0a0a0d] text-white overflow-hidden">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Encabezado */}
-        <div className="text-center mb-12">
-          <span className="text-[var(--ts-red)] text-xs font-bold uppercase tracking-widest bg-red-950/30 border border-red-900/40 px-3 py-1 rounded-full">
-            Atención Especializada
-          </span>
-          <h2 className="mt-4 text-3xl sm:text-5xl font-black text-white tracking-tight">
-            Solicita tu Asesoría Gratuita
-          </h2>
-          
-          {/* Promesa Visible */}
-          <div className="mt-4 inline-flex items-center gap-2 bg-[#171720] border border-[#2d2d3c] px-4 py-2 rounded-xl text-xs sm:text-sm text-[var(--ts-red)] font-semibold shadow-md">
-            <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-            <span>Te llamará uno de nuestros ingenieros en menos de 24 horas hábiles.</span>
+        <ScrollReveal direction="up">
+          <div className="text-center mb-12">
+            <span className="text-[var(--ts-red)] text-xs font-bold uppercase tracking-widest bg-red-950/30 border border-red-900/40 px-3 py-1 rounded-full">
+              Atención Especializada
+            </span>
+            <h2 className="mt-4 text-3xl sm:text-5xl font-black text-white tracking-tight">
+              Solicita tu Asesoría Gratuita
+            </h2>
+            
+            {/* Promesa Visible */}
+            <div className="mt-4 inline-flex items-center gap-2 bg-[#171720] border border-[#2d2d3c] px-4 py-2 rounded-xl text-xs sm:text-sm text-[var(--ts-red)] font-semibold shadow-md">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              <span>Te llamará uno de nuestros ingenieros en menos de 24 horas hábiles.</span>
+            </div>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Card del Formulario */}
-        <div className="bg-[#121217] border border-[#242430] rounded-3xl p-6 sm:p-10 shadow-2xl">
+        <ScrollReveal direction="zoom" duration={750} delay={100}>
+          <div className="bg-[#121217] border border-[#242430] hover:border-[var(--ts-red)]/50 rounded-3xl p-6 sm:p-10 shadow-2xl transition-colors">
           
           {enviado ? (
             <div className="text-center py-10 space-y-4">
@@ -240,6 +244,7 @@ export default function FormularioAsesoria() {
           )}
 
         </div>
+        </ScrollReveal>
 
       </div>
     </section>
