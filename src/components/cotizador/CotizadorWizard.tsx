@@ -443,8 +443,10 @@ export default function CotizadorWizard() {
         setCliente((prev) => ({ ...prev, id: clienteId }));
       }
 
-      // Metadata de moneda en notas
-      const infoMoneda = moneda === "VES" ? `[Cotización emitida en Bolívares | Tasa BCV: Bs. ${tasaBcv.toFixed(2)}]` : "";
+      // Metadata de moneda en notas con cláusula de indexación BCV
+      const infoMoneda = moneda === "VES"
+        ? `[Cotización emitida en Bolívares | Tasa BCV: Bs. ${tasaBcv.toFixed(2)} | Liquidable a tasa BCV del día de pago]`
+        : "";
       const notasFinales = [notas, infoMoneda].filter(Boolean).join(" ");
 
       let cotIdFinal = cotizacionId;

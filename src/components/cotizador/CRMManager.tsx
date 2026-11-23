@@ -53,6 +53,8 @@ export default function CRMManager() {
   const [detalles, setDetalles]             = useState<any[]>([]);
   const [loadingDetalles, setLoadingDetalles] = useState(false);
   const [regenerando, setRegenerando]       = useState(false);
+  const [reliquidando, setReliquidando]     = useState(false);
+  const [tasaBcvHoy, setTasaBcvHoy]         = useState<number>(0);
 
   const cargarDatos = async () => {
     setLoading(true);
@@ -76,7 +78,19 @@ export default function CRMManager() {
     setLoading(false);
   };
 
-  useEffect(() => { cargarDatos(); }, []);
+  useEffect(() => {
+    cargarDatos();
+    async function obtenerTasaHoy() {
+      try {
+        const res = await fetch("https://ve.dolarapi.com/v1/dolares/oficial");
+        const data = await res.json();
+        if (data?.promedio) setTasaBcvHoy(Number(data.promedio));
+      } catch (e) {
+        console.warn("No se pudo obtener tasa BCV actual en CRM:", e);
+      }
+    }
+    obtenerTasaHoy();
+  }, []);
 
   // ── Acciones ──────────────────────────────────────────────
   const handleUpdateEstado = async (id: string, nuevoEstado: string) => {
@@ -148,6 +162,9 @@ export default function CRMManager() {
       const total = Math.max(0, subtotal - descuento);
       const aplicaEsquemaPago = total > 500;
 
+      const isVES = Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares"));
+      const cotTasaBcv = Number(cot.tasa_bcv || tasaBcvHoy || 0);
+
       const { exportarCotizacionPDF } = await import("@/components/pdf/CotizacionPDF");
       await exportarCotizacionPDF({
         numeroCot: cot.numero_cotizacion,
@@ -161,14 +178,53 @@ export default function CRMManager() {
           anticipo:         aplicaEsquemaPago ? total * 0.7 : 0,
           saldo:            aplicaEsquemaPago ? total * 0.3 : 0,
           aplicaEsquemaPago,
+          moneda: isVES ? "VES" : "USD",
+          tasaBcv: isVES ? cotTasaBcv : undefined,
         },
         notas: cot.notas || undefined,
+        moneda: isVES ? "VES" : "USD",
+        tasaBcv: isVES ? cotTasaBcv : undefined,
       });
     } catch (e) {
       console.error("Error al re-generar PDF de cotización:", e);
       alert("No se pudo generar el PDF.");
     }
     setRegenerando(false);
+  };
+
+  const handleReliquidarCot = async (cot: CotizacionDB) => {
+    if (!tasaBcvHoy || tasaBcvHoy <= 0) {
+      alert("No se pudo obtener la tasa oficial del BCV del día para reliquidar.");
+      return;
+    }
+    setReliquidando(true);
+    try {
+      // Limpiar nota previa de tasa y agregar la actualizada
+      const notasLimpias = (cot.notas || "").replace(/\[Cotización (emitida|actualizada) en Bolívares.*?\]/g, "").trim();
+      const nuevaNota = `[Cotización actualizada a Tasa BCV: Bs. ${tasaBcvHoy.toFixed(2)} | Liquidable a tasa BCV del día de pago]`;
+      const notasFinales = [notasLimpias, nuevaNota].filter(Boolean).join(" ");
+
+      const { error } = await supabase
+        .from("cotizaciones")
+        .update({
+          tasa_bcv: tasaBcvHoy,
+          notas: notasFinales,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", cot.id);
+
+      if (error) throw error;
+
+      const cotActualizada = { ...cot, tasa_bcv: tasaBcvHoy, notas: notasFinales };
+      setCotizaciones(prev => prev.map(c => c.id === cot.id ? cotActualizada : c));
+      setSelected(cotActualizada);
+      alert(`✓ Cotización ${cot.numero_cotizacion} reliquidada con éxito a la tasa oficial de hoy (Bs. ${tasaBcvHoy.toFixed(2)} / USD).`);
+    } catch (err: any) {
+      console.error("Error al reliquidar cotización:", err);
+      alert("Error al reliquidar: " + (err.message || "desconocido"));
+    } finally {
+      setReliquidando(false);
+    }
   };
 
   // ── Filtrado ──────────────────────────────────────────────
@@ -228,7 +284,14 @@ export default function CRMManager() {
         )}
 
         <div className="flex justify-between items-center mt-3 pt-2.5 border-t border-[var(--ts-border-2)]">
-          <span className="text-sm font-extrabold text-[var(--ts-text-primary)]">{formatUSD(cot.total)}</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-extrabold text-[var(--ts-text-primary)]">{formatUSD(cot.total)}</span>
+            {Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares")) && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30 rounded" title={`Tasa BCV: Bs. ${Number(cot.tasa_bcv || 0).toFixed(2)}`}>
+                VES
+              </span>
+            )}
+          </div>
 
           <select
             value={cot.estado}
@@ -405,7 +468,14 @@ export default function CRMManager() {
                         <td className="px-5 py-3 text-sm font-medium text-[var(--ts-text-primary)]">
                           {cot.clientes?.empresa || cot.clientes?.contacto}
                         </td>
-                        <td className="px-5 py-3 text-sm font-bold text-right">{formatUSD(cot.total)}</td>
+                        <td className="px-5 py-3 text-sm font-bold text-right">
+                          <div>{formatUSD(cot.total)}</div>
+                          {Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares")) && (
+                            <span className="inline-block text-[9px] font-semibold text-blue-400">
+                              VES · {cot.tasa_bcv ? `Bs. ${Number(cot.tasa_bcv).toFixed(1)}` : "BCV"}
+                            </span>
+                          )}
+                        </td>
                         <td className="px-5 py-3 text-center">
                           <select
                             value={cot.estado}
@@ -504,218 +574,300 @@ export default function CRMManager() {
       )}
 
       {/* ── DRAWER DETALLE COTIZACIÓN ── */}
-      {selected && (
-        <div className="fixed inset-0 z-50 flex">
-          {/* Overlay */}
-          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => setSelected(null)} />
+      {selected && (() => {
+        const isSelectedVES = Boolean(selected.notas?.toLowerCase().includes("bolívares") || selected.notas?.toLowerCase().includes("bolivares"));
+        const cotTasaBcv = Number(selected.tasa_bcv || 0);
+        const totalUsd = Number(selected.total || 0);
+        const totalBsEmision = cotTasaBcv > 0 ? totalUsd * cotTasaBcv : 0;
+        const totalBsHoy = tasaBcvHoy > 0 ? totalUsd * tasaBcvHoy : 0;
+        const hayVariacionTasa = tasaBcvHoy > 0 && cotTasaBcv > 0 && Math.abs(tasaBcvHoy - cotTasaBcv) >= 0.01;
+        const difBs = totalBsHoy - totalBsEmision;
+        const pctVariacion = cotTasaBcv > 0 ? ((tasaBcvHoy - cotTasaBcv) / cotTasaBcv) * 100 : 0;
 
-          {/* Panel */}
-          <div className="w-full max-w-lg bg-[var(--ts-surface)] h-full overflow-y-auto shadow-2xl flex flex-col">
+        return (
+          <div className="fixed inset-0 z-50 flex">
+            {/* Overlay */}
+            <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => setSelected(null)} />
 
-            {/* ── Header ── */}
-            <div className="px-6 py-5 border-b border-[var(--ts-border)] bg-[var(--ts-surface-2)]">
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h2 className="text-xl font-extrabold text-[var(--ts-red)]">
-                      {selected.numero_cotizacion}
-                    </h2>
-                    {selected.numero_cotizacion?.includes("-R") && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-md">
-                        <GitBranch className="w-3 h-3" />
-                        Revisión
+            {/* Panel */}
+            <div className="w-full max-w-lg bg-[var(--ts-surface)] h-full overflow-y-auto shadow-2xl flex flex-col">
+
+              {/* ── Header ── */}
+              <div className="px-6 py-5 border-b border-[var(--ts-border)] bg-[var(--ts-surface-2)]">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <h2 className="text-xl font-extrabold text-[var(--ts-red)]">
+                        {selected.numero_cotizacion}
+                      </h2>
+                      {selected.numero_cotizacion?.includes("-R") && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-md">
+                          <GitBranch className="w-3 h-3" />
+                          Revisión
+                        </span>
+                      )}
+                      <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${ESTADOS_MAP[selected.estado]?.color || "bg-gray-100 text-gray-700"}`}>
+                        {ESTADOS_MAP[selected.estado]?.label || selected.estado}
                       </span>
-                    )}
-                    <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full ${ESTADOS_MAP[selected.estado]?.color || "bg-gray-100 text-gray-700"}`}>
-                      {ESTADOS_MAP[selected.estado]?.label || selected.estado}
-                    </span>
+                    </div>
+                    <p className="text-xs text-[var(--ts-text-muted)]">
+                      Creada: {formatFecha(selected.fecha || selected.created_at)}
+                    </p>
                   </div>
-                  <p className="text-xs text-[var(--ts-text-muted)]">
-                    Creada: {formatFecha(selected.fecha || selected.created_at)}
-                  </p>
+                  <button onClick={() => setSelected(null)}>
+                    <X className="w-5 h-5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors" />
+                  </button>
                 </div>
-                <button onClick={() => setSelected(null)}>
-                  <X className="w-5 h-5 text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)] transition-colors" />
-                </button>
               </div>
-            </div>
 
-            {/* ── Cuerpo ── */}
-            <div className="flex-1 p-5 space-y-6 overflow-y-auto">
+              {/* ── Cuerpo ── */}
+              <div className="flex-1 p-5 space-y-6 overflow-y-auto">
 
-              {/* Cliente */}
-              {selected.clientes && (
+                {/* Cliente */}
+                {selected.clientes && (
+                  <div>
+                    <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
+                      Cliente
+                    </h3>
+                    <div className="bg-[var(--ts-surface-2)] rounded-lg p-3 border border-[var(--ts-border)] space-y-1">
+                      <p className="text-sm font-bold text-[var(--ts-text-primary)]">
+                        {selected.clientes.empresa || selected.clientes.contacto}
+                      </p>
+                      {selected.clientes.empresa && selected.clientes.contacto && (
+                        <p className="text-xs text-[var(--ts-text-muted)]">Contacto: {selected.clientes.contacto}</p>
+                      )}
+                      {selected.clientes.rif_cedula && (
+                        <p className="text-xs text-[var(--ts-text-muted)]">RIF/Cédula: {selected.clientes.rif_cedula}</p>
+                      )}
+                      {selected.clientes.telefono && (
+                        <p className="text-xs text-[var(--ts-text-muted)]">Tel: {selected.clientes.telefono}</p>
+                      )}
+                      {selected.clientes.direccion && (
+                        <p className="text-xs text-[var(--ts-text-muted)]">{selected.clientes.direccion}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Ítems / Líneas */}
                 <div>
                   <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
-                    Cliente
+                    Ítems Cotizados
                   </h3>
-                  <div className="bg-[var(--ts-surface-2)] rounded-lg p-3 border border-[var(--ts-border)] space-y-1">
-                    <p className="text-sm font-bold text-[var(--ts-text-primary)]">
-                      {selected.clientes.empresa || selected.clientes.contacto}
-                    </p>
-                    {selected.clientes.empresa && selected.clientes.contacto && (
-                      <p className="text-xs text-[var(--ts-text-muted)]">Contacto: {selected.clientes.contacto}</p>
+                  {loadingDetalles ? (
+                    <div className="py-4 text-center text-xs text-[var(--ts-text-muted)]">
+                      <div className="w-5 h-5 border-2 border-[var(--ts-red)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                      Cargando detalles...
+                    </div>
+                  ) : detalles.length === 0 ? (
+                    <div className="flex items-center gap-2 py-4 text-center text-xs text-[var(--ts-text-muted)] border border-dashed border-[var(--ts-border)] rounded-lg justify-center">
+                      <FileText className="w-4 h-4" />
+                      No hay ítems registrados para esta cotización.
+                    </div>
+                  ) : (
+                    <div className="border border-[var(--ts-border)] rounded-lg overflow-hidden">
+                      <table className="w-full border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)] text-[9px] uppercase">
+                            <th className="px-3 py-2 text-left border-b border-[var(--ts-border)]">Descripción</th>
+                            <th className="px-3 py-2 text-center border-b border-[var(--ts-border)]">Cant.</th>
+                            <th className="px-3 py-2 text-right border-b border-[var(--ts-border)]">P.U.</th>
+                            <th className="px-3 py-2 text-right border-b border-[var(--ts-border)]">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[var(--ts-border-2)]">
+                          {detalles.map((d: any) => (
+                            <tr key={d.id}>
+                              <td className="px-3 py-2.5 text-[var(--ts-text-primary)] leading-snug">{d.descripcion}</td>
+                              <td className="px-3 py-2.5 text-center text-[var(--ts-text-muted)]">{d.cantidad}</td>
+                              <td className="px-3 py-2.5 text-right text-[var(--ts-text-muted)]">{formatUSD(d.precio_unitario)}</td>
+                              <td className="px-3 py-2.5 text-right font-bold text-[var(--ts-text-primary)]">{formatUSD(d.cantidad * d.precio_unitario)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Resumen financiero */}
+                <div>
+                  <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
+                    Resumen
+                  </h3>
+                  <div className="bg-[var(--ts-surface-2)] rounded-lg p-4 border border-[var(--ts-border)] space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[var(--ts-text-muted)]">Subtotal</span>
+                      <span className="font-semibold">{formatUSD(Number(selected.subtotal || 0))}</span>
+                    </div>
+                    {Number(selected.descuento) > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[var(--ts-text-muted)]">Descuento</span>
+                        <span className="font-semibold text-emerald-600">− {formatUSD(Number(selected.descuento))}</span>
+                      </div>
                     )}
-                    {selected.clientes.rif_cedula && (
-                      <p className="text-xs text-[var(--ts-text-muted)]">RIF/Cédula: {selected.clientes.rif_cedula}</p>
-                    )}
-                    {selected.clientes.telefono && (
-                      <p className="text-xs text-[var(--ts-text-muted)]">Tel: {selected.clientes.telefono}</p>
-                    )}
-                    {selected.clientes.direccion && (
-                      <p className="text-xs text-[var(--ts-text-muted)]">{selected.clientes.direccion}</p>
+                    <div className="flex justify-between text-sm border-t border-[var(--ts-border)] pt-2">
+                      <span className="font-bold text-[var(--ts-text-primary)]">Total</span>
+                      <span className="font-extrabold text-[var(--ts-text-primary)] text-base">{formatUSD(Number(selected.total || 0))}</span>
+                    </div>
+                    {Number(selected.total) > 500 && (
+                      <>
+                        <div className="flex justify-between text-xs text-[var(--ts-text-muted)] pt-1">
+                          <span>Anticipo (70%)</span>
+                          <span className="font-semibold">{formatUSD(Number(selected.anticipo_monto || selected.total * 0.7))}</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-[var(--ts-text-muted)]">
+                          <span>Saldo (30%)</span>
+                          <span className="font-semibold">{formatUSD(Number(selected.saldo_monto || selected.total * 0.3))}</span>
+                        </div>
+                      </>
                     )}
                   </div>
                 </div>
-              )}
 
-              {/* Ítems / Líneas */}
-              <div>
-                <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
-                  Ítems Cotizados
-                </h3>
-                {loadingDetalles ? (
-                  <div className="py-4 text-center text-xs text-[var(--ts-text-muted)]">
-                    <div className="w-5 h-5 border-2 border-[var(--ts-red)] border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                    Cargando detalles...
+                {/* Bloque especial de Indexación BCV / Bolívares */}
+                {isSelectedVES && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40">
+                        🇻🇪 Cotización en Bolívares (VES)
+                      </span>
+                      <span className="text-[10px] text-[var(--ts-text-muted)] font-medium">
+                        Vigencia: 24h hábiles
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      <div className="bg-[var(--ts-surface)] p-2.5 rounded-lg border border-[var(--ts-border)]">
+                        <div className="text-[10px] text-[var(--ts-text-muted)]">Tasa Emisión</div>
+                        <div className="font-bold text-[var(--ts-text-primary)]">
+                          {cotTasaBcv > 0 ? `Bs. ${cotTasaBcv.toFixed(2)}` : "No registrada"}
+                        </div>
+                        <div className="text-[11px] font-semibold text-[var(--ts-text-muted)] mt-1">
+                          {cotTasaBcv > 0 ? `Bs. ${totalBsEmision.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                        </div>
+                      </div>
+
+                      <div className="bg-[var(--ts-surface)] p-2.5 rounded-lg border border-[var(--ts-border)]">
+                        <div className="text-[10px] text-[var(--ts-text-muted)] flex items-center justify-between">
+                          <span>Tasa BCV Hoy</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        </div>
+                        <div className="font-bold text-emerald-400">
+                          {tasaBcvHoy > 0 ? `Bs. ${tasaBcvHoy.toFixed(2)}` : "Consultando..."}
+                        </div>
+                        <div className="text-[11px] font-bold text-emerald-400 mt-1">
+                          {tasaBcvHoy > 0 ? `Bs. ${totalBsHoy.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                        </div>
+                      </div>
+                    </div>
+
+                    {hayVariacionTasa && (
+                      <div className="bg-amber-500/15 border border-amber-500/30 rounded-lg p-2.5 space-y-2">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="text-xs">
+                            <p className="font-bold text-amber-500">
+                              Variación de Tasa: {pctVariacion > 0 ? `+${pctVariacion.toFixed(2)}%` : `${pctVariacion.toFixed(2)}%`}
+                            </p>
+                            <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5">
+                              La cotización original sumaba {totalBsEmision.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs. A la tasa de hoy son {totalBsHoy.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs ({difBs > 0 ? `+${difBs.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs` : `${difBs.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs`}).
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleReliquidarCot(selected)}
+                          disabled={reliquidando}
+                          className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/40 text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                          <RotateCcw className={`w-3.5 h-3.5 ${reliquidando ? "animate-spin" : ""}`} />
+                          <span>{reliquidando ? "Reliquidando..." : "Actualizar cotización a Tasa BCV de hoy"}</span>
+                        </button>
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-[var(--ts-text-muted)] italic leading-tight">
+                      * Cláusula legal activa: El monto a pagar en Bolívares se liquida según la tasa oficial del BCV en la fecha efectiva del pago.
+                    </p>
                   </div>
-                ) : detalles.length === 0 ? (
-                  <div className="flex items-center gap-2 py-4 text-center text-xs text-[var(--ts-text-muted)] border border-dashed border-[var(--ts-border)] rounded-lg justify-center">
-                    <FileText className="w-4 h-4" />
-                    No hay ítems registrados para esta cotización.
+                )}
+
+                {/* Notas */}
+                {selected.notas && (
+                  <div>
+                    <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
+                      Notas / Observaciones
+                    </h3>
+                    <p className="text-xs text-[var(--ts-text-muted)] bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-3 py-2.5 leading-relaxed">
+                      {selected.notas}
+                    </p>
                   </div>
-                ) : (
-                  <div className="border border-[var(--ts-border)] rounded-lg overflow-hidden">
-                    <table className="w-full border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)] text-[9px] uppercase">
-                          <th className="px-3 py-2 text-left border-b border-[var(--ts-border)]">Descripción</th>
-                          <th className="px-3 py-2 text-center border-b border-[var(--ts-border)]">Cant.</th>
-                          <th className="px-3 py-2 text-right border-b border-[var(--ts-border)]">P.U.</th>
-                          <th className="px-3 py-2 text-right border-b border-[var(--ts-border)]">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--ts-border-2)]">
-                        {detalles.map((d: any) => (
-                          <tr key={d.id}>
-                            <td className="px-3 py-2.5 text-[var(--ts-text-primary)] leading-snug">{d.descripcion}</td>
-                            <td className="px-3 py-2.5 text-center text-[var(--ts-text-muted)]">{d.cantidad}</td>
-                            <td className="px-3 py-2.5 text-right text-[var(--ts-text-muted)]">{formatUSD(d.precio_unitario)}</td>
-                            <td className="px-3 py-2.5 text-right font-bold text-[var(--ts-text-primary)]">{formatUSD(d.cantidad * d.precio_unitario)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                )}
+
+              </div>
+
+              {/* ── Acciones del drawer ── */}
+              <div className="p-5 border-t border-[var(--ts-border)] space-y-2.5">
+                {/* Botones de Edición y Duplicación */}
+                <div className="grid grid-cols-2 gap-2">
+                  <a
+                    href={`/nueva?edit=${selected.id}`}
+                    className="flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white text-xs font-bold py-2.5 px-3 rounded-xl transition-all shadow-xs text-center"
+                    title="Editar o generar nueva revisión de esta cotización"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Editar / Corregir</span>
+                  </a>
+                  <a
+                    href={`/nueva?duplicar=${selected.id}`}
+                    className="flex items-center justify-center gap-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface-3)] text-[var(--ts-text-primary)] border border-[var(--ts-border)] text-xs font-bold py-2.5 px-3 rounded-xl transition-colors text-center"
+                    title="Crear una cotización nueva duplicando estos ítems"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-[var(--ts-text-muted)]" />
+                    <span>Duplicar</span>
+                  </a>
+                </div>
+
+                {(["aprobada", "aprobadas", "Aprobada", "Aprobadas"].includes(selected.estado)) && (
+                  <a
+                    href={`/ordenes?cotizacion_id=${selected.id}`}
+                    className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-xs"
+                  >
+                    <Wrench className="w-4 h-4" />
+                    Generar Orden de Trabajo (OT)
+                  </a>
+                )}
+
+                <button
+                  onClick={() => handleRedescargarCot(selected)}
+                  disabled={regenerando || loadingDetalles || detalles.length === 0}
+                  className="w-full flex items-center justify-center gap-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface-3)] border border-[var(--ts-border)] disabled:opacity-40 text-[var(--ts-text-primary)] text-xs font-bold py-2.5 rounded-xl transition-colors"
+                >
+                  <Download className="w-4 h-4 text-[var(--ts-text-muted)]" />
+                  {regenerando ? "Generando PDF..." : "Descargar PDF"}
+                </button>
+
+                {selected.clientes?.telefono && (
+                  <a
+                    href={`https://wa.me/${selected.clientes.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(
+                      isSelectedVES
+                        ? `Hola, adjunto la cotización ${selected.numero_cotizacion} de TecnoSmart VZL por un total de Bs. ${(totalBsHoy > 0 ? totalBsHoy : totalBsEmision).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Ref. $${totalUsd.toFixed(2)} USD liquidable a Tasa BCV del día de pago).`
+                        : `Hola, adjunto la cotización ${selected.numero_cotizacion} de TecnoSmart VZL por un total de ${formatUSD(selected.total)}.`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20b858] text-white text-xs font-bold py-2.5 rounded-xl transition-colors"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Enviar por WhatsApp
+                  </a>
                 )}
               </div>
 
-              {/* Resumen financiero */}
-              <div>
-                <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
-                  Resumen
-                </h3>
-                <div className="bg-[var(--ts-surface-2)] rounded-lg p-4 border border-[var(--ts-border)] space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[var(--ts-text-muted)]">Subtotal</span>
-                    <span className="font-semibold">{formatUSD(Number(selected.subtotal || 0))}</span>
-                  </div>
-                  {Number(selected.descuento) > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-[var(--ts-text-muted)]">Descuento</span>
-                      <span className="font-semibold text-emerald-600">− {formatUSD(Number(selected.descuento))}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm border-t border-[var(--ts-border)] pt-2">
-                    <span className="font-bold text-[var(--ts-text-primary)]">Total</span>
-                    <span className="font-extrabold text-[var(--ts-text-primary)] text-base">{formatUSD(Number(selected.total || 0))}</span>
-                  </div>
-                  {Number(selected.total) > 500 && (
-                    <>
-                      <div className="flex justify-between text-xs text-[var(--ts-text-muted)] pt-1">
-                        <span>Anticipo (70%)</span>
-                        <span className="font-semibold">{formatUSD(Number(selected.anticipo_monto || selected.total * 0.7))}</span>
-                      </div>
-                      <div className="flex justify-between text-xs text-[var(--ts-text-muted)]">
-                        <span>Saldo (30%)</span>
-                        <span className="font-semibold">{formatUSD(Number(selected.saldo_monto || selected.total * 0.3))}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Notas */}
-              {selected.notas && (
-                <div>
-                  <h3 className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wide mb-2">
-                    Notas / Observaciones
-                  </h3>
-                  <p className="text-xs text-[var(--ts-text-muted)] bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-3 py-2.5 leading-relaxed">
-                    {selected.notas}
-                  </p>
-                </div>
-              )}
-
             </div>
-
-            {/* ── Acciones del drawer ── */}
-            <div className="p-5 border-t border-[var(--ts-border)] space-y-2.5">
-              {/* Botones de Edición y Duplicación */}
-              <div className="grid grid-cols-2 gap-2">
-                <a
-                  href={`/nueva?edit=${selected.id}`}
-                  className="flex items-center justify-center gap-2 bg-[var(--ts-red)] hover:bg-red-700 text-white text-xs font-bold py-2.5 px-3 rounded-xl transition-all shadow-xs text-center"
-                  title="Editar o generar nueva revisión de esta cotización"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  <span>Editar / Corregir</span>
-                </a>
-                <a
-                  href={`/nueva?duplicar=${selected.id}`}
-                  className="flex items-center justify-center gap-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface-3)] text-[var(--ts-text-primary)] border border-[var(--ts-border)] text-xs font-bold py-2.5 px-3 rounded-xl transition-colors text-center"
-                  title="Crear una cotización nueva duplicando estos ítems"
-                >
-                  <Copy className="w-3.5 h-3.5 text-[var(--ts-text-muted)]" />
-                  <span>Duplicar</span>
-                </a>
-              </div>
-
-              {(["aprobada", "aprobadas", "Aprobada", "Aprobadas"].includes(selected.estado)) && (
-                <a
-                  href={`/ordenes?cotizacion_id=${selected.id}`}
-                  className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2.5 rounded-xl transition-colors shadow-xs"
-                >
-                  <Wrench className="w-4 h-4" />
-                  Generar Orden de Trabajo (OT)
-                </a>
-              )}
-
-              <button
-                onClick={() => handleRedescargarCot(selected)}
-                disabled={regenerando || loadingDetalles || detalles.length === 0}
-                className="w-full flex items-center justify-center gap-2 bg-[var(--ts-surface-2)] hover:bg-[var(--ts-surface-3)] border border-[var(--ts-border)] disabled:opacity-40 text-[var(--ts-text-primary)] text-xs font-bold py-2.5 rounded-xl transition-colors"
-              >
-                <Download className="w-4 h-4 text-[var(--ts-text-muted)]" />
-                {regenerando ? "Generando PDF..." : "Descargar PDF"}
-              </button>
-
-              {selected.clientes?.telefono && (
-                <a
-                  href={`https://wa.me/${selected.clientes.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(`Hola, adjunto la cotización ${selected.numero_cotizacion} de TecnoSmart VZL por un total de ${formatUSD(selected.total)}.`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20b858] text-white text-xs font-bold py-2.5 rounded-xl transition-colors"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  Enviar por WhatsApp
-                </a>
-              )}
-            </div>
-
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Modal Confirmación Borrado Definitivo ── */}
       {confirmDelete && (
