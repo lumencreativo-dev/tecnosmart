@@ -6,7 +6,7 @@ import {
   Trash2, RefreshCw, Filter, Sliders, TrendingUp, TrendingDown,
   DollarSign, ArrowUpRight, ArrowDownRight, Check, X, Copy,
   FileText, ShieldCheck, ChevronDown, Layers, Sparkles, HelpCircle,
-  Percent, ArrowRight, FileSpreadsheet, Download
+  Percent, ArrowRight, FileSpreadsheet, Download, Lock, Unlock
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD } from "@/lib/utils";
@@ -33,7 +33,10 @@ interface ProductoStaging {
   categoria: string;
   precio_costo: number;
   precio_venta: number;
+  precio_bcv?: number;
   precio_tecnico: number;
+  margen_bloqueado?: boolean;
+  margen_individual?: number;
   estatus_proveedor: string;
   cantidad_proveedor: number | null;
 
@@ -52,7 +55,8 @@ type TipoMargen = "utilidad" | "markup";
 
 interface MargenConfig {
   tipo: TipoMargen;
-  porcentaje: number;           // Default: 28%
+  porcentaje: number;           // Margen Divisas (Default: 28%)
+  porcentajeBcv: number;        // Margen BCV (Default: 38%)
   descuentoTecnicoPct: number;  // Default: 15%
 }
 
@@ -167,24 +171,40 @@ function calcularPrecios(
   costo: number,
   tipoMargen: TipoMargen,
   porcentajeMargen: number,
-  descuentoTecnicoPct: number = 15
-): { precioVenta: number; precioTecnico: number; ganancia: number; margenRealPct: number } {
+  descuentoTecnicoPct: number = 15,
+  porcentajeMargenBcv: number = 38
+): {
+  precioVenta: number;
+  precioBcv: number;
+  precioTecnico: number;
+  ganancia: number;
+  margenRealPct: number;
+} {
   if (costo <= 0) {
-    return { precioVenta: 0, precioTecnico: 0, ganancia: 0, margenRealPct: 0 };
+    return { precioVenta: 0, precioBcv: 0, precioTecnico: 0, ganancia: 0, margenRealPct: 0 };
   }
 
   let precioVenta = 0;
+  let precioBcv = 0;
+
   if (tipoMargen === "utilidad") {
     // Margen de Utilidad sobre Precio de Venta: P = C / (1 - M)
     const m = Math.min(Math.max(0, porcentajeMargen), 99) / 100;
     precioVenta = costo / (1 - m);
+
+    const mBcv = Math.min(Math.max(0, porcentajeMargenBcv), 99) / 100;
+    precioBcv = costo / (1 - mBcv);
   } else {
     // Markup sobre Costo: P = C * (1 + M)
     const m = Math.max(0, porcentajeMargen) / 100;
     precioVenta = costo * (1 + m);
+
+    const mBcv = Math.max(0, porcentajeMargenBcv) / 100;
+    precioBcv = costo * (1 + mBcv);
   }
 
   precioVenta = Math.round(precioVenta * 100) / 100;
+  precioBcv = Math.round(precioBcv * 100) / 100;
 
   // Precio Técnico: descuento sobre precio de venta sin bajar del costo + 5%
   let precioTecnico = Math.round(precioVenta * (1 - descuentoTecnicoPct / 100) * 100) / 100;
@@ -195,7 +215,7 @@ function calcularPrecios(
   const ganancia = Math.round((precioVenta - costo) * 100) / 100;
   const margenRealPct = precioVenta > 0 ? Math.round(((precioVenta - costo) / precioVenta) * 1000) / 10 : 0;
 
-  return { precioVenta, precioTecnico, ganancia, margenRealPct };
+  return { precioVenta, precioBcv, precioTecnico, ganancia, margenRealPct };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -257,12 +277,80 @@ export default function ImportarPage() {
   const [filtroMarca, setFiltroMarca] = useState("TODAS");
   const [filtroCategoria, setFiltroCategoria] = useState("TODAS");
 
-  // Configuración de Margen
+  // Configuración de Margen Dual Bimoneda
   const [margenConfig, setMargenConfig] = useState<MargenConfig>({
     tipo: "utilidad",
     porcentaje: 28,
+    porcentajeBcv: 38,
     descuentoTecnicoPct: 15,
   });
+
+  // Tasa BCV en vivo para cálculo de precios en Bolívares
+  const [tasaBcv, setTasaBcv] = useState<number>(0);
+  const [cargandoTasa, setCargandoTasa] = useState(false);
+
+  useEffect(() => {
+    const obtenerTasaBcv = async () => {
+      setCargandoTasa(true);
+      try {
+        const res = await fetch("https://ve.dolarapi.com/v1/dolares/oficial");
+        const data = await res.json();
+        if (data?.promedio) setTasaBcv(data.promedio);
+      } catch (e) {
+        console.warn("No se pudo obtener tasa BCV en tiempo real:", e);
+      } finally {
+        setCargandoTasa(false);
+      }
+    };
+    obtenerTasaBcv();
+  }, []);
+
+  // Métricas de candados en staging
+  const statsBloqueo = useMemo(() => {
+    const bloqueados = items.filter(it => it.margen_bloqueado).length;
+    const flotantes = items.length - bloqueados;
+    return { bloqueados, flotantes };
+  }, [items]);
+
+  // Alternar candado (bloqueo) de un ítem en staging
+  const toggleBloqueoStaging = (id: string) => {
+    setItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      const nuevoEstado = !it.margen_bloqueado;
+      return {
+        ...it,
+        margen_bloqueado: nuevoEstado,
+        margen_individual: it.margen_individual !== undefined && it.margen_individual !== null
+          ? it.margen_individual
+          : (it.precio_venta > 0 && it.precio_costo > 0
+              ? Math.round(((it.precio_venta - it.precio_costo) / it.precio_venta) * 100)
+              : margenConfig.porcentaje),
+      };
+    }));
+  };
+
+  // Cambio manual de margen individual en fila de staging
+  const handleMargenIndividualFila = (id: string, nuevoMargenStr: string) => {
+    const nuevoMargen = parseFloat(nuevoMargenStr) || 0;
+    setItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      const { precioVenta, precioBcv, precioTecnico } = calcularPrecios(
+        it.precio_costo,
+        margenConfig.tipo,
+        nuevoMargen,
+        margenConfig.descuentoTecnicoPct,
+        margenConfig.porcentajeBcv
+      );
+      return {
+        ...it,
+        precio_venta: precioVenta,
+        precio_bcv: precioBcv,
+        precio_tecnico: precioTecnico,
+        margen_individual: nuevoMargen,
+        margen_bloqueado: true,
+      };
+    }));
+  };
 
   // Modo de Importación
   const [modoImportacion, setModoImportacion] = useState<ModoImportacion>("completo");
@@ -282,7 +370,7 @@ export default function ImportarPage() {
     try {
       const { data, error } = await supabase
         .from("productos")
-        .select("id, codigo_sku, nombre, marca, categoria, precio_costo, precio_venta, precio_tecnico, stock");
+        .select("id, codigo_sku, nombre, marca, categoria, precio_costo, precio_venta, precio_bcv, precio_tecnico, margen_bloqueado, margen_individual, stock");
       if (!error && data) {
         setDbProductos(data);
       }
@@ -502,7 +590,8 @@ export default function ImportarPage() {
               costoProv,
               margenConfig.tipo,
               margenConfig.porcentaje,
-              margenConfig.descuentoTecnicoPct
+              margenConfig.descuentoTecnicoPct,
+              margenConfig.porcentajeBcv
             );
 
             itemsExtraidos.push({
@@ -514,6 +603,7 @@ export default function ImportarPage() {
               categoria: catFinal,
               precio_costo: costoProv,
               precio_venta: calcs.precioVenta,
+              precio_bcv: calcs.precioBcv,
               precio_tecnico: calcs.precioTecnico,
               estatus_proveedor: estatus,
               cantidad_proveedor: null,
@@ -601,7 +691,8 @@ export default function ImportarPage() {
               precioEncontrado,
               margenConfig.tipo,
               margenConfig.porcentaje,
-              margenConfig.descuentoTecnicoPct
+              margenConfig.descuentoTecnicoPct,
+              margenConfig.porcentajeBcv
             );
 
             itemsExtraidos.push({
@@ -613,6 +704,7 @@ export default function ImportarPage() {
               categoria: inferencia.categoria,
               precio_costo: precioEncontrado,
               precio_venta: calculos.precioVenta,
+              precio_bcv: calculos.precioBcv,
               precio_tecnico: calculos.precioTecnico,
               estatus_proveedor: "DISPONIBLE",
               cantidad_proveedor: null,
@@ -792,13 +884,47 @@ export default function ImportarPage() {
         const conciliacion = conciliarProducto(cleanSku, costoNum, dbIndexMap, skusEnEsteArchivo);
         skusEnEsteArchivo.add(skuKey);
 
-        // Precios con motor de márgenes
+        // Precios explícitos si vienen en el archivo
+        const pVentaExplicito = buscarNumero(row, ["precio_venta", "pvp", "precio_divisas", "precio_divisa", "p_venta"]);
+        const pBcvExplicito = buscarNumero(row, ["precio_bcv", "bcv", "precio_bs", "p_bcv"]);
+        const pTecExplicito = buscarNumero(row, ["precio_tecnico", "p_tecnico", "tecnico"]);
+
+        // Bloqueo de margen y margen individual
+        const bloqueadoRaw = buscarClave(row, ["margen_bloqueado", "bloqueado", "candado", "bloquear"]);
+        const margenIndivRaw = buscarNumero(row, ["margen_individual", "margen", "margen_pct"]);
+
+        const esBloqueado = bloqueadoRaw
+          ? ["SI", "TRUE", "1", "YES"].includes(bloqueadoRaw.toUpperCase().trim())
+          : (prodExistente?.margen_bloqueado ?? false);
+
+        const margenIndiv = margenIndivRaw !== null
+          ? margenIndivRaw
+          : (prodExistente?.margen_individual ?? null);
+
+        // Precios con motor de márgenes (respetando margen individual si está bloqueado)
+        const pctMargenUsar = (esBloqueado && margenIndiv !== null && margenIndiv > 0)
+          ? margenIndiv
+          : margenConfig.porcentaje;
+
         const calcs = calcularPrecios(
           costoNum,
           margenConfig.tipo,
-          margenConfig.porcentaje,
-          margenConfig.descuentoTecnicoPct
+          pctMargenUsar,
+          margenConfig.descuentoTecnicoPct,
+          margenConfig.porcentajeBcv
         );
+
+        const precioVentaFinal = (pVentaExplicito !== null && pVentaExplicito > 0)
+          ? pVentaExplicito
+          : calcs.precioVenta;
+
+        const precioBcvFinal = (pBcvExplicito !== null && pBcvExplicito > 0)
+          ? pBcvExplicito
+          : calcs.precioBcv;
+
+        const precioTecnicoFinal = (pTecExplicito !== null && pTecExplicito > 0)
+          ? pTecExplicito
+          : calcs.precioTecnico;
 
         const notas = buscarClave(row, ["notas", "observaciones", "observacion", "detalles"]);
 
@@ -810,8 +936,11 @@ export default function ImportarPage() {
           marca: marcaFinal,
           categoria: catFinal,
           precio_costo: costoNum,
-          precio_venta: calcs.precioVenta,
-          precio_tecnico: calcs.precioTecnico,
+          precio_venta: precioVentaFinal,
+          precio_bcv: precioBcvFinal,
+          precio_tecnico: precioTecnicoFinal,
+          margen_bloqueado: esBloqueado,
+          margen_individual: margenIndiv,
           estatus_proveedor: estatus,
           cantidad_proveedor: stockNum,
           estado_conciliacion: conciliacion.estado,
@@ -820,6 +949,7 @@ export default function ImportarPage() {
           precio_venta_anterior: conciliacion.precioVentaAnterior,
           variacion_costo_pct: conciliacion.variacionPct,
           seleccionado: true,
+          precio_manual: (pVentaExplicito !== null && pVentaExplicito > 0) || (pBcvExplicito !== null && pBcvExplicito > 0),
         });
       }
 
@@ -863,21 +993,25 @@ export default function ImportarPage() {
   const aplicarNuevoMargen = (
     nuevoTipo: TipoMargen,
     nuevoPct: number,
-    nuevoDescTec: number
+    nuevoDescTec: number,
+    nuevoPctBcv?: number
   ) => {
+    const pctBcv = nuevoPctBcv ?? margenConfig.porcentajeBcv;
     setMargenConfig({
       tipo: nuevoTipo,
       porcentaje: nuevoPct,
+      porcentajeBcv: pctBcv,
       descuentoTecnicoPct: nuevoDescTec,
     });
 
     setItems(prev =>
       prev.map(item => {
-        if (item.precio_manual) return item; // Respetar si el usuario lo editó a mano
-        const c = calcularPrecios(item.precio_costo, nuevoTipo, nuevoPct, nuevoDescTec);
+        if (item.precio_manual || item.margen_bloqueado) return item; // Respetar si el usuario lo editó a mano o está bloqueado
+        const c = calcularPrecios(item.precio_costo, nuevoTipo, nuevoPct, nuevoDescTec, pctBcv);
         return {
           ...item,
           precio_venta: c.precioVenta,
+          precio_bcv: c.precioBcv,
           precio_tecnico: c.precioTecnico,
         };
       })
@@ -961,7 +1095,10 @@ export default function ImportarPage() {
           categoria: p.categoria,
           precio_costo: p.precio_costo,
           precio_venta: p.precio_venta,
+          precio_bcv: p.precio_bcv || 0,
           precio_tecnico: p.precio_tecnico,
+          margen_bloqueado: p.margen_bloqueado || false,
+          margen_individual: p.margen_individual !== undefined ? p.margen_individual : null,
           stock: p.cantidad_proveedor ?? 0,
           activo: true,
           especificaciones_json: {
@@ -1309,67 +1446,89 @@ export default function ImportarPage() {
               {/* Acceso Rápido Recálculo */}
               <div className="p-4 rounded-2xl border border-[var(--ts-border)] bg-[var(--ts-surface)] flex flex-col justify-between">
                 <div>
-                  <p className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">Estrategia Activa</p>
+                  <p className="text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">Estrategia Bimoneda</p>
                   <p className="text-xs font-black text-white mt-1">
-                    {margenConfig.tipo === "utilidad" ? "Margen de Utilidad" : "Markup"} {margenConfig.porcentaje}%
+                    Divisas: <span className="text-emerald-400">{margenConfig.porcentaje}%</span> | BCV: <span className="text-cyan-300">{margenConfig.porcentajeBcv}%</span>
                   </p>
                 </div>
-                <span className="text-[10px] text-emerald-400 font-semibold">Técnico: -{margenConfig.descuentoTecnicoPct}%</span>
+                <div className="flex items-center justify-between text-[10px] text-[var(--ts-text-muted)] font-semibold mt-1">
+                  <span>Técnico: -{margenConfig.descuentoTecnicoPct}%</span>
+                  <span className="text-amber-400 font-bold">🔒 {statsBloqueo.bloqueados} fijos</span>
+                </div>
               </div>
             </div>
 
-            {/* ── 2. PANEL DE CONFIGURACIÓN DE MÁRGENES Y PRECIOS ── */}
+            {/* ── 2. PANEL DE CONFIGURACIÓN DE MÁRGENES DUAL Y PRECIOS ── */}
             <div className="bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-3xl p-6 shadow-sm space-y-5">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-[var(--ts-border)]">
                 <div>
                   <div className="flex items-center gap-2">
                     <Sliders className="w-4 h-4 text-[var(--ts-red)]" />
                     <h2 className="text-sm font-bold text-[var(--ts-text-primary)]">
-                      Motor de Márgenes y Fijación de Precios de Venta
+                      Motor de Márgenes Dual & Estrategia Bimoneda
                     </h2>
                   </div>
                   <p className="text-xs text-[var(--ts-text-muted)] mt-0.5">
-                    Modifica el margen deseado para que los precios de venta se recalculen instantáneamente para todo el lote.
+                    Control general para precios en Divisas y liquidación formal a Tasa BCV. Los productos con candado (🔒) están protegidos y no serán modificados por este panel.
                   </p>
                 </div>
 
-                {/* Switch Utilidad vs Markup */}
-                <div className="flex items-center bg-[var(--ts-surface-2)] p-1 rounded-2xl border border-[var(--ts-border)] self-start md:self-center">
-                  <button
-                    type="button"
-                    onClick={() => aplicarNuevoMargen("utilidad", margenConfig.porcentaje, margenConfig.descuentoTecnicoPct)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      margenConfig.tipo === "utilidad"
-                        ? "bg-[var(--ts-red)] text-white shadow-sm"
-                        : "text-[var(--ts-text-muted)] hover:text-white"
-                    }`}
-                  >
-                    Margen de Utilidad (Sobre Venta)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => aplicarNuevoMargen("markup", margenConfig.porcentaje, margenConfig.descuentoTecnicoPct)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      margenConfig.tipo === "markup"
-                        ? "bg-[var(--ts-red)] text-white shadow-sm"
-                        : "text-[var(--ts-text-muted)] hover:text-white"
-                    }`}
-                  >
-                    Markup (Sobre Costo)
-                  </button>
+                {/* Pill Tasa Oficial BCV y Contador de Bloqueados */}
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className="flex items-center gap-2 bg-[var(--ts-surface-2)] border border-cyan-500/30 px-3 py-1.5 rounded-xl text-xs">
+                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                    <span className="text-gray-300">BCV Oficial:</span>
+                    <span className="font-mono font-bold text-cyan-300">
+                      {tasaBcv > 0 ? `Bs. ${tasaBcv.toFixed(2)}` : (cargandoTasa ? "Consultando..." : "Bs. —")}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] px-3 py-1.5 rounded-xl text-xs">
+                    <span className="text-amber-400 font-bold">🔒 {statsBloqueo.bloqueados}</span>
+                    <span className="text-[var(--ts-text-muted)]">fijos</span>
+                    <span className="text-gray-600">|</span>
+                    <span className="text-emerald-400 font-bold">🔓 {statsBloqueo.flotantes}</span>
+                    <span className="text-[var(--ts-text-muted)]">flotantes</span>
+                  </div>
+
+                  {/* Switch Utilidad vs Markup */}
+                  <div className="flex items-center bg-[var(--ts-surface-2)] p-1 rounded-2xl border border-[var(--ts-border)]">
+                    <button
+                      type="button"
+                      onClick={() => aplicarNuevoMargen("utilidad", margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                        margenConfig.tipo === "utilidad"
+                          ? "bg-[var(--ts-red)] text-white shadow-sm"
+                          : "text-[var(--ts-text-muted)] hover:text-white"
+                      }`}
+                    >
+                      Utilidad
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => aplicarNuevoMargen("markup", margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                        margenConfig.tipo === "markup"
+                          ? "bg-[var(--ts-red)] text-white shadow-sm"
+                          : "text-[var(--ts-text-muted)] hover:text-white"
+                      }`}
+                    >
+                      Markup
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* Controles de Porcentaje y Presets */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-                {/* Input de Porcentaje */}
-                <div className="md:col-span-4 space-y-2">
+              {/* Controles de Sliders Duales (Divisas & BCV) */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* 1. Margen Divisas */}
+                <div className="lg:col-span-5 p-4 bg-[var(--ts-surface-2)]/60 border border-emerald-500/20 rounded-2xl space-y-3">
                   <div className="flex justify-between items-center text-xs">
-                    <label className="font-bold text-[var(--ts-text-primary)] flex items-center gap-1.5">
-                      <Percent className="w-3.5 h-3.5 text-[var(--ts-red)]" />
-                      Porcentaje de Margen Deseado:
+                    <label className="font-bold text-emerald-400 flex items-center gap-1.5">
+                      <Percent className="w-3.5 h-3.5" />
+                      Margen Divisas ($ Efectivo / Zelle):
                     </label>
-                    <span className="font-mono text-sm font-black text-[var(--ts-red)]">
+                    <span className="font-mono text-sm font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/30">
                       {margenConfig.porcentaje}%
                     </span>
                   </div>
@@ -1381,8 +1540,8 @@ export default function ImportarPage() {
                       max={70}
                       step={1}
                       value={margenConfig.porcentaje}
-                      onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, parseFloat(e.target.value) || 28, margenConfig.descuentoTecnicoPct)}
-                      className="w-full accent-[var(--ts-red)] cursor-pointer"
+                      onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, parseFloat(e.target.value) || 28, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                      className="w-full accent-emerald-500 cursor-pointer"
                     />
                     <input
                       type="number"
@@ -1390,39 +1549,86 @@ export default function ImportarPage() {
                       max={99}
                       step={0.5}
                       value={margenConfig.porcentaje}
-                      onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, parseFloat(e.target.value) || 0, margenConfig.descuentoTecnicoPct)}
-                      className="w-16 px-2 py-1.5 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl text-xs font-bold text-center text-white"
+                      onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, parseFloat(e.target.value) || 0, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                      className="w-16 px-2 py-1 bg-[#18181b] border border-[var(--ts-border)] rounded-xl text-xs font-bold text-center text-white"
                     />
                   </div>
-                </div>
 
-                {/* Presets Rápidos */}
-                <div className="md:col-span-5 space-y-1.5">
-                  <label className="block text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">
-                    Presets Frecuentes
-                  </label>
-                  <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold mr-1">Presets:</span>
                     {[20, 25, 28, 30, 35, 40].map((pct) => (
                       <button
                         key={pct}
                         type="button"
-                        onClick={() => aplicarNuevoMargen(margenConfig.tipo, pct, margenConfig.descuentoTecnicoPct)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                        onClick={() => aplicarNuevoMargen(margenConfig.tipo, pct, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
                           margenConfig.porcentaje === pct
-                            ? "bg-red-500/20 text-red-300 border-red-500"
-                            : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-white hover:bg-[var(--ts-border)]/40"
+                            ? "bg-emerald-500/20 text-emerald-300 border-emerald-500"
+                            : "bg-[#18181b] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-white"
                         }`}
                       >
-                        {pct}% {pct === 28 ? "★ Habitual" : ""}
+                        {pct}%{pct === 28 ? " ★" : ""}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Descuento Técnico */}
-                <div className="md:col-span-3 space-y-1.5">
+                {/* 2. Margen BCV */}
+                <div className="lg:col-span-5 p-4 bg-[var(--ts-surface-2)]/60 border border-cyan-500/20 rounded-2xl space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <label className="font-bold text-cyan-300 flex items-center gap-1.5">
+                      <Percent className="w-3.5 h-3.5" />
+                      Margen BCV ($ / Ref. Bolívares):
+                    </label>
+                    <span className="font-mono text-sm font-black text-cyan-300 bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/30">
+                      {margenConfig.porcentajeBcv}%
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={10}
+                      max={80}
+                      step={1}
+                      value={margenConfig.porcentajeBcv}
+                      onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, parseFloat(e.target.value) || 38)}
+                      className="w-full accent-cyan-400 cursor-pointer"
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      max={99}
+                      step={0.5}
+                      value={margenConfig.porcentajeBcv}
+                      onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, parseFloat(e.target.value) || 0)}
+                      className="w-16 px-2 py-1 bg-[#18181b] border border-[var(--ts-border)] rounded-xl text-xs font-bold text-center text-white"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                    <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold mr-1">Presets:</span>
+                    {[30, 35, 38, 40, 45, 50].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, pct)}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                          margenConfig.porcentajeBcv === pct
+                            ? "bg-cyan-500/20 text-cyan-200 border-cyan-400"
+                            : "bg-[#18181b] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-white"
+                        }`}
+                      >
+                        {pct}%{pct === 38 ? " ★ Oficial" : ""}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 3. Descuento Técnico */}
+                <div className="lg:col-span-2 p-4 bg-[var(--ts-surface-2)]/60 border border-[var(--ts-border)] rounded-2xl space-y-2">
                   <label className="block text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">
-                    Descuento Técnico (P. Técnico)
+                    Desc. Técnico
                   </label>
                   <div className="flex items-center gap-2">
                     <input
@@ -1431,32 +1637,37 @@ export default function ImportarPage() {
                       max={50}
                       step={1}
                       value={margenConfig.descuentoTecnicoPct}
-                      onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, parseFloat(e.target.value) || 0)}
-                      className="w-20 px-2 py-1.5 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl text-xs font-bold text-center text-white"
+                      onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, parseFloat(e.target.value) || 0, margenConfig.porcentajeBcv)}
+                      className="w-16 px-2 py-1 bg-[#18181b] border border-[var(--ts-border)] rounded-xl text-xs font-bold text-center text-white"
                     />
-                    <span className="text-xs text-[var(--ts-text-muted)]">% s/ venta</span>
+                    <span className="text-xs text-[var(--ts-text-muted)]">% s/ divisa</span>
                   </div>
                 </div>
               </div>
 
-              {/* Explicación de la Fórmula en Tiempo Real */}
-              <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-xs text-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+              {/* Explicación Comercial en Tiempo Real */}
+              <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-xs text-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
                   <HelpCircle className="w-4 h-4 text-blue-400 shrink-0" />
                   <span>
-                    {margenConfig.tipo === "utilidad" ? (
-                      <>
-                        <strong>Fórmula de Margen de Utilidad:</strong> <code>PVP = Costo / (1 - {margenConfig.porcentaje}%)</code>.
-                        Para un ítem de <strong>$100.00</strong> de costo $\rightarrow$ <strong>PVP: ${(100 / (1 - margenConfig.porcentaje / 100)).toFixed(2)}</strong> (Ganancia neta: ${((100 / (1 - margenConfig.porcentaje / 100)) - 100).toFixed(2)}, margen exacto del {margenConfig.porcentaje}% del total).
-                      </>
-                    ) : (
-                      <>
-                        <strong>Fórmula de Markup sobre Costo:</strong> <code>PVP = Costo × (1 + {margenConfig.porcentaje}%)</code>.
-                        Para un ítem de <strong>$100.00</strong> de costo $\rightarrow$ <strong>PVP: ${(100 * (1 + margenConfig.porcentaje / 100)).toFixed(2)}</strong> (Margen sobre costo: {margenConfig.porcentaje}%).
-                      </>
-                    )}
+                    <strong>Esquema Comercial:</strong> Para un costo de $100.00 &rarr; 
+                    <span className="text-emerald-400 font-bold ml-1">P. Divisas: ${(100 / (1 - margenConfig.porcentaje / 100)).toFixed(2)}</span> | 
+                    <span className="text-cyan-300 font-bold ml-1">P. BCV: ${(100 / (1 - margenConfig.porcentajeBcv / 100)).toFixed(2)}</span>
+                    {tasaBcv > 0 && (
+                      <span className="text-cyan-400 font-semibold ml-1">
+                        (≈ Bs. {((100 / (1 - margenConfig.porcentajeBcv / 100)) * tasaBcv).toFixed(2)})
+                      </span>
+                    )}.
                   </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shrink-0 flex items-center gap-1.5 transition-colors shadow-sm"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  ⚡ Recalcular Lote Desbloqueado ({statsBloqueo.flotantes})
+                </button>
               </div>
             </div>
 
@@ -1534,10 +1745,21 @@ export default function ImportarPage() {
                       <th className="p-3 font-bold">SKU / Modelo</th>
                       <th className="p-3 font-bold">Marca & Categoría</th>
                       <th className="p-3 font-bold min-w-[260px]">Nombre & Descripción</th>
-                      <th className="p-3 font-bold text-right whitespace-nowrap">Costo Prov.</th>
-                      <th className="p-3 font-bold text-right whitespace-nowrap">P. Venta</th>
-                      <th className="p-3 font-bold text-right whitespace-nowrap">P. Técnico</th>
-                      <th className="p-3 font-bold text-center">Margen</th>
+                      <th className="p-3 font-bold text-center whitespace-nowrap">Costo Prov.</th>
+                      <th className="p-3 font-bold text-center whitespace-nowrap">
+                        <div className="flex flex-col items-center">
+                          <span className="text-emerald-400 font-bold">P. Divisas ($)</span>
+                          <span className="text-[9px] text-[var(--ts-text-muted)] font-normal normal-case">Efectivo / Zelle</span>
+                        </div>
+                      </th>
+                      <th className="p-3 font-bold text-center whitespace-nowrap">
+                        <div className="flex flex-col items-center">
+                          <span className="text-cyan-400 font-bold">P. BCV ($ / Bs)</span>
+                          <span className="text-[9px] text-[var(--ts-text-muted)] font-normal normal-case">Factura / Oficial</span>
+                        </div>
+                      </th>
+                      <th className="p-3 font-bold text-center whitespace-nowrap">P. Técnico</th>
+                      <th className="p-3 font-bold text-center whitespace-nowrap">Margen & Candado</th>
                       <th className="p-3 font-bold text-center">Estatus</th>
                       <th className="p-3 text-center w-12"></th>
                     </tr>
@@ -1545,7 +1767,7 @@ export default function ImportarPage() {
                   <tbody className="divide-y divide-[var(--ts-border-2)]">
                     {itemsFiltrados.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-xs text-[var(--ts-text-muted)]">
+                        <td colSpan={12} className="py-12 text-center text-xs text-[var(--ts-text-muted)]">
                           No hay productos que coincidan con los filtros aplicados.
                         </td>
                       </tr>
@@ -1660,7 +1882,7 @@ export default function ImportarPage() {
                             </td>
 
                             {/* Costo Proveedor */}
-                            <td className="p-3 text-right font-mono font-bold whitespace-nowrap">
+                            <td className="p-3 text-center font-mono font-bold whitespace-nowrap">
                               <input
                                 type="number"
                                 min={0}
@@ -1668,46 +1890,91 @@ export default function ImportarPage() {
                                 value={item.precio_costo}
                                 onChange={(e) => {
                                   const c = parseFloat(e.target.value) || 0;
-                                  const calcs = calcularPrecios(c, margenConfig.tipo, margenConfig.porcentaje, margenConfig.descuentoTecnicoPct);
+                                  const calcs = calcularPrecios(
+                                    c,
+                                    margenConfig.tipo,
+                                    item.margen_bloqueado ? (item.margen_individual || margenConfig.porcentaje) : margenConfig.porcentaje,
+                                    margenConfig.descuentoTecnicoPct,
+                                    margenConfig.porcentajeBcv
+                                  );
                                   setItems(prev => prev.map(it => it.id === item.id ? {
                                     ...it,
                                     precio_costo: c,
                                     precio_venta: calcs.precioVenta,
+                                    precio_bcv: calcs.precioBcv,
                                     precio_tecnico: calcs.precioTecnico,
                                   } : it));
                                 }}
-                                className={`w-20 text-right bg-[var(--ts-surface-2)] border rounded-lg px-2 py-1 text-xs font-mono font-bold ${
+                                className={`w-20 text-center bg-[var(--ts-surface-2)] border rounded-lg px-2 py-1 text-xs font-mono font-bold ${
                                   item.precio_costo === 0 ? "border-amber-500/60 text-amber-300" : "border-[var(--ts-border)] text-white"
                                 }`}
                               />
                               {item.precio_costo === 0 && (
-                                <p className="text-[9px] text-amber-400 font-sans font-medium mt-0.5 text-right">
-                                  Sin costo en PDF
+                                <p className="text-[9px] text-amber-400 font-sans font-medium mt-0.5 text-center">
+                                  Sin costo
                                 </p>
                               )}
                             </td>
 
-                            {/* Precio Venta */}
-                            <td className="p-3 text-right font-mono font-bold whitespace-nowrap">
-                              <input
-                                type="number"
-                                min={0}
-                                step={0.01}
-                                value={item.precio_venta}
-                                onChange={(e) => {
-                                  const pv = parseFloat(e.target.value) || 0;
-                                  setItems(prev => prev.map(it => it.id === item.id ? {
-                                    ...it,
-                                    precio_venta: pv,
-                                    precio_manual: true,
-                                  } : it));
-                                }}
-                                className="w-24 text-right bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-2 py-1 text-xs text-emerald-400 font-mono font-bold"
-                              />
+                            {/* P. Divisas ($ Efectivo / Zelle) */}
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <div className="flex flex-col items-center">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
+                                  value={item.precio_venta}
+                                  onChange={(e) => {
+                                    const pv = parseFloat(e.target.value) || 0;
+                                    const pb = item.precio_bcv && item.precio_bcv > 0 ? item.precio_bcv : Math.round(pv * 1.10 * 100) / 100;
+                                    const margenIndividual = pv > 0 && item.precio_costo > 0
+                                      ? Math.round(((pv - item.precio_costo) / pv) * 100)
+                                      : margenConfig.porcentaje;
+                                    setItems(prev => prev.map(it => it.id === item.id ? {
+                                      ...it,
+                                      precio_venta: pv,
+                                      precio_bcv: pb,
+                                      margen_individual: margenIndividual,
+                                      margen_bloqueado: true,
+                                      precio_manual: true,
+                                    } : it));
+                                  }}
+                                  className="w-24 text-center bg-[#18181b] border border-emerald-500/30 rounded-lg px-2 py-1 text-xs text-emerald-400 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                                />
+                                <span className="text-[9px] text-emerald-500/70 font-semibold mt-0.5">Efectivo / Zelle</span>
+                              </div>
+                            </td>
+
+                            {/* P. BCV ($ / Factura Oficial Bs) */}
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <div className="flex flex-col items-center">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  step={0.01}
+                                  value={item.precio_bcv || 0}
+                                  onChange={(e) => {
+                                    const pb = parseFloat(e.target.value) || 0;
+                                    setItems(prev => prev.map(it => it.id === item.id ? {
+                                      ...it,
+                                      precio_bcv: pb,
+                                      precio_manual: true,
+                                    } : it));
+                                  }}
+                                  className="w-24 text-center bg-[#18181b] border border-cyan-500/30 rounded-lg px-2 py-1 text-xs text-cyan-300 font-mono font-bold focus:outline-none focus:border-cyan-500"
+                                />
+                                {tasaBcv > 0 && item.precio_bcv && item.precio_bcv > 0 ? (
+                                  <span className="text-[9px] font-mono text-cyan-400 font-semibold mt-0.5">
+                                    ≈ Bs. {(item.precio_bcv * tasaBcv).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] text-cyan-500/70 font-semibold mt-0.5">Ref. BCV</span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Precio Técnico */}
-                            <td className="p-3 text-right font-mono text-[var(--ts-text-muted)] whitespace-nowrap">
+                            <td className="p-3 text-center whitespace-nowrap">
                               <input
                                 type="number"
                                 min={0}
@@ -1717,19 +1984,57 @@ export default function ImportarPage() {
                                   const pt = parseFloat(e.target.value) || 0;
                                   setItems(prev => prev.map(it => it.id === item.id ? { ...it, precio_tecnico: pt } : it));
                                 }}
-                                className="w-20 text-right bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-lg px-2 py-1 text-[11px] text-[var(--ts-text-muted)] font-mono"
+                                className="w-20 text-center bg-[#18181b] border border-[var(--ts-border)] rounded-lg px-2 py-1 text-[11px] text-gray-300 font-mono"
                               />
                             </td>
 
-                            {/* Margen Real % */}
-                            <td className="p-3 text-center whitespace-nowrap font-mono text-[11px] font-bold">
-                              {item.precio_venta > 0 && item.precio_costo > 0 ? (
-                                <span className="text-emerald-400">
-                                  {Math.round(((item.precio_venta - item.precio_costo) / item.precio_venta) * 100)}%
-                                </span>
-                              ) : (
-                                <span className="text-gray-500">-</span>
-                              )}
+                            {/* Margen & Candado */}
+                            <td className="p-3 text-center whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1.5">
+                                <div className="inline-flex items-center justify-center gap-0.5 bg-[#18181b] border border-[var(--ts-border)] rounded-lg px-1.5 py-0.5 focus-within:border-emerald-500">
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    min="0"
+                                    max="99"
+                                    value={
+                                      item.margen_individual !== undefined && item.margen_individual !== null
+                                        ? item.margen_individual
+                                        : (item.precio_venta > 0 && item.precio_costo > 0
+                                            ? Math.round(((item.precio_venta - item.precio_costo) / item.precio_venta) * 100)
+                                            : margenConfig.porcentaje)
+                                    }
+                                    onChange={(e) => handleMargenIndividualFila(item.id, e.target.value)}
+                                    className="w-9 bg-transparent text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none"
+                                    title="Modificar margen individual (%)"
+                                  />
+                                  <span className="text-[10px] font-mono font-bold text-emerald-400/80">%</span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => toggleBloqueoStaging(item.id)}
+                                  className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 ${
+                                    item.margen_bloqueado
+                                      ? "bg-amber-500/15 text-amber-400 border-amber-500/40"
+                                      : "bg-white/5 text-[var(--ts-text-muted)] border-white/10 hover:text-white"
+                                  }`}
+                                  title={
+                                    item.margen_bloqueado
+                                      ? "Margen bloqueado individualmente. Protegido del slider global. Clic para desbloquear."
+                                      : "Margen flotante. Cambia con los sliders globales. Clic para bloquear."
+                                  }
+                                >
+                                  {item.margen_bloqueado ? (
+                                    <>
+                                      <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                      <span className="text-[9px] font-bold text-amber-300">Fijo</span>
+                                    </>
+                                  ) : (
+                                    <Unlock className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
                             </td>
 
                             {/* Estatus Proveedor */}

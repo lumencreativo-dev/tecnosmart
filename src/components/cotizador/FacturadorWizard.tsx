@@ -33,7 +33,15 @@ interface LineaVenta {
 }
 
 // ── Buscador inline de productos ──────────────────
-function BuscadorInline({ onAdd }: { onAdd: (p: Producto) => void }) {
+function BuscadorInline({
+  onAdd,
+  moneda = "USD",
+  tasaBcv = 0,
+}: {
+  onAdd: (p: Producto) => void;
+  moneda?: "USD" | "VES";
+  tasaBcv?: number;
+}) {
   const [q, setQ] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,20 +72,37 @@ function BuscadorInline({ onAdd }: { onAdd: (p: Producto) => void }) {
       </div>
       {show && resultados.length > 0 && (
         <ul className="absolute z-20 w-full mt-1 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
-          {resultados.map(p => (
-            <li key={p.id}>
-              <button
-                onClick={() => { onAdd(p); setQ(""); setResultados([]); setShow(false); }}
-                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-[var(--ts-surface-2)] text-left transition-colors"
-              >
-                <div>
-                  <p className="text-sm font-medium text-[var(--ts-text-primary)]">{p.nombre}</p>
-                  <p className="text-xs text-[var(--ts-text-muted)]">SKU: {p.codigo_sku} · Stock: {p.stock ?? 0}</p>
-                </div>
-                <span className="text-sm font-bold text-[var(--ts-red)]">{formatUSD(p.precio_venta)}</span>
-              </button>
-            </li>
-          ))}
+          {resultados.map(p => {
+            const precioBase = moneda === "VES" && p.precio_bcv && p.precio_bcv > 0
+              ? p.precio_bcv
+              : p.precio_venta;
+
+            return (
+              <li key={p.id}>
+                <button
+                  onClick={() => { onAdd(p); setQ(""); setResultados([]); setShow(false); }}
+                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-[var(--ts-surface-2)] text-left transition-colors"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-[var(--ts-text-primary)]">{p.nombre}</p>
+                    <p className="text-xs text-[var(--ts-text-muted)]">SKU: {p.codigo_sku} · Stock: {p.stock ?? 0}</p>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-sm font-bold text-emerald-400">{formatUSD(precioBase)}</span>
+                    {moneda === "VES" && tasaBcv > 0 ? (
+                      <span className="text-[10px] font-mono text-cyan-400 font-semibold">
+                        ≈ {formatBs(precioBase * tasaBcv)}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold">
+                        {moneda === "VES" ? "P. BCV" : "P. Divisas"}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       {show && resultados.length === 0 && !loading && (
@@ -210,6 +235,10 @@ export default function FacturadorWizard() {
 
   // ── Venta directa: agregar producto ──
   const agregarProductoDirecto = (p: Producto) => {
+    const precioUnitario = moneda === "VES" && p.precio_bcv && p.precio_bcv > 0
+      ? p.precio_bcv
+      : p.precio_venta;
+
     const existe = lineasDirectas.findIndex(l => l.producto_id === p.id);
     if (existe >= 0) {
       // Incrementar cantidad si ya existe
@@ -223,8 +252,8 @@ export default function FacturadorWizard() {
         codigo_sku:     p.codigo_sku,
         descripcion:    `${p.codigo_sku} – ${p.nombre}`,
         cantidad:       1,
-        precio_unitario: p.precio_venta,
-        subtotal:       p.precio_venta,
+        precio_unitario: precioUnitario,
+        subtotal:       precioUnitario,
         tipo_item:      "producto",
       }]);
     }
@@ -1527,7 +1556,11 @@ export default function FacturadorWizard() {
               <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide mb-3">
                 Agregar Productos del Stock
               </h2>
-              <BuscadorInline onAdd={agregarProductoDirecto} />
+              <BuscadorInline
+                onAdd={agregarProductoDirecto}
+                moneda={moneda}
+                tasaBcv={tasaBcv}
+              />
             </div>
 
             <div className="pl-0 md:pl-6 md:border-l border-[var(--ts-border)]">

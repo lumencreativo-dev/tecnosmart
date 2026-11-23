@@ -47,6 +47,10 @@ export function generarWorkbookPlantilla(): XLSX.WorkBook {
       marca: "EZVIZ",
       categoria: "Cámaras WiFi / PTZ",
       precio_costo: 24.50,
+      precio_venta: 34.03,
+      precio_bcv: 39.52,
+      precio_tecnico: 28.93,
+      margen_bloqueado: "NO",
       stock: 15,
       estatus: "DISPONIBLE",
       notas: "Cámara para interior, seguimiento inteligente"
@@ -57,6 +61,10 @@ export function generarWorkbookPlantilla(): XLSX.WorkBook {
       marca: "Hikvision",
       categoria: "Cámaras Analógicas y Domos",
       precio_costo: 38.00,
+      precio_venta: 52.78,
+      precio_bcv: 61.29,
+      precio_tecnico: 44.86,
+      margen_bloqueado: "NO",
       stock: 8,
       estatus: "DISPONIBLE",
       notas: "Soporta 1 HDD hasta 6TB"
@@ -67,9 +75,13 @@ export function generarWorkbookPlantilla(): XLSX.WorkBook {
       marca: "MikroTik",
       categoria: "Redes, Routers y OLT/ONT",
       precio_costo: 52.00,
+      precio_venta: 72.22,
+      precio_bcv: 83.87,
+      precio_tecnico: 61.39,
+      margen_bloqueado: "SI",
       stock: 5,
       estatus: "DISPONIBLE",
-      notas: "Router balanceador / firewall"
+      notas: "Router balanceador / firewall (Margen bloqueado)"
     },
     {
       codigo_sku: "CAB-DROP-1H-1KM",
@@ -77,6 +89,10 @@ export function generarWorkbookPlantilla(): XLSX.WorkBook {
       marca: "Cablix",
       categoria: "Carretes de Fibra y Cables",
       precio_costo: 45.00,
+      precio_venta: 62.50,
+      precio_bcv: 72.58,
+      precio_tecnico: 53.13,
+      margen_bloqueado: "NO",
       stock: 20,
       estatus: "DISPONIBLE",
       notas: "Mensajero de acero, uso exterior"
@@ -87,6 +103,10 @@ export function generarWorkbookPlantilla(): XLSX.WorkBook {
       marca: "CDP",
       categoria: "Fuentes de Poder / UPS",
       precio_costo: 68.00,
+      precio_venta: 94.44,
+      precio_bcv: 109.68,
+      precio_tecnico: 80.27,
+      margen_bloqueado: "NO",
       stock: 10,
       estatus: "EN TRANSITO",
       notas: "Llegada estimada próxima semana"
@@ -100,6 +120,10 @@ export function generarWorkbookPlantilla(): XLSX.WorkBook {
       "marca",
       "categoria",
       "precio_costo",
+      "precio_venta",
+      "precio_bcv",
+      "precio_tecnico",
+      "margen_bloqueado",
       "stock",
       "estatus",
       "notas"
@@ -112,7 +136,11 @@ export function generarWorkbookPlantilla(): XLSX.WorkBook {
     { wch: 55 }, // nombre
     { wch: 18 }, // marca
     { wch: 30 }, // categoria
-    { wch: 18 }, // precio_costo
+    { wch: 16 }, // precio_costo
+    { wch: 16 }, // precio_venta (Divisas)
+    { wch: 16 }, // precio_bcv (BCV)
+    { wch: 16 }, // precio_tecnico
+    { wch: 18 }, // margen_bloqueado
     { wch: 12 }, // stock
     { wch: 16 }, // estatus
     { wch: 45 }, // notas
@@ -130,10 +158,12 @@ export function generarWorkbookPlantilla(): XLSX.WorkBook {
     ["3. El 'codigo_sku' debe ser único para cada producto (ej: CS-C6N-2MP, RB750Gr3). No repetir."],
     ["4. La 'marca' y 'categoria' son OPCIONALES: si las dejas vacías, el sistema TecnoSmart las inferirá de forma inteligente por el SKU."],
     ["5. En 'precio_costo' ingresa únicamente números con punto decimal (ej: 45.50 o 12.00). NO coloques el símbolo $ ni Bs."],
-    ["6. Si un producto no tiene precio o costo aún, déjalo en blanco o en 0. El sistema lo cargará con costo $0 para que no se pierda."],
-    ["7. En 'stock' ingresa números enteros (ej: 10, 0, 50)."],
-    ["8. En 'estatus' puedes colocar: DISPONIBLE, EN TRANSITO, o NO DISPONIBLE."],
-    ["9. No combines celdas ni agregues filas de subtotales o banners decorativos."],
+    ["6. 'precio_venta' (Divisas) y 'precio_bcv' (Oficial BCV) son OPCIONALES: si los dejas en 0 o vacíos, el sistema los calculará automáticamente con los márgenes globales (Divisas 28%, BCV 38%)."],
+    ["7. En 'margen_bloqueado' coloca 'SI' si deseas proteger el margen individual de este producto contra ajustes masivos (Candado 🔒). De lo contrario, coloca 'NO'."],
+    ["8. Si un producto no tiene precio o costo aún, déjalo en blanco o en 0. El sistema lo cargará con costo $0 para que no se pierda."],
+    ["9. En 'stock' ingresa números enteros (ej: 10, 0, 50)."],
+    ["10. En 'estatus' puedes colocar: DISPONIBLE, EN TRANSITO, o NO DISPONIBLE."],
+    ["11. No combines celdas ni agregues filas de subtotales o banners decorativos."],
     [""],
     ["CÓMO USAR DESDE GOOGLE SHEETS:"],
     ["1. Llena tus productos en Google Sheets siguiendo estas mismas columnas."],
@@ -183,11 +213,11 @@ export function descargarPlantillaExcel(): void {
  */
 export function descargarPlantillaCSV(): void {
   const contenidoCSV = [
-    "codigo_sku,nombre,marca,categoria,precio_costo,stock,estatus,notas",
-    'CS-H6C-R101-2G3WF,"Cámara WiFi EZVIZ H6c 2MP 1080p 360 Pan/Tilt Audio Bi-direccional",EZVIZ,"Cámaras WiFi / PTZ",24.50,15,DISPONIBLE,"Cámara para interior"',
-    'DS-7104HQHI-K1,"DVR Hikvision Turbo HD 4 Canales 1080p Lite H.265+",Hikvision,"Cámaras Analógicas y Domos",38.00,8,DISPONIBLE,"Soporta 1 HDD"',
-    'RB750Gr3,"Routerboard MikroTik hEX 5x Gigabit Ethernet Dual Core",MikroTik,"Redes, Routers y OLT/ONT",52.00,5,DISPONIBLE,"Router balanceador"',
-    'CAB-DROP-1H-1KM,"Bobina Cable Fibra Óptica Drop Figura 8 1 Hilo 1000m",Cablix,"Carretes de Fibra y Cables",45.00,20,DISPONIBLE,"Mensajero acero"'
+    "codigo_sku,nombre,marca,categoria,precio_costo,precio_venta,precio_bcv,precio_tecnico,margen_bloqueado,stock,estatus,notas",
+    'CS-H6C-R101-2G3WF,"Cámara WiFi EZVIZ H6c 2MP 1080p 360 Pan/Tilt Audio Bi-direccional",EZVIZ,"Cámaras WiFi / PTZ",24.50,34.03,39.52,28.93,NO,15,DISPONIBLE,"Cámara interior"',
+    'DS-7104HQHI-K1,"DVR Hikvision Turbo HD 4 Canales 1080p Lite H.265+",Hikvision,"Cámaras Analógicas y Domos",38.00,52.78,61.29,44.86,NO,8,DISPONIBLE,"Soporta 1 HDD"',
+    'RB750Gr3,"Routerboard MikroTik hEX 5x Gigabit Ethernet Dual Core",MikroTik,"Redes, Routers y OLT/ONT",52.00,72.22,83.87,61.39,SI,5,DISPONIBLE,"Router balanceador"',
+    'CAB-DROP-1H-1KM,"Bobina Cable Fibra Óptica Drop Figura 8 1 Hilo 1000m",Cablix,"Carretes de Fibra y Cables",45.00,62.50,72.58,53.13,NO,20,DISPONIBLE,"Mensajero acero"'
   ].join("\n");
 
   const blob = new Blob(["\uFEFF" + contenidoCSV], { type: "text/csv;charset=utf-8;" });
@@ -214,6 +244,11 @@ export function exportarProductosAExcel(productos: any[]): void {
     marca: p.marca || "",
     categoria: p.categoria || "",
     precio_costo: Number(p.precio_costo || 0),
+    precio_venta: Number(p.precio_venta || 0),
+    precio_bcv: Number(p.precio_bcv || 0),
+    precio_tecnico: Number(p.precio_tecnico || 0),
+    margen_bloqueado: p.margen_bloqueado ? "SI" : "NO",
+    margen_individual: p.margen_individual !== undefined && p.margen_individual !== null ? Number(p.margen_individual) : "",
     stock: Number(p.stock || 0),
     estatus: p.stock > 0 ? "DISPONIBLE" : "NO DISPONIBLE",
     notas: p.especificaciones_json?.notas || ""
@@ -226,6 +261,11 @@ export function exportarProductosAExcel(productos: any[]): void {
       "marca",
       "categoria",
       "precio_costo",
+      "precio_venta",
+      "precio_bcv",
+      "precio_tecnico",
+      "margen_bloqueado",
+      "margen_individual",
       "stock",
       "estatus",
       "notas"
@@ -237,6 +277,11 @@ export function exportarProductosAExcel(productos: any[]): void {
     { wch: 55 },
     { wch: 18 },
     { wch: 30 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 18 },
     { wch: 18 },
     { wch: 12 },
     { wch: 16 },

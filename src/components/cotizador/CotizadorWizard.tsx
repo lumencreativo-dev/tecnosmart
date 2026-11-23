@@ -816,7 +816,13 @@ export default function CotizadorWizard() {
                 Productos & Equipos
               </h2>
             </div>
-            <BuscadorProductos onAdd={addLinea} clienteTipo={cliente.tipo} descuentoTecnico={descuentoTecnico} />
+            <BuscadorProductos
+              onAdd={addLinea}
+              clienteTipo={cliente.tipo}
+              descuentoTecnico={descuentoTecnico}
+              moneda={moneda}
+              tasaBcv={tasaBcv}
+            />
           </div>
 
           {/* Servicios y mano de obra */}

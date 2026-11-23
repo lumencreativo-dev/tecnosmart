@@ -10,9 +10,17 @@ interface Props {
   onAdd: (linea: LineaDetalle) => void;
   clienteTipo?: "cliente_normal" | "tecnico";
   descuentoTecnico?: number; // porcentaje de descuento, ej: 15
+  moneda?: "USD" | "VES";
+  tasaBcv?: number;
 }
 
-export default function BuscadorProductos({ onAdd, clienteTipo, descuentoTecnico = 15 }: Props) {
+export default function BuscadorProductos({
+  onAdd,
+  clienteTipo,
+  descuentoTecnico = 15,
+  moneda = "USD",
+  tasaBcv = 0,
+}: Props) {
   const [query, setQuery] = useState("");
   const [resultados, setResultados] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -36,13 +44,18 @@ export default function BuscadorProductos({ onAdd, clienteTipo, descuentoTecnico
   }, [query]);
 
   const handleSelect = (p: Producto) => {
-    // Si es técnico: usar precio_tecnico si existe, si no calcular el descuento sobre precio_venta
-    let precio = p.precio_venta;
+    // Si la cotización es en VES (Bolívares), usar precio_bcv si está definido; si no, precio_venta
+    const precioBase = moneda === "VES" && p.precio_bcv && p.precio_bcv > 0
+      ? p.precio_bcv
+      : p.precio_venta;
+
+    // Si es técnico: usar precio_tecnico si existe, si no calcular el descuento sobre precioBase
+    let precio = precioBase;
     if (clienteTipo === "tecnico") {
       if (p.precio_tecnico != null && p.precio_tecnico > 0) {
         precio = p.precio_tecnico;
       } else {
-        precio = p.precio_venta * (1 - descuentoTecnico / 100);
+        precio = precioBase * (1 - descuentoTecnico / 100);
       }
     }
     onAdd({
@@ -89,27 +102,47 @@ export default function BuscadorProductos({ onAdd, clienteTipo, descuentoTecnico
       {/* Dropdown de resultados */}
       {showList && resultados.length > 0 && (
         <ul className="absolute z-20 w-full mt-1 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg shadow-lg max-h-64 overflow-y-auto">
-          {resultados.map((p) => (
-            <li key={p.id}>
-              <button
-                onClick={() => handleSelect(p)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-[var(--ts-surface-2)] text-left transition-colors group"
-              >
-                <div>
-                  <p className="text-sm font-medium text-[var(--ts-text-primary)]">{p.nombre}</p>
-                  <p className="text-xs text-[var(--ts-text-muted)]">
-                    SKU: {p.codigo_sku} · {p.marca}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[var(--ts-red)]">
-                    ${p.precio_venta.toFixed(2)}
-                  </span>
-                  <Plus className="w-4 h-4 text-[var(--ts-text-muted)] group-hover:text-[var(--ts-red)] transition-colors" />
-                </div>
-              </button>
-            </li>
-          ))}
+          {resultados.map((p) => {
+            const precioBase = moneda === "VES" && p.precio_bcv && p.precio_bcv > 0
+              ? p.precio_bcv
+              : p.precio_venta;
+            const precioFinal = clienteTipo === "tecnico"
+              ? (p.precio_tecnico != null && p.precio_tecnico > 0 ? p.precio_tecnico : precioBase * (1 - descuentoTecnico / 100))
+              : precioBase;
+
+            return (
+              <li key={p.id}>
+                <button
+                  onClick={() => handleSelect(p)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-[var(--ts-surface-2)] text-left transition-colors group"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-[var(--ts-text-primary)]">{p.nombre}</p>
+                    <p className="text-xs text-[var(--ts-text-muted)]">
+                      SKU: {p.codigo_sku} · {p.marca}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex flex-col items-end">
+                      <span className="text-sm font-bold text-emerald-400">
+                        ${precioFinal.toFixed(2)}
+                      </span>
+                      {moneda === "VES" && tasaBcv > 0 ? (
+                        <span className="text-[10px] font-mono text-cyan-400 font-semibold">
+                          ≈ Bs. {(precioFinal * tasaBcv).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-[var(--ts-text-muted)]">
+                          {moneda === "VES" ? "P. BCV" : "P. Divisas"}
+                        </span>
+                      )}
+                    </div>
+                    <Plus className="w-4 h-4 text-[var(--ts-text-muted)] group-hover:text-[var(--ts-red)] transition-colors" />
+                  </div>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 

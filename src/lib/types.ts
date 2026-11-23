@@ -16,7 +16,10 @@ export interface Producto {
   marca?: string;
   precio_costo: number;
   precio_venta: number;
+  precio_bcv?: number;       // Precio en USD base para liquidación formal a Tasa BCV (Bolívares)
   precio_tecnico?: number;   // Precio especial para técnicos
+  margen_bloqueado?: boolean;// Si el producto tiene el margen protegido contra cambios globales
+  margen_individual?: number;// Porcentaje de margen fijado individualmente
   stock: number;
   datasheet_url?: string;
   especificaciones_json?: Record<string, unknown>;

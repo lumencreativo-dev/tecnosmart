@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   Search, Plus, Edit2, Package, Save, X, Filter, ChevronDown, Trash2,
-  AlertTriangle, Eye, Lock, Sliders, Percent, HelpCircle, Check,
+  AlertTriangle, Eye, Lock, Unlock, Sliders, Percent, HelpCircle, Check,
   RotateCcw, Sparkles, Loader2, ArrowRight, DollarSign, CheckCircle2, AlertCircle
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
@@ -18,7 +18,8 @@ export type TipoMargen = "utilidad" | "markup";
 
 export interface MargenConfig {
   tipo: TipoMargen;
-  porcentaje: number;           // Default: 28%
+  porcentaje: number;           // Margen Divisas (Default: 28%)
+  porcentajeBcv: number;        // Margen BCV / Bolívares (Default: 38%)
   descuentoTecnicoPct: number;  // Default: 15%
 }
 
@@ -26,24 +27,53 @@ export function calcularPrecios(
   costo: number,
   tipoMargen: TipoMargen,
   porcentajeMargen: number,
-  descuentoTecnicoPct: number = 15
-): { precioVenta: number; precioTecnico: number; ganancia: number; margenRealPct: number } {
+  descuentoTecnicoPct: number = 15,
+  porcentajeMargenBcv: number = 38
+): {
+  precioVenta: number;
+  precioBcv: number;
+  precioTecnico: number;
+  ganancia: number;
+  margenRealPct: number;
+  margenRealBcvPct: number;
+} {
   if (costo <= 0) {
-    return { precioVenta: 0, precioTecnico: 0, ganancia: 0, margenRealPct: 0 };
+    return {
+      precioVenta: 0,
+      precioBcv: 0,
+      precioTecnico: 0,
+      ganancia: 0,
+      margenRealPct: 0,
+      margenRealBcvPct: 0,
+    };
   }
 
   let precioVenta = 0;
+  let precioBcv = 0;
+
   if (tipoMargen === "utilidad") {
     // Margen de Utilidad sobre Precio de Venta: P = C / (1 - M)
-    const m = Math.min(Math.max(0, porcentajeMargen), 99) / 100;
-    precioVenta = costo / (1 - m);
+    const mDivisa = Math.min(Math.max(0, porcentajeMargen), 99) / 100;
+    precioVenta = costo / (1 - mDivisa);
+
+    const mBcv = Math.min(Math.max(0, porcentajeMargenBcv), 99) / 100;
+    precioBcv = costo / (1 - mBcv);
   } else {
     // Markup sobre Costo: P = C * (1 + M)
-    const m = Math.max(0, porcentajeMargen) / 100;
-    precioVenta = costo * (1 + m);
+    const mDivisa = Math.max(0, porcentajeMargen) / 100;
+    precioVenta = costo * (1 + mDivisa);
+
+    const mBcv = Math.max(0, porcentajeMargenBcv) / 100;
+    precioBcv = costo * (1 + mBcv);
   }
 
   precioVenta = Math.round(precioVenta * 100) / 100;
+  precioBcv = Math.round(precioBcv * 100) / 100;
+
+  // Garantizar que precioBcv mantenga cobertura respecto a precioVenta
+  if (precioBcv < precioVenta) {
+    precioBcv = Math.round(precioVenta * 1.10 * 100) / 100;
+  }
 
   // Precio Técnico: descuento sobre precio de venta sin bajar del costo + 5%
   let precioTecnico = Math.round(precioVenta * (1 - descuentoTecnicoPct / 100) * 100) / 100;
@@ -53,8 +83,9 @@ export function calcularPrecios(
 
   const ganancia = Math.round((precioVenta - costo) * 100) / 100;
   const margenRealPct = precioVenta > 0 ? Math.round(((precioVenta - costo) / precioVenta) * 1000) / 10 : 0;
+  const margenRealBcvPct = precioBcv > 0 ? Math.round(((precioBcv - costo) / precioBcv) * 1000) / 10 : 0;
 
-  return { precioVenta, precioTecnico, ganancia, margenRealPct };
+  return { precioVenta, precioBcv, precioTecnico, ganancia, margenRealPct, margenRealBcvPct };
 }
 
 const MARCAS_PREDETERMINADAS = [
@@ -94,10 +125,12 @@ type Producto = {
   categoria: string;
   precio_costo: number;
   precio_venta: number;
+  precio_bcv?: number;
   precio_tecnico: number;
   stock: number;
   activo?: boolean;
   margen_individual?: number;
+  margen_bloqueado?: boolean;
 };
 
 // Limpia campos internos antes de enviar a Supabase
@@ -105,7 +138,8 @@ function sanitizarPayload(data: Record<string, any>) {
   const clean: Record<string, any> = {};
   const validKeys = [
     "codigo_sku", "nombre", "marca", "categoria",
-    "precio_costo", "precio_venta", "precio_tecnico", "stock", "activo"
+    "precio_costo", "precio_venta", "precio_bcv", "precio_tecnico", "stock", "activo",
+    "margen_bloqueado", "margen_individual"
   ];
   for (const k of validKeys) {
     if (data[k] !== undefined) {
@@ -136,14 +170,35 @@ export default function InventarioManager() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
 
+  // Tasa BCV en vivo para cálculo de precios en Bolívares
+  const [tasaBcv, setTasaBcv] = useState<number>(0);
+  const [cargandoTasa, setCargandoTasa] = useState(false);
+
+  useEffect(() => {
+    const obtenerTasaBcv = async () => {
+      setCargandoTasa(true);
+      try {
+        const res = await fetch("https://ve.dolarapi.com/v1/dolares/oficial");
+        const data = await res.json();
+        if (data?.promedio) setTasaBcv(data.promedio);
+      } catch (e) {
+        console.warn("No se pudo obtener tasa BCV en tiempo real:", e);
+      } finally {
+        setCargandoTasa(false);
+      }
+    };
+    obtenerTasaBcv();
+  }, []);
+
   // Filtros
   const [filtroCategoria, setFiltroCategoria] = useState("Todas");
   const [filtroMarca, setFiltroMarca] = useState("Todas");
 
-  // Motor de Márgenes Centralizado Global
+  // Motor de Márgenes Centralizado Global Bimoneda
   const [margenConfig, setMargenConfig] = useState<MargenConfig>({
     tipo: "utilidad",
-    porcentaje: 28,
+    porcentaje: 28,     // Margen Divisas Efectivo (Default: 28%)
+    porcentajeBcv: 38,  // Margen Facturado formal en Bs / Tasa BCV (Default: 38%)
     descuentoTecnicoPct: 15,
   });
 
@@ -174,9 +229,12 @@ export default function InventarioManager() {
     marca: "Hikvision",
     categoria: "Cámaras Analógicas y Domos",
     precio_venta: 0,
+    precio_bcv: 0,
     precio_costo: 0,
     precio_tecnico: 0,
     stock: 0,
+    margen_bloqueado: false,
+    margen_individual: 28,
   });
 
   const cargarProductos = async () => {
@@ -242,6 +300,21 @@ export default function InventarioManager() {
 
   const numCambiosPendientes = Object.keys(editedRows).length;
 
+  // Estadísticas de bloqueo de margen
+  const statsBloqueo = useMemo(() => {
+    let bloqueados = 0;
+    productos.forEach(p => {
+      const isBlocked = editedRows[p.id]?.margen_bloqueado !== undefined
+        ? editedRows[p.id]?.margen_bloqueado
+        : p.margen_bloqueado;
+      if (isBlocked) bloqueados++;
+    });
+    return {
+      bloqueados,
+      flotantes: productos.length - bloqueados,
+    };
+  }, [productos, editedRows]);
+
   // ─────────────────────────────────────────────────────────────
   // CONTROLADORES DE EDICIÓN RÁPIDA INLINE
   // ─────────────────────────────────────────────────────────────
@@ -270,11 +343,12 @@ export default function InventarioManager() {
           ? Math.round(((prod.precio_venta - prod.precio_costo) / prod.precio_venta) * 100)
           : margenConfig.porcentaje);
 
-    const { precioVenta, precioTecnico } = calcularPrecios(
+    const { precioVenta, precioBcv, precioTecnico } = calcularPrecios(
       val,
       margenConfig.tipo,
       margenAUsar,
-      margenConfig.descuentoTecnicoPct
+      margenConfig.descuentoTecnicoPct,
+      margenConfig.porcentajeBcv
     );
 
     setEditedRows(prev => {
@@ -285,6 +359,7 @@ export default function InventarioManager() {
           ...actual,
           precio_costo: val,
           precio_venta: precioVenta,
+          precio_bcv: precioBcv,
           precio_tecnico: precioTecnico,
           margen_individual: margenAUsar,
         }
@@ -292,7 +367,7 @@ export default function InventarioManager() {
     });
   };
 
-  // Cambio de Margen individual de una sola fila (sin tocar a los demás productos)
+  // Cambio de Margen individual de una sola fila (bloquea automáticamente el producto para protegerlo)
   const handleMargenFilaChange = (prod: Producto, nuevoMargenStr: string) => {
     const nuevoMargen = parseFloat(nuevoMargenStr.replace(",", ".")) || 0;
     const costoActual = editedRows[prod.id]?.precio_costo !== undefined
@@ -300,16 +375,19 @@ export default function InventarioManager() {
       : (prod.precio_costo || 0);
 
     let nuevoPV = 0;
+    let nuevoPBCV = 0;
     let nuevoPT = 0;
 
     if (costoActual > 0) {
-      const { precioVenta, precioTecnico } = calcularPrecios(
+      const { precioVenta, precioBcv, precioTecnico } = calcularPrecios(
         costoActual,
         margenConfig.tipo,
         nuevoMargen,
-        margenConfig.descuentoTecnicoPct
+        margenConfig.descuentoTecnicoPct,
+        margenConfig.porcentajeBcv
       );
       nuevoPV = precioVenta;
+      nuevoPBCV = precioBcv;
       nuevoPT = precioTecnico;
     }
 
@@ -320,13 +398,14 @@ export default function InventarioManager() {
         [prod.id]: {
           ...actual,
           margen_individual: nuevoMargen,
-          ...(costoActual > 0 ? { precio_venta: nuevoPV, precio_tecnico: nuevoPT } : {}),
+          margen_bloqueado: true, // Auto-bloquear para proteger el margen individual fijado a mano
+          ...(costoActual > 0 ? { precio_venta: nuevoPV, precio_bcv: nuevoPBCV, precio_tecnico: nuevoPT } : {}),
         }
       };
     });
   };
 
-  // Cambio directo de Precio de Venta: recalcula el margen individual y el precio técnico
+  // Cambio directo de Precio de Venta (Divisas): recalcula el margen individual y el precio técnico
   const handlePrecioVentaChange = (prod: Producto, nuevoPVPStr: string) => {
     const pv = parseFloat(nuevoPVPStr.replace(",", ".")) || 0;
     const costoActual = editedRows[prod.id]?.precio_costo !== undefined
@@ -342,6 +421,11 @@ export default function InventarioManager() {
       ? Math.round(((pv - costoActual) / pv) * 100)
       : 0;
 
+    // Si aún no tenía precio BCV establecido o necesita valor sugerido
+    const pbcvActual = editedRows[prod.id]?.precio_bcv !== undefined
+      ? editedRows[prod.id]?.precio_bcv
+      : (prod.precio_bcv && prod.precio_bcv > 0 ? prod.precio_bcv : Math.round(pv * 1.10 * 100) / 100);
+
     setEditedRows(prev => {
       const actual = prev[prod.id] || {};
       return {
@@ -349,11 +433,46 @@ export default function InventarioManager() {
         [prod.id]: {
           ...actual,
           precio_venta: pv,
+          precio_bcv: pbcvActual,
           precio_tecnico: pt,
           margen_individual: nuevoMargenCalculado,
+          margen_bloqueado: true, // Proteger para que la barra global no sobrescriba el precio manual
         }
       };
     });
+  };
+
+  // Cambio directo de Precio BCV ($ / Ref Bolívares)
+  const handlePrecioBcvChange = (prod: Producto, nuevoPBcvStr: string) => {
+    const pb = parseFloat(nuevoPBcvStr.replace(",", ".")) || 0;
+    actualizarCampoInline(prod.id, "precio_bcv", pb);
+  };
+
+  // Alternar bloqueo/desbloqueo de margen (Candado 🔒 / 🔓)
+  const toggleBloqueoMargen = (prod: Producto) => {
+    const dirty = editedRows[prod.id];
+    const isCurrentlyLocked = dirty?.margen_bloqueado !== undefined
+      ? dirty.margen_bloqueado
+      : (prod.margen_bloqueado || false);
+
+    const nuevoEstado = !isCurrentlyLocked;
+
+    const costoActual = dirty?.precio_costo !== undefined ? dirty.precio_costo : prod.precio_costo;
+    const pvActual = dirty?.precio_venta !== undefined ? dirty.precio_venta : prod.precio_venta;
+    const margenActual = dirty?.margen_individual !== undefined
+      ? dirty.margen_individual
+      : (pvActual > 0 && costoActual > 0
+          ? Math.round(((pvActual - costoActual) / pvActual) * 100)
+          : margenConfig.porcentaje);
+
+    setEditedRows(prev => ({
+      ...prev,
+      [prod.id]: {
+        ...(prev[prod.id] || {}),
+        margen_bloqueado: nuevoEstado,
+        margen_individual: margenActual,
+      }
+    }));
   };
 
   const handlePrecioTecnicoChange = (prod: Producto, nuevoPTStr: string) => {
@@ -440,25 +559,45 @@ export default function InventarioManager() {
   // ─────────────────────────────────────────────────────────────
   // RECALCULACIÓN BASADA EN MOTOR DE MÁRGENES (GLOBAL)
   // ─────────────────────────────────────────────────────────────
-  const recalcularPreciosEnVista = (nuevoTipo?: TipoMargen, nuevoPct?: number, nuevoDesc?: number) => {
+  const recalcularPreciosEnVista = (
+    nuevoTipo?: TipoMargen,
+    nuevoPctDivisas?: number,
+    nuevoPctBcv?: number,
+    nuevoDesc?: number
+  ) => {
     const tipo = nuevoTipo ?? margenConfig.tipo;
-    const pct = nuevoPct ?? margenConfig.porcentaje;
+    const pctDivisas = nuevoPctDivisas ?? margenConfig.porcentaje;
+    const pctBcv = nuevoPctBcv ?? margenConfig.porcentajeBcv;
     const desc = nuevoDesc ?? margenConfig.descuentoTecnicoPct;
 
     const nuevosCambios: Record<string, Partial<Producto>> = { ...editedRows };
 
     productosFiltrados.forEach(p => {
+      // SI EL PRODUCTO ESTÁ BLOQUEADO (🔒), SE PROTEGE Y SE OMITE
+      const isBloqueado = nuevosCambios[p.id]?.margen_bloqueado !== undefined
+        ? nuevosCambios[p.id]?.margen_bloqueado
+        : p.margen_bloqueado;
+
+      if (isBloqueado) return;
+
       const costo = nuevosCambios[p.id]?.precio_costo !== undefined
         ? (nuevosCambios[p.id]?.precio_costo || 0)
         : (p.precio_costo || 0);
 
       if (costo > 0) {
-        const { precioVenta, precioTecnico } = calcularPrecios(costo, tipo, pct, desc);
+        const { precioVenta, precioBcv, precioTecnico } = calcularPrecios(
+          costo,
+          tipo,
+          pctDivisas,
+          desc,
+          pctBcv
+        );
         nuevosCambios[p.id] = {
           ...nuevosCambios[p.id],
           precio_venta: precioVenta,
+          precio_bcv: precioBcv,
           precio_tecnico: precioTecnico,
-          margen_individual: pct,
+          margen_individual: pctDivisas,
         };
       }
     });
@@ -466,12 +605,17 @@ export default function InventarioManager() {
     setEditedRows(nuevosCambios);
   };
 
-  const aplicarNuevoMargen = (tipo: TipoMargen, porcentaje: number, descuentoTecnicoPct: number) => {
-    setMargenConfig({ tipo, porcentaje, descuentoTecnicoPct });
-    recalcularPreciosEnVista(tipo, porcentaje, descuentoTecnicoPct);
+  const aplicarNuevoMargen = (
+    tipo: TipoMargen,
+    porcentaje: number,
+    descuentoTecnicoPct: number,
+    porcentajeBcv: number = margenConfig.porcentajeBcv
+  ) => {
+    setMargenConfig({ tipo, porcentaje, porcentajeBcv, descuentoTecnicoPct });
+    recalcularPreciosEnVista(tipo, porcentaje, porcentajeBcv, descuentoTecnicoPct);
   };
 
-  // Aplicar margen masivo directamente a la BD
+  // Aplicar margen masivo directamente a la BD (respetando los productos con candado 🔒)
   const ejecutarAplicacionMargenEnBD = async () => {
     if (!puedeGestionarStock) return;
     setAplicandoMargenMasivo(true);
@@ -479,7 +623,7 @@ export default function InventarioManager() {
     try {
       const { data, error } = await supabase
         .from("productos")
-        .select("id, precio_costo")
+        .select("id, precio_costo, margen_bloqueado, precio_venta, precio_bcv")
         .gt("precio_costo", 0);
 
       if (error) throw error;
@@ -489,18 +633,30 @@ export default function InventarioManager() {
         return;
       }
 
-      const updates = data.map(item => {
-        const { precioVenta, precioTecnico } = calcularPrecios(
+      // Solo productos que NO tengan margen_bloqueado
+      const desbloqueados = data.filter(item => !item.margen_bloqueado);
+
+      if (desbloqueados.length === 0) {
+        alert("Todos los productos tienen el margen bloqueado (🔒). No hay productos flotantes para actualizar.");
+        setModalAplicarMargen(false);
+        return;
+      }
+
+      const updates = desbloqueados.map(item => {
+        const { precioVenta, precioBcv, precioTecnico } = calcularPrecios(
           item.precio_costo,
           margenConfig.tipo,
           margenConfig.porcentaje,
-          margenConfig.descuentoTecnicoPct
+          margenConfig.descuentoTecnicoPct,
+          margenConfig.porcentajeBcv
         );
         return supabase
           .from("productos")
           .update({
             precio_venta: precioVenta,
+            precio_bcv: precioBcv,
             precio_tecnico: precioTecnico,
+            margen_individual: margenConfig.porcentaje,
           })
           .eq("id", item.id);
       });
@@ -510,7 +666,8 @@ export default function InventarioManager() {
       setModalAplicarMargen(false);
       setEditedRows({});
       await cargarProductos();
-      mostrarAvisoExito(`Se recalcularon y guardaron los precios de ${data.length} productos con éxito.`);
+      const protegidosCount = data.length - desbloqueados.length;
+      mostrarAvisoExito(`Se recalcularon ${desbloqueados.length} productos desbloqueados. ${protegidosCount > 0 ? `(${protegidosCount} con candado 🔒 protegidos)` : ""}`);
     } catch (err: any) {
       alert("Error al aplicar margen en BD: " + err.message);
     } finally {
@@ -532,9 +689,12 @@ export default function InventarioManager() {
         marca: fila.marca || "Hikvision",
         categoria: fila.categoria || "Cámaras Analógicas y Domos",
         precio_venta: fila.precio_venta || 0,
+        precio_bcv: fila.precio_bcv !== undefined ? fila.precio_bcv : (fila.precio_venta > 0 ? Math.round(fila.precio_venta * 1.10 * 100) / 100 : 0),
         precio_costo: fila.precio_costo || 0,
         precio_tecnico: fila.precio_tecnico || 0,
         stock: fila.stock || 0,
+        margen_bloqueado: fila.margen_bloqueado || false,
+        margen_individual: fila.margen_individual !== undefined ? fila.margen_individual : 28,
       });
     } else {
       setEditingProd(null);
@@ -544,9 +704,12 @@ export default function InventarioManager() {
         marca: "Hikvision",
         categoria: "Cámaras Analógicas y Domos",
         precio_venta: 0,
+        precio_bcv: 0,
         precio_costo: 0,
         precio_tecnico: 0,
-        stock: 0
+        stock: 0,
+        margen_bloqueado: false,
+        margen_individual: 28,
       });
     }
     setModalOpen(true);
@@ -573,8 +736,11 @@ export default function InventarioManager() {
       marca: form.marca,
       categoria: form.categoria,
       precio_venta: form.precio_venta,
+      precio_bcv: form.precio_bcv || 0,
       precio_costo: form.precio_costo || 0,
       precio_tecnico: form.precio_tecnico || null,
+      margen_bloqueado: form.margen_bloqueado || false,
+      margen_individual: form.margen_individual !== undefined ? form.margen_individual : null,
       stock: form.stock,
       activo: true,
     };
@@ -687,51 +853,74 @@ export default function InventarioManager() {
             <div className="flex items-center gap-2">
               <Sliders className="w-4 h-4 text-[var(--ts-red)]" />
               <h2 className="text-sm font-bold text-[var(--ts-text-primary)] tracking-wide">
-                Motor de Márgenes y Fijación de Precios de Venta
+                Motor de Márgenes Dual & Estrategia Bimoneda
               </h2>
             </div>
             <p className="text-xs text-[var(--ts-text-muted)] mt-0.5">
-              Control general para el lote. Recuerda que abajo puedes ajustar el margen individual de cada producto de forma independiente.
+              Control general para precios en Divisas y liquidación formal a Tasa BCV. Los productos con candado (🔒) están protegidos y no serán modificados por este panel.
             </p>
           </div>
 
-          {/* Switch Utilidad vs Markup */}
-          <div className="flex items-center bg-[var(--ts-surface-2)] p-1 rounded-2xl border border-[var(--ts-border)] self-start md:self-center">
-            <button
-              type="button"
-              onClick={() => aplicarNuevoMargen("utilidad", margenConfig.porcentaje, margenConfig.descuentoTecnicoPct)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                margenConfig.tipo === "utilidad"
-                  ? "bg-[var(--ts-red)] text-white shadow-sm"
-                  : "text-[var(--ts-text-muted)] hover:text-white"
-              }`}
-            >
-              Margen de Utilidad (Sobre Venta)
-            </button>
-            <button
-              type="button"
-              onClick={() => aplicarNuevoMargen("markup", margenConfig.porcentaje, margenConfig.descuentoTecnicoPct)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                margenConfig.tipo === "markup"
-                  ? "bg-[var(--ts-red)] text-white shadow-sm"
-                  : "text-[var(--ts-text-muted)] hover:text-white"
-              }`}
-            >
-              Markup (Sobre Costo)
-            </button>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Tasa BCV Oficial */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-950/40 border border-cyan-800/50 rounded-xl text-xs">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="text-gray-300">BCV Oficial:</span>
+              <span className="font-mono font-bold text-cyan-300">
+                {tasaBcv > 0 ? `Bs. ${tasaBcv.toFixed(2)}` : (cargandoTasa ? "Consultando..." : "Bs. —")}
+              </span>
+            </div>
+
+            {/* Contador de Candados */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl text-xs">
+              <span className="inline-flex items-center gap-1 text-amber-400 font-bold">
+                <Lock className="w-3 h-3" /> {statsBloqueo.bloqueados}
+              </span>
+              <span className="text-[var(--ts-text-muted)]">protegidos /</span>
+              <span className="inline-flex items-center gap-1 text-emerald-400 font-bold">
+                <Unlock className="w-3 h-3" /> {statsBloqueo.flotantes}
+              </span>
+              <span className="text-[var(--ts-text-muted)]">flotantes</span>
+            </div>
+
+            {/* Switch Utilidad vs Markup */}
+            <div className="flex items-center bg-[var(--ts-surface-2)] p-1 rounded-2xl border border-[var(--ts-border)]">
+              <button
+                type="button"
+                onClick={() => aplicarNuevoMargen("utilidad", margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                  margenConfig.tipo === "utilidad"
+                    ? "bg-[var(--ts-red)] text-white shadow-sm"
+                    : "text-[var(--ts-text-muted)] hover:text-white"
+                }`}
+              >
+                Margen Utilidad (Venta)
+              </button>
+              <button
+                type="button"
+                onClick={() => aplicarNuevoMargen("markup", margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                  margenConfig.tipo === "markup"
+                    ? "bg-[var(--ts-red)] text-white shadow-sm"
+                    : "text-[var(--ts-text-muted)] hover:text-white"
+                }`}
+              >
+                Markup (Costo)
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Controles de Porcentaje, Presets y Descuento Técnico */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-          {/* Input de Porcentaje */}
-          <div className="md:col-span-4 space-y-2">
+        {/* Controles de Porcentaje Doble (Divisas vs BCV) y Descuento Técnico */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
+          {/* 1. Margen Divisas */}
+          <div className="lg:col-span-5 p-3.5 bg-[var(--ts-surface-2)]/60 border border-emerald-500/20 rounded-2xl space-y-2">
             <div className="flex justify-between items-center text-xs">
-              <label className="font-bold text-[var(--ts-text-primary)] flex items-center gap-1.5">
-                <Percent className="w-3.5 h-3.5 text-[var(--ts-red)]" />
-                Porcentaje General Deseado:
+              <label className="font-bold text-white flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                💵 Margen Divisas (Efectivo / Zelle):
               </label>
-              <span className="font-mono text-sm font-black text-[var(--ts-red)]">
+              <span className="font-mono text-sm font-black text-emerald-400">
                 {margenConfig.porcentaje}%
               </span>
             </div>
@@ -743,8 +932,8 @@ export default function InventarioManager() {
                 max={70}
                 step={1}
                 value={margenConfig.porcentaje}
-                onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, parseFloat(e.target.value) || 28, margenConfig.descuentoTecnicoPct)}
-                className="w-full accent-[var(--ts-red)] cursor-pointer"
+                onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, parseFloat(e.target.value) || 28, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                className="w-full accent-emerald-500 cursor-pointer"
               />
               <input
                 type="number"
@@ -752,39 +941,86 @@ export default function InventarioManager() {
                 max={99}
                 step={0.5}
                 value={margenConfig.porcentaje}
-                onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, parseFloat(e.target.value) || 0, margenConfig.descuentoTecnicoPct)}
-                className="w-16 px-2 py-1.5 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl text-xs font-bold text-center text-white"
+                onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, parseFloat(e.target.value) || 0, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                className="w-16 px-2 py-1 bg-[#18181b] border border-emerald-500/30 rounded-xl text-xs font-bold text-center text-emerald-300"
               />
             </div>
-          </div>
 
-          {/* Presets Rápidos */}
-          <div className="md:col-span-5 space-y-1.5">
-            <label className="block text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">
-              Presets Frecuentes
-            </label>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {[20, 25, 28, 30, 35, 40].map((pct) => (
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              <span className="text-[9px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">Presets:</span>
+              {[20, 25, 28, 30, 35].map((pct) => (
                 <button
                   key={pct}
                   type="button"
-                  onClick={() => aplicarNuevoMargen(margenConfig.tipo, pct, margenConfig.descuentoTecnicoPct)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                  onClick={() => aplicarNuevoMargen(margenConfig.tipo, pct, margenConfig.descuentoTecnicoPct, margenConfig.porcentajeBcv)}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border transition-all ${
                     margenConfig.porcentaje === pct
-                      ? "bg-red-500/20 text-red-300 border-red-500"
-                      : "bg-[var(--ts-surface-2)] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-white hover:bg-[var(--ts-border)]/40"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500"
+                      : "bg-[#18181b] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-white"
                   }`}
                 >
-                  {pct}% {pct === 28 ? "★ Habitual" : ""}
+                  {pct}% {pct === 28 ? "★" : ""}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Descuento Técnico */}
-          <div className="md:col-span-3 space-y-1.5">
+          {/* 2. Margen BCV / Bolívares */}
+          <div className="lg:col-span-5 p-3.5 bg-[var(--ts-surface-2)]/60 border border-cyan-500/20 rounded-2xl space-y-2">
+            <div className="flex justify-between items-center text-xs">
+              <label className="font-bold text-white flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
+                🏛️ Margen BCV (Liquidación formal en Bs):
+              </label>
+              <span className="font-mono text-sm font-black text-cyan-300">
+                {margenConfig.porcentajeBcv}%
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={10}
+                max={80}
+                step={1}
+                value={margenConfig.porcentajeBcv}
+                onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, parseFloat(e.target.value) || 38)}
+                className="w-full accent-cyan-500 cursor-pointer"
+              />
+              <input
+                type="number"
+                min={0}
+                max={99}
+                step={0.5}
+                value={margenConfig.porcentajeBcv}
+                onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, parseFloat(e.target.value) || 0)}
+                className="w-16 px-2 py-1 bg-[#18181b] border border-cyan-500/30 rounded-xl text-xs font-bold text-center text-cyan-300"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              <span className="text-[9px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">Presets:</span>
+              {[30, 35, 38, 40, 45].map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  onClick={() => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, margenConfig.descuentoTecnicoPct, pct)}
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border transition-all ${
+                    margenConfig.porcentajeBcv === pct
+                      ? "bg-cyan-500/20 text-cyan-300 border-cyan-500"
+                      : "bg-[#18181b] text-[var(--ts-text-muted)] border-[var(--ts-border)] hover:text-white"
+                  }`}
+                >
+                  {pct}% {pct === 38 ? "★" : ""}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 3. Descuento Técnico */}
+          <div className="lg:col-span-2 p-3.5 bg-[var(--ts-surface-2)]/60 border border-[var(--ts-border)] rounded-2xl space-y-2">
             <label className="block text-[10px] font-bold text-[var(--ts-text-muted)] uppercase tracking-wider">
-              Descuento Técnico (P. Técnico)
+              Desc. Técnico
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -793,30 +1029,27 @@ export default function InventarioManager() {
                 max={50}
                 step={1}
                 value={margenConfig.descuentoTecnicoPct}
-                onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, parseFloat(e.target.value) || 0)}
-                className="w-20 px-2 py-1.5 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] rounded-xl text-xs font-bold text-center text-white"
+                onChange={(e) => aplicarNuevoMargen(margenConfig.tipo, margenConfig.porcentaje, parseFloat(e.target.value) || 0, margenConfig.porcentajeBcv)}
+                className="w-16 px-2 py-1 bg-[#18181b] border border-[var(--ts-border)] rounded-xl text-xs font-bold text-center text-white"
               />
-              <span className="text-xs text-[var(--ts-text-muted)]">% s/ venta</span>
+              <span className="text-xs text-[var(--ts-text-muted)]">% s/ divisa</span>
             </div>
           </div>
         </div>
 
-        {/* Explicación de la Fórmula en Tiempo Real */}
+        {/* Explicación de la Fórmula y Botón de Aplicar */}
         <div className="p-3.5 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-xs text-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <HelpCircle className="w-4 h-4 text-blue-400 shrink-0" />
             <span>
-              {margenConfig.tipo === "utilidad" ? (
-                <>
-                  <strong>Fórmula de Margen de Utilidad:</strong> <code>PVP = Costo / (1 - {margenConfig.porcentaje}%)</code>.
-                  Para un ítem de <strong>$100.00</strong> de costo &rarr; <strong>PVP: ${(100 / (1 - margenConfig.porcentaje / 100)).toFixed(2)}</strong> (Ganancia neta: ${((100 / (1 - margenConfig.porcentaje / 100)) - 100).toFixed(2)}, margen exacto del {margenConfig.porcentaje}% del total).
-                </>
-              ) : (
-                <>
-                  <strong>Fórmula de Markup sobre Costo:</strong> <code>PVP = Costo × (1 + {margenConfig.porcentaje}%)</code>.
-                  Para un ítem de <strong>$100.00</strong> de costo &rarr; <strong>PVP: ${(100 * (1 + margenConfig.porcentaje / 100)).toFixed(2)}</strong> (Margen sobre costo: {margenConfig.porcentaje}%).
-                </>
-              )}
+              <strong>Esquema Comercial:</strong> Para un costo de $100.00 &rarr; 
+              <span className="text-emerald-400 font-bold ml-1">P. Divisas: ${(100 / (1 - margenConfig.porcentaje / 100)).toFixed(2)}</span> | 
+              <span className="text-cyan-300 font-bold ml-1">P. BCV: ${(100 / (1 - margenConfig.porcentajeBcv / 100)).toFixed(2)}</span>
+              {tasaBcv > 0 && (
+                <span className="text-cyan-400 font-semibold ml-1">
+                  (≈ Bs. {((100 / (1 - margenConfig.porcentajeBcv / 100)) * tasaBcv).toFixed(2)})
+                </span>
+              )}.
             </span>
           </div>
 
@@ -824,10 +1057,10 @@ export default function InventarioManager() {
             <button
               type="button"
               onClick={() => setModalAplicarMargen(true)}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shrink-0 flex items-center gap-1.5 transition-colors shadow-sm"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs shrink-0 flex items-center gap-1.5 transition-colors shadow-sm"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              ⚡ Aplicar a Todo el Inventario en BD
+              ⚡ Aplicar a Productos Desbloqueados ({statsBloqueo.flotantes})
             </button>
           )}
         </div>
@@ -914,10 +1147,21 @@ export default function InventarioManager() {
                 <th className="px-4 py-3.5">Marca & Categoría</th>
                 <th className="px-4 py-3.5">Nombre & Descripción</th>
                 {puedeVerCostos && <th className="px-4 py-3.5 text-center">Costo Prov.</th>}
-                <th className="px-4 py-3.5 text-center">{esTecnicoAliado ? "PVP Referencial" : "P. Venta (Sugerido)"}</th>
+                <th className="px-4 py-3.5 text-center">
+                  <div className="flex flex-col items-center">
+                    <span className="text-emerald-400 font-bold">P. Divisas ($)</span>
+                    <span className="text-[9px] text-[var(--ts-text-muted)] font-normal">Efectivo / Zelle</span>
+                  </div>
+                </th>
+                <th className="px-4 py-3.5 text-center">
+                  <div className="flex flex-col items-center">
+                    <span className="text-cyan-400 font-bold">P. BCV ($ / Bs)</span>
+                    <span className="text-[9px] text-[var(--ts-text-muted)] font-normal">Factura / Oficial</span>
+                  </div>
+                </th>
                 <th className="px-4 py-3.5 text-center">{esTecnicoAliado ? "P. Aliado (-15%)" : "P. Técnico"}</th>
-                {puedeVerCostos && <th className="px-4 py-3.5 text-center">Margen (%)</th>}
-                <th className="px-4 py-3.5 text-center">Estatus</th>
+                {puedeVerCostos && <th className="px-4 py-3.5 text-center">Margen & Candado</th>}
+                <th className="px-4 py-3.5 text-center">Estatus & Stock</th>
                 <th className="px-4 py-3.5 text-center w-24">{puedeGestionarStock ? "Acciones" : "Acceso"}</th>
               </tr>
             </thead>
@@ -925,7 +1169,7 @@ export default function InventarioManager() {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: puedeVerCostos ? 9 : 7 }).map((_, j) => (
+                    {Array.from({ length: puedeVerCostos ? 10 : 8 }).map((_, j) => (
                       <td key={j} className="px-4 py-4">
                         <div className="h-4 bg-[var(--ts-surface-2)] rounded animate-pulse w-full"></div>
                       </td>
@@ -934,7 +1178,7 @@ export default function InventarioManager() {
                 ))
               ) : productosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={puedeVerCostos ? 9 : 7} className="px-6 py-12 text-center text-[var(--ts-text-muted)]">
+                  <td colSpan={puedeVerCostos ? 10 : 8} className="px-6 py-12 text-center text-[var(--ts-text-muted)]">
                     <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
                     <p className="font-medium text-white">No se encontraron productos en el inventario</p>
                     <p className="text-xs mt-1">Ajusta los filtros o crea un nuevo producto.</p>
@@ -949,13 +1193,17 @@ export default function InventarioManager() {
                   const catVal = dirty?.categoria !== undefined ? dirty.categoria : (p.categoria || "Accesorios y Varios");
                   const costoVal = dirty?.precio_costo !== undefined ? dirty.precio_costo : (p.precio_costo || 0);
                   const pVentaVal = dirty?.precio_venta !== undefined ? dirty.precio_venta : (p.precio_venta || 0);
+                  const pBcvVal = dirty?.precio_bcv !== undefined ? dirty.precio_bcv : (p.precio_bcv || 0);
                   const pTecVal = dirty?.precio_tecnico !== undefined ? dirty.precio_tecnico : (p.precio_tecnico || 0);
                   const stockVal = dirty?.stock !== undefined ? dirty.stock : (p.stock || 0);
+                  const estaBloqueado = dirty?.margen_bloqueado !== undefined ? dirty.margen_bloqueado : Boolean(p.margen_bloqueado);
 
                   // Margen individual específico de la fila
                   let margenFilaValor: number | string = "";
                   if (dirty?.margen_individual !== undefined) {
                     margenFilaValor = dirty.margen_individual;
+                  } else if (p.margen_individual !== undefined && p.margen_individual !== null) {
+                    margenFilaValor = p.margen_individual;
                   } else if (pVentaVal > 0 && costoVal > 0) {
                     margenFilaValor = Math.round(((pVentaVal - costoVal) / pVentaVal) * 100);
                   } else {
@@ -1023,22 +1271,63 @@ export default function InventarioManager() {
                         </td>
                       )}
 
-                      {/* P. VENTA (SUGERIDO) */}
+                      {/* P. DIVISAS ($ EFECTIVO / ZELLE) */}
                       <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
                         {puedeGestionarStock ? (
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={pVentaVal === 0 ? "" : pVentaVal}
-                            placeholder="0.00"
-                            onChange={(e) => handlePrecioVentaChange(p, e.target.value)}
-                            className="w-24 px-2 py-1.5 bg-[#18181b] border border-emerald-500/30 rounded-xl text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                          />
+                          <div className="flex flex-col items-center">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={pVentaVal === 0 ? "" : pVentaVal}
+                              placeholder="0.00"
+                              onChange={(e) => handlePrecioVentaChange(p, e.target.value)}
+                              className="w-24 px-2 py-1.5 bg-[#18181b] border border-emerald-500/30 rounded-xl text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
+                            />
+                            <span className="text-[10px] text-emerald-500/70 font-semibold mt-0.5">Efectivo / Zelle</span>
+                          </div>
                         ) : (
-                          <span className={`font-mono text-xs ${esTecnicoAliado ? "text-[var(--ts-text-muted)] line-through" : "text-emerald-400 font-bold"}`}>
-                            {formatUSD(pVentaVal)}
-                          </span>
+                          <div className="flex flex-col items-center">
+                            <span className={`font-mono text-xs ${esTecnicoAliado ? "text-[var(--ts-text-muted)] line-through" : "text-emerald-400 font-bold"}`}>
+                              {formatUSD(pVentaVal)}
+                            </span>
+                            <span className="text-[10px] text-emerald-500/70 font-semibold">Efectivo</span>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* P. BCV ($ / FACTURA OFICIAL BS) */}
+                      <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
+                        {puedeGestionarStock ? (
+                          <div className="flex flex-col items-center">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={pBcvVal === 0 ? "" : pBcvVal}
+                              placeholder="0.00"
+                              onChange={(e) => handlePrecioBcvChange(p, e.target.value)}
+                              className="w-24 px-2 py-1.5 bg-[#18181b] border border-cyan-500/30 rounded-xl text-xs font-mono font-bold text-center text-cyan-300 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50"
+                            />
+                            {tasaBcv > 0 && pBcvVal > 0 ? (
+                              <span className="text-[10px] font-mono text-cyan-400 font-semibold mt-0.5">
+                                ≈ Bs. {(pBcvVal * tasaBcv).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-cyan-500/70 font-semibold mt-0.5">Ref. BCV</span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <span className="font-mono text-xs text-cyan-300 font-bold">
+                              {formatUSD(pBcvVal)}
+                            </span>
+                            {tasaBcv > 0 && pBcvVal > 0 && (
+                              <span className="text-[10px] font-mono text-cyan-400 font-semibold">
+                                ≈ Bs. {(pBcvVal * tasaBcv).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </td>
 
@@ -1068,23 +1357,67 @@ export default function InventarioManager() {
                         )}
                       </td>
 
-                      {/* MARGEN INDIVIDUAL (Solo visible si puede ver costos) */}
+                      {/* MARGEN & CANDADO (Solo visible si puede ver costos) */}
                       {puedeVerCostos && (
                         <td className="px-4 py-3 align-middle text-center whitespace-nowrap">
-                          <div className="inline-flex items-center justify-center gap-0.5 bg-[#18181b] border border-emerald-500/30 rounded-xl px-2 py-1 focus-within:border-emerald-500 focus-within:ring-1 focus-within:ring-emerald-500/50 transition-all">
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="0"
-                              max="99"
-                              disabled={!puedeGestionarStock}
-                              value={margenFilaValor}
-                              placeholder="0"
-                              onChange={(e) => handleMargenFilaChange(p, e.target.value)}
-                              className="w-11 bg-transparent text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none"
-                              title="Modificar margen individual para este producto (%)"
-                            />
-                            <span className="text-xs font-mono font-bold text-emerald-400/80">%</span>
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Input de margen individual */}
+                            <div className="inline-flex items-center justify-center gap-0.5 bg-[#18181b] border border-[var(--ts-border)] rounded-xl px-2 py-1 focus-within:border-emerald-500 transition-all">
+                              <input
+                                type="number"
+                                step="0.5"
+                                min="0"
+                                max="99"
+                                disabled={!puedeGestionarStock}
+                                value={margenFilaValor}
+                                placeholder="0"
+                                onChange={(e) => handleMargenFilaChange(p, e.target.value)}
+                                className="w-10 bg-transparent text-xs font-mono font-bold text-center text-emerald-400 focus:outline-none"
+                                title="Modificar margen individual para este producto (%)"
+                              />
+                              <span className="text-[11px] font-mono font-bold text-emerald-400/80">%</span>
+                            </div>
+
+                            {/* Botón Candado (Toggle Bloqueo) */}
+                            {puedeGestionarStock ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleBloqueoMargen(p)}
+                                className={`p-1.5 rounded-xl border transition-all flex items-center gap-1 ${
+                                  estaBloqueado
+                                    ? "bg-amber-500/15 text-amber-400 border-amber-500/40 shadow-xs"
+                                    : "bg-white/5 text-[var(--ts-text-muted)] border-white/10 hover:text-white hover:border-white/20"
+                                }`}
+                                title={
+                                  estaBloqueado
+                                    ? `Margen bloqueado individualmente (${margenFilaValor}%). Protegido de la barra global. Clic para desbloquear.`
+                                    : "Margen flotante dinámico. Se actualizará con la barra global. Clic para bloquear."
+                                }
+                              >
+                                {estaBloqueado ? (
+                                  <>
+                                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                    <span className="text-[9px] font-bold text-amber-300 pr-0.5">Fijo</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Unlock className="w-3.5 h-3.5" />
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <div className="p-1">
+                                {estaBloqueado ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-lg">
+                                    <Lock className="w-3 h-3" /> Fijo
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-[var(--ts-text-muted)] font-mono">
+                                    Flotante
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </td>
                       )}
@@ -1242,9 +1575,14 @@ export default function InventarioManager() {
               </div>
 
               <div>
-                <h3 className="text-lg font-bold text-white">¿Aplicar Margen a Todo el Inventario?</h3>
+                <h3 className="text-lg font-bold text-white">¿Aplicar Margen a Productos Desbloqueados?</h3>
                 <p className="text-xs text-[var(--ts-text-muted)] mt-1">
-                  Se recalcularán el <strong>Precio de Venta</strong> y el <strong>Precio Técnico</strong> de todos los productos que tengan un costo registrado en la base de datos.
+                  Se recalcularán el <strong>Precio Divisas</strong>, <strong>Precio BCV</strong> y <strong>Precio Técnico</strong> de los <strong>{statsBloqueo.flotantes} productos flotantes</strong> en base de datos.
+                  {statsBloqueo.bloqueados > 0 && (
+                    <span className="block text-amber-400 font-semibold mt-1">
+                      🔒 {statsBloqueo.bloqueados} productos con candado están protegidos y NO serán alterados.
+                    </span>
+                  )}
                 </p>
               </div>
 
@@ -1255,9 +1593,13 @@ export default function InventarioManager() {
                     {margenConfig.tipo === "utilidad" ? "Margen de Utilidad (Sobre Venta)" : "Markup (Sobre Costo)"}
                   </span>
                 </div>
-                <div className="flex justify-between text-gray-300">
-                  <span>Porcentaje Margen:</span>
-                  <span className="font-bold text-[var(--ts-red)]">{margenConfig.porcentaje}%</span>
+                <div className="flex justify-between text-emerald-400">
+                  <span>Margen Divisas ($):</span>
+                  <span className="font-bold">{margenConfig.porcentaje}%</span>
+                </div>
+                <div className="flex justify-between text-cyan-300">
+                  <span>Margen BCV ($ / Bs):</span>
+                  <span className="font-bold">{margenConfig.porcentajeBcv}%</span>
                 </div>
                 <div className="flex justify-between text-gray-300">
                   <span>Descuento Técnico:</span>
@@ -1434,16 +1776,18 @@ export default function InventarioManager() {
                         value={form.precio_costo}
                         onChange={(e) => {
                           const c = parseFloat(e.target.value) || 0;
-                          const { precioVenta, precioTecnico } = calcularPrecios(
+                          const { precioVenta, precioBcv, precioTecnico } = calcularPrecios(
                             c,
                             margenConfig.tipo,
-                            margenConfig.porcentaje,
-                            margenConfig.descuentoTecnicoPct
+                            form.margen_bloqueado ? (form.margen_individual || margenConfig.porcentaje) : margenConfig.porcentaje,
+                            margenConfig.descuentoTecnicoPct,
+                            margenConfig.porcentajeBcv
                           );
                           setForm({
                             ...form,
                             precio_costo: c,
                             precio_venta: precioVenta,
+                            precio_bcv: precioBcv,
                             precio_tecnico: precioTecnico,
                           });
                         }}
@@ -1464,7 +1808,7 @@ export default function InventarioManager() {
 
                 <div>
                   <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
-                    Precio Público (Venta)
+                    Precio Divisas ($ Efectivo / Zelle)
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-emerald-400 font-bold">$</span>
@@ -1480,7 +1824,8 @@ export default function InventarioManager() {
                         if (form.precio_costo > 0 && pt < form.precio_costo) {
                           pt = Math.round(form.precio_costo * 1.05 * 100) / 100;
                         }
-                        setForm({ ...form, precio_venta: pv, precio_tecnico: pt });
+                        const pb = form.precio_bcv > 0 ? form.precio_bcv : Math.round(pv * 1.10 * 100) / 100;
+                        setForm({ ...form, precio_venta: pv, precio_bcv: pb, precio_tecnico: pt });
                       }}
                       className="w-full pl-7 pr-3 py-2 bg-[var(--ts-surface-2)] border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-emerald-500"
                     />
@@ -1489,6 +1834,28 @@ export default function InventarioManager() {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
+                    Precio BCV ($ Factura / Liquidación Oficial)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-cyan-400 font-bold">$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.precio_bcv}
+                      onChange={(e) => setForm({ ...form, precio_bcv: parseFloat(e.target.value) || 0 })}
+                      className="w-full pl-7 pr-3 py-2 bg-[var(--ts-surface-2)] border border-cyan-500/30 text-cyan-300 rounded-xl text-xs font-mono font-bold focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                  {tasaBcv > 0 && form.precio_bcv > 0 && (
+                    <p className="text-[10px] font-mono text-cyan-400 mt-1 font-semibold">
+                      ≈ Bs. {(form.precio_bcv * tasaBcv).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
                     Precio Técnico ({margenConfig.descuentoTecnicoPct}% off)
@@ -1505,6 +1872,9 @@ export default function InventarioManager() {
                     />
                   </div>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
                     Stock Disponible
@@ -1518,6 +1888,48 @@ export default function InventarioManager() {
                     className="w-full px-3 py-2 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] text-white rounded-xl text-xs font-mono font-bold text-center focus:outline-none focus:border-[var(--ts-red)]"
                   />
                 </div>
+
+                {puedeVerCostos && (
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[var(--ts-text-muted)] uppercase tracking-wide mb-1">
+                      Margen Individual (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      max="99"
+                      value={form.margen_individual !== undefined && form.margen_individual !== null ? form.margen_individual : 28}
+                      onChange={(e) => setForm({ ...form, margen_individual: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 bg-[var(--ts-surface-2)] border border-[var(--ts-border)] text-emerald-400 rounded-xl text-xs font-mono font-bold text-center focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Checkbox de Bloqueo / Candado */}
+              <div className="p-3 bg-[var(--ts-surface-2)] rounded-xl border border-[var(--ts-border)] flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  {form.margen_bloqueado ? (
+                    <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                  ) : (
+                    <Unlock className="w-4 h-4 text-[var(--ts-text-muted)] shrink-0" />
+                  )}
+                  <div>
+                    <p className="text-xs font-bold text-white">
+                      Bloquear margen de este producto (Candado 🔒)
+                    </p>
+                    <p className="text-[10px] text-[var(--ts-text-muted)]">
+                      Protege este producto para que el slider o ajustes globales no alteren sus precios.
+                    </p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={form.margen_bloqueado}
+                  onChange={(e) => setForm({ ...form, margen_bloqueado: e.target.checked })}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                />
               </div>
 
               {saveError && (
