@@ -10,7 +10,7 @@ import {
   pdf,
   Image as PDFImage,
 } from "@react-pdf/renderer";
-import type { Cliente, LineaDetalle, ResumenCotizacion } from "@/lib/types";
+import type { Cliente, LineaDetalle, ModoCotizacion, ResumenCotizacion } from "@/lib/types";
 import { formatFecha } from "@/lib/utils";
 import { LOGO_BLANCO_B64 } from "@/lib/assets/logo-b64";
 
@@ -206,7 +206,7 @@ const S = StyleSheet.create({
 // ── Componente PDF ────────────────────────────────────────────
 export interface CotizacionPDFProps {
   numeroCot:      string;
-  fecha:          Date;
+  fecha:          Date | string;
   cliente:        Cliente;
   lineas:         LineaDetalle[];
   resumen:        ResumenCotizacion;
@@ -214,6 +214,7 @@ export interface CotizacionPDFProps {
   esFactura?:     boolean;
   numeroFactura?: string;
   moneda?:        "USD" | "VES";
+  modoCotizacion?: ModoCotizacion;
   tasaBcv?:       number;
 }
 
@@ -227,16 +228,19 @@ function CotizacionDocument({
   esFactura,
   numeroFactura,
   moneda,
+  modoCotizacion,
   tasaBcv,
 }: CotizacionPDFProps) {
-  // Manejo de moneda y factor de conversión
-  const isVES = (moneda || resumen.moneda) === "VES";
+  // Manejo de modo de cotización, moneda y factor de conversión
+  const modo = modoCotizacion || resumen.modoCotizacion;
+  const isVES = modo === "VES" || (moneda || resumen.moneda) === "VES";
+  const isUsdBCV = modo === "USD_BCV" || (!isVES && (notas?.includes("Dólares Ref. BCV") || notas?.includes("Dolares Ref. BCV")));
   const currentTasaBcv = tasaBcv || resumen.tasaBcv || 0;
   const factor = isVES && currentTasaBcv > 0 ? currentTasaBcv : 1;
 
   const vencimiento = new Date(fecha);
-  if (isVES) {
-    vencimiento.setDate(vencimiento.getDate() + 1); // 24-48 horas para cotizaciones en Bs
+  if (isVES || isUsdBCV) {
+    vencimiento.setDate(vencimiento.getDate() + 1); // 24-48 horas para cotizaciones indexadas a BCV
   } else {
     vencimiento.setDate(vencimiento.getDate() + 15);
   }
@@ -312,16 +316,16 @@ function CotizacionDocument({
             </Text>
             <Text style={S.cotFecha}>Fecha: {formatFecha(fecha)}</Text>
             {!esFactura && (
-              <Text style={[S.cotFecha, { marginTop: 1, color: isVES ? "#ffdddd" : "#ffffff" }]}>
-                {isVES ? "Validez: 24 horas hábiles" : `Válido hasta: ${formatFecha(vencimiento)}`}
+              <Text style={[S.cotFecha, { marginTop: 1, color: (isVES || isUsdBCV) ? "#ffdddd" : "#ffffff" }]}>
+                {(isVES || isUsdBCV) ? "Validez: 24 horas hábiles" : `Válido hasta: ${formatFecha(vencimiento)}`}
               </Text>
             )}
             <Text style={[S.cotFecha, { marginTop: 2, fontFamily: "Helvetica-Bold", color: "#ffffff" }]}>
-              Moneda: {isVES ? "Bolívares (Bs.)" : "Dólares (USD)"}
+              Moneda: {isVES ? "Bolívares (Bs. BCV)" : (isUsdBCV ? "Dólares Ref. BCV ($)" : "Dólares (USD Divisas)")}
             </Text>
-            {isVES && currentTasaBcv > 0 && (
+            {(isVES || isUsdBCV) && currentTasaBcv > 0 && (
               <Text style={[S.cotFecha, { color: "#ffdddd", fontSize: 7 }]}>
-                Tasa BCV: Bs. {currentTasaBcv.toFixed(2)}
+                Tasa BCV del día: Bs. {currentTasaBcv.toFixed(2)}
               </Text>
             )}
           </View>
@@ -471,6 +475,16 @@ function CotizacionDocument({
                 </Text>
               </View>
             )}
+            {isUsdBCV && currentTasaBcv > 0 && (
+              <View style={[S.resumenRow, { backgroundColor: "#fffbeb", paddingHorizontal: 10, paddingVertical: 4, borderBottom: "none" }]}>
+                <Text style={[S.resumenLabel, { fontSize: 7, color: "#92400e", fontFamily: "Helvetica-Bold" }]}>
+                  Equiv. est. en Bs. (BCV):
+                </Text>
+                <Text style={[S.resumenVal, { fontSize: 7, color: "#92400e", fontFamily: "Helvetica-Bold" }]}>
+                  Bs. {(totalPresupuesto * currentTasaBcv).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </View>
+            )}
             {tieneAlgunaRetencion && (
               <>
                 {tieneRetIva && (
@@ -529,13 +543,19 @@ function CotizacionDocument({
             "• Equipos: 1 año de garantía de fábrica (Hikvision).",
             "• Instalación: 2 años de garantía bajo materiales y mano de obra TecnoSmart.",
             "• Redes estructuradas: Hasta 5 años de garantía bajo protocolo TecnoSmart.",
-            isVES
+            (isVES || isUsdBCV)
               ? "• Validez comercial: Cotización válida por 24 horas hábiles a partir de la fecha de emisión."
               : "• Cotización válida por 15 días hábiles a partir de la fecha de emisión.",
             ...(isVES && currentTasaBcv > 0
               ? [
                   `• Precios expresados en Bolívares (Bs.) calculados según tasa oficial del Banco Central de Venezuela (BCV: Bs. ${currentTasaBcv.toFixed(2)} / USD) a la fecha de emisión.`,
                   "• Cláusula de Pago en Bolívares: El monto en Bolívares es referencial y sujeto a la tasa oficial del BCV vigente en la fecha y hora efectiva de la transferencia o pago.",
+                ]
+              : []),
+            ...(isUsdBCV && currentTasaBcv > 0
+              ? [
+                  `• Precios expresados en Dólares ($) con margen calculado bajo referencia oficial del Banco Central de Venezuela (BCV: Bs. ${currentTasaBcv.toFixed(2)} / USD).`,
+                  "• Cláusula de Pago: En caso de cancelar en Bolívares o vía transferencia bancaria, el importe se liquidará según la tasa oficial del BCV vigente en la fecha y hora efectiva del pago.",
                 ]
               : []),
           ].map((g) => (

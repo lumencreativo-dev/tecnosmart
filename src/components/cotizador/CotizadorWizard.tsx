@@ -21,9 +21,12 @@ import {
   FileEdit,
   Eye,
   FileCheck,
+  Coins,
+  DollarSign,
+  Landmark,
 } from "lucide-react";
 
-import type { Cliente, LineaDetalle, ResumenCotizacion } from "@/lib/types";
+import type { Cliente, LineaDetalle, ModoCotizacion, ResumenCotizacion } from "@/lib/types";
 import { generarNumeroCot, tempId, formatUSD } from "@/lib/utils";
 import { supabase } from "@/lib/supabase/client";
 
@@ -63,10 +66,59 @@ export default function CotizadorWizard() {
   const [descuentoTecnico, setDescuentoTecnico] = useState(15); // porcentaje
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
 
-  // ── Estado: Moneda y Tasa BCV ──
-  const [moneda, setMoneda]             = useState<"USD" | "VES">("USD");
-  const [tasaBcv, setTasaBcv]           = useState<number>(0);
-  const [cargandoTasa, setCargandoTasa] = useState(false);
+  // ── Estado: Modo de Cotización, Moneda y Tasa BCV ──
+  const [modoCotizacion, setModoCotizacion] = useState<ModoCotizacion>("USD_DIVISAS");
+  const [moneda, setMoneda]                 = useState<"USD" | "VES">("USD");
+  const [tasaBcv, setTasaBcv]               = useState<number>(0);
+  const [cargandoTasa, setCargandoTasa]     = useState(false);
+
+  // Recálculo dinámico de precios al cambiar entre Divisas y BCV
+  const handleModoCotizacionChange = useCallback((nuevoModo: ModoCotizacion) => {
+    setModoCotizacion(nuevoModo);
+    const nuevaMoneda = nuevoModo === "VES" ? "VES" : "USD";
+    setMoneda(nuevaMoneda);
+
+    const esModoBCV = nuevoModo === "USD_BCV" || nuevoModo === "VES";
+
+    setLineas((prev) =>
+      prev.map((l) => {
+        if (l.tipo_item !== "producto") return l;
+
+        // Determinar precio base según el modo
+        let precioBase = l.precio_unitario;
+
+        if (esModoBCV) {
+          if (l.precio_bcv && l.precio_bcv > 0) {
+            precioBase = l.precio_bcv;
+          } else if (l.precio_divisas && l.precio_divisas > 0) {
+            precioBase = Math.round(l.precio_divisas * 1.15 * 100) / 100;
+          }
+        } else {
+          if (l.precio_divisas && l.precio_divisas > 0) {
+            precioBase = l.precio_divisas;
+          } else if (l.precio_bcv && l.precio_bcv > 0) {
+            precioBase = Math.round((l.precio_bcv / 1.15) * 100) / 100;
+          }
+        }
+
+        let precioFinal = precioBase;
+        if (cliente.tipo === "tecnico") {
+          if (l.precio_tecnico != null && l.precio_tecnico > 0) {
+            precioFinal = l.precio_tecnico;
+          } else {
+            precioFinal = precioBase * (1 - descuentoTecnico / 100);
+          }
+        }
+
+        const pu = parseFloat(precioFinal.toFixed(2));
+        return {
+          ...l,
+          precio_unitario: pu,
+          subtotal: parseFloat((l.cantidad * pu).toFixed(2)),
+        };
+      })
+    );
+  }, [cliente.tipo, descuentoTecnico]);
 
   // ── Estado: Impuesto al Valor Agregado (IVA) ──
   const [aplicaIva, setAplicaIva]       = useState(true);
@@ -211,30 +263,68 @@ export default function CotizadorWizard() {
           setCliente(cot.clientes);
         }
 
-        // Cargar Líneas de producto / servicio
+        // Cargar Líneas de producto / servicio con precios base frescos
         if (det && det.length > 0) {
-          const lineasMapeadas: LineaDetalle[] = det.map((d: any) => ({
-            id: d.id || tempId(),
-            tipo_item: d.tipo_item || "producto",
-            item_id: d.item_id || undefined,
-            descripcion: d.descripcion,
-            cantidad: Number(d.cantidad || 1),
-            precio_unitario: Number(d.precio_unitario || 0),
-            subtotal: Number(d.subtotal || (Number(d.cantidad || 1) * Number(d.precio_unitario || 0))),
-          }));
+          const prodIds = det
+            .filter((d: any) => d.tipo_item === "producto" && d.item_id)
+            .map((d: any) => d.item_id);
+
+          let prodsMap: Record<string, any> = {};
+          if (prodIds.length > 0) {
+            const { data: prodsData } = await supabase
+              .from("productos")
+              .select("id, precio_costo, precio_venta, precio_bcv, precio_tecnico")
+              .in("id", prodIds);
+            if (prodsData) {
+              prodsData.forEach((p: any) => { prodsMap[p.id] = p; });
+            }
+          }
+
+          const lineasMapeadas: LineaDetalle[] = det.map((d: any) => {
+            const prod = d.item_id ? prodsMap[d.item_id] : null;
+            const pDiv = prod?.precio_venta && prod.precio_venta > 0
+              ? prod.precio_venta
+              : (prod?.precio_costo > 0 ? Math.round((prod.precio_costo / (1 - 0.28)) * 100) / 100 : d.precio_unitario);
+
+            let pBcv = prod?.precio_bcv && prod.precio_bcv > 0 ? prod.precio_bcv : 0;
+            if (!pBcv && prod?.precio_costo > 0) {
+              pBcv = Math.round((prod.precio_costo / (1 - 0.38)) * 100) / 100;
+            }
+            if (!pBcv && pDiv > 0) {
+              pBcv = Math.round(pDiv * 1.15 * 100) / 100;
+            }
+
+            return {
+              id: d.id || tempId(),
+              tipo_item: d.tipo_item || "producto",
+              item_id: d.item_id || undefined,
+              descripcion: d.descripcion,
+              cantidad: Number(d.cantidad || 1),
+              precio_unitario: Number(d.precio_unitario || 0),
+              subtotal: Number(d.subtotal || (Number(d.cantidad || 1) * Number(d.precio_unitario || 0))),
+              precio_divisas: pDiv,
+              precio_bcv: pBcv,
+              precio_tecnico: prod?.precio_tecnico,
+            };
+          });
           setLineas(lineasMapeadas);
         }
 
         // Descuento y Notas
         setDescuento(Number(cot.descuento || 0));
 
-        // Detección de moneda y notas
+        // Detección de modo de cotización y notas
         let notasTexto = cot.notas || "";
-        if (notasTexto.includes("[Cotización emitida en Bolívares")) {
-          setMoneda("VES");
+        let modoDetectado: ModoCotizacion = "USD_DIVISAS";
+        if (notasTexto.includes("Bolívares") || notasTexto.includes("VES")) {
+          modoDetectado = "VES";
+        } else if (notasTexto.includes("Dólares Ref. BCV") || notasTexto.includes("Dolares Ref. BCV")) {
+          modoDetectado = "USD_BCV";
         } else {
-          setMoneda("USD");
+          modoDetectado = "USD_DIVISAS";
         }
+        setModoCotizacion(modoDetectado);
+        setMoneda(modoDetectado === "VES" ? "VES" : "USD");
         setNotas(notasTexto);
 
         // Tasa BCV
@@ -365,6 +455,7 @@ export default function CotizadorWizard() {
       saldo:            aplicaEsquemaPago ? total * 0.3 : 0,
       aplicaEsquemaPago,
       moneda,
+      modoCotizacion,
       tasaBcv,
       aplicaRetenciones,
       aplicaRetencionIva,
@@ -382,6 +473,7 @@ export default function CotizadorWizard() {
     aplicaIva,
     ivaPct,
     moneda,
+    modoCotizacion,
     tasaBcv,
     aplicaRetenciones,
     aplicaRetencionIva,
@@ -443,11 +535,17 @@ export default function CotizadorWizard() {
         setCliente((prev) => ({ ...prev, id: clienteId }));
       }
 
-      // Metadata de moneda en notas con cláusula de indexación BCV
-      const infoMoneda = moneda === "VES"
-        ? `[Cotización emitida en Bolívares | Tasa BCV: Bs. ${tasaBcv.toFixed(2)} | Liquidable a tasa BCV del día de pago]`
-        : "";
-      const notasFinales = [notas, infoMoneda].filter(Boolean).join(" ");
+      // Metadata de modo de cotización y moneda en notas con cláusula de indexación BCV
+      let infoMoneda = "";
+      if (modoCotizacion === "VES") {
+        infoMoneda = `[Cotización emitida en Bolívares | Tasa BCV: Bs. ${tasaBcv.toFixed(2)} | Liquidable a tasa BCV del día de pago]`;
+      } else if (modoCotizacion === "USD_BCV") {
+        infoMoneda = `[Cotización emitida en Dólares Ref. BCV | Tasa BCV: Bs. ${tasaBcv.toFixed(2)} | Liquidable a tasa BCV del día de pago]`;
+      } else {
+        infoMoneda = `[Cotización emitida en Dólares Divisas (Efectivo/Zelle)]`;
+      }
+      const notasLimpias = (notas || "").replace(/\[Cotización (emitida|actualizada) en.*?\]/g, "").trim();
+      const notasFinales = [notasLimpias, infoMoneda].filter(Boolean).join(" ");
 
       let cotIdFinal = cotizacionId;
       let numCotFinal = numeroCot;
@@ -610,8 +708,9 @@ export default function CotizadorWizard() {
           cliente,
           lineas,
           resumen,
-          notas,
+          notas: notasFinales,
           moneda,
+          modoCotizacion,
           tasaBcv,
         });
       }
@@ -810,6 +909,79 @@ export default function CotizadorWizard() {
 
         {/* ── Columna izquierda: Selectores ── */}
         <div className="space-y-5">
+          {/* Selector de Modo de Cotización & Moneda */}
+          <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[var(--ts-text-primary)] uppercase tracking-wide flex items-center gap-1.5">
+                <Coins className="w-4 h-4 text-[var(--ts-red)]" />
+                Modo & Moneda
+              </span>
+              {tasaBcv > 0 && (
+                <span className="text-[10px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-full font-bold">
+                  BCV: Bs. {tasaBcv.toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5 bg-[var(--ts-surface-2)] p-1 rounded-xl border border-[var(--ts-border)]">
+              <button
+                type="button"
+                onClick={() => handleModoCotizacionChange("USD_DIVISAS")}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg text-xs font-bold transition-all text-center ${
+                  modoCotizacion === "USD_DIVISAS"
+                    ? "bg-[var(--ts-surface)] text-[var(--ts-red)] shadow-sm border border-[var(--ts-red)]/30"
+                    : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                }`}
+                title="Margen Divisas habitual para cobros en efectivo o Zelle"
+              >
+                <DollarSign className="w-4 h-4 mb-0.5" />
+                <span className="leading-tight">$ Divisas</span>
+                <span className="text-[9px] font-normal opacity-75">Efectivo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleModoCotizacionChange("USD_BCV")}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg text-xs font-bold transition-all text-center ${
+                  modoCotizacion === "USD_BCV"
+                    ? "bg-amber-500 text-slate-950 font-black shadow-sm"
+                    : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                }`}
+                title="Margen alto BCV expresado en Dólares ($ Ref. BCV)"
+              >
+                <Landmark className="w-4 h-4 mb-0.5" />
+                <span className="leading-tight">$ Ref. BCV</span>
+                <span className="text-[9px] font-semibold opacity-90">Utilidad BCV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleModoCotizacionChange("VES")}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg text-xs font-bold transition-all text-center ${
+                  modoCotizacion === "VES"
+                    ? "bg-[var(--ts-red)] text-white shadow-sm"
+                    : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                }`}
+                title="Margen alto BCV expresado y liquidado en Bolívares (Bs.)"
+              >
+                <Coins className="w-4 h-4 mb-0.5" />
+                <span className="leading-tight">Bs. BCV</span>
+                <span className="text-[9px] font-normal opacity-75">Bolívares</span>
+              </button>
+            </div>
+
+            {modoCotizacion === "USD_BCV" && (
+              <p className="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 leading-relaxed">
+                ★ <strong>Dólares Ref. BCV:</strong> Los productos aplican la utilidad alta de BCV y se cotizan en <strong>$</strong> para transferencias bancarias a la tasa oficial del día de pago.
+              </p>
+            )}
+            {modoCotizacion === "VES" && (
+              <p className="text-[11px] text-cyan-400/90 bg-cyan-500/10 border border-cyan-500/20 rounded-lg p-2 leading-relaxed">
+                ★ <strong>Bolívares (Bs. BCV):</strong> Productos con utilidad alta de BCV convertidos a Bolívares. Validez de 24 horas hábiles.
+              </p>
+            )}
+          </div>
+
           {/* Buscador de productos */}
           <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -823,6 +995,7 @@ export default function CotizadorWizard() {
               clienteTipo={cliente.tipo}
               descuentoTecnico={descuentoTecnico}
               moneda={moneda}
+              modoCotizacion={modoCotizacion}
               tasaBcv={tasaBcv}
             />
           </div>
@@ -942,7 +1115,9 @@ export default function CotizadorWizard() {
             descuento={descuento}
             onDescuentoChange={setDescuento}
             moneda={moneda}
-            onMonedaChange={setMoneda}
+            onMonedaChange={(m) => handleModoCotizacionChange(m === "VES" ? "VES" : "USD_DIVISAS")}
+            modoCotizacion={modoCotizacion}
+            onModoCotizacionChange={handleModoCotizacionChange}
             tasaBcv={tasaBcv}
             onTasaBcvChange={setTasaBcv}
             onRefreshTasa={fetchBCVRate}

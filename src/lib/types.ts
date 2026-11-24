@@ -59,6 +59,12 @@ export interface Cliente {
 
 export type TipoItem = "producto" | "servicio";
 
+// ── Modos de Cotización & Moneda en Venezuela ────────────────
+export type ModoCotizacion = 
+  | "USD_DIVISAS" // Dólares en efectivo/Zelle: utiliza margen de divisas (precio_venta)
+  | "USD_BCV"     // Dólares Ref. BCV: se emite en $, pero usa margen alto BCV (precio_bcv)
+  | "VES";        // Bolívares: se emite en Bs., usa margen alto BCV (precio_bcv * tasaBcv)
+
 export interface LineaDetalle {
   id: string; // UUID temporal en cliente
   tipo_item: TipoItem;
@@ -67,6 +73,10 @@ export interface LineaDetalle {
   cantidad: number;
   precio_unitario: number;
   subtotal: number; // computed
+  // Precios base para recálculo dinámico al cambiar entre modos de cotización
+  precio_divisas?: number; // Precio base en $ con margen habitual de divisas
+  precio_bcv?: number;     // Precio base en $ con margen de bolívares / BCV
+  precio_tecnico?: number; // Precio especial para gremio técnico
 }
 
 export interface ResumenCotizacion {
@@ -84,6 +94,7 @@ export interface ResumenCotizacion {
   aplicaEsquemaPago: boolean;
   // Moneda y tasa de cambio
   moneda?: "USD" | "VES";
+  modoCotizacion?: ModoCotizacion;
   tasaBcv?: number;
   // Retenciones fiscales
   aplicaRetenciones?: boolean;

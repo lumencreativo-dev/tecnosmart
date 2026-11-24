@@ -6,12 +6,12 @@ import {
   Search, FileText, CheckCircle2, AlertCircle,
   RefreshCw, ShoppingCart, Plus, Minus, Trash2,
   ArrowRight, Package, Building2, Info, GripVertical,
-  ArrowUp, ArrowDown,
+  ArrowUp, ArrowDown, Landmark, Coins, DollarSign,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase/client";
 import { formatUSD, tempId } from "@/lib/utils";
 import { buscarProductos, cargarServicios } from "@/lib/supabase/servicios";
-import type { Producto, Cliente, ServicioManoObra } from "@/lib/types";
+import type { Producto, Cliente, ServicioManoObra, ModoCotizacion } from "@/lib/types";
 import ClientePicker from "@/components/cotizador/ClientePicker";
 
 type CotizacionDB = any;
@@ -30,15 +30,19 @@ interface LineaVenta {
   precio_unitario: number;
   subtotal: number;
   tipo_item?: string;
+  precio_divisas?: number;
+  precio_bcv?: number;
 }
 
 // ── Buscador inline de productos ──────────────────
 function BuscadorInline({
   onAdd,
-  moneda = "USD",
+  tipoUtilidad = "BCV",
+  moneda = "VES",
   tasaBcv = 0,
 }: {
   onAdd: (p: Producto) => void;
+  tipoUtilidad?: "BCV" | "DIVISAS";
   moneda?: "USD" | "VES";
   tasaBcv?: number;
 }) {
@@ -73,9 +77,11 @@ function BuscadorInline({
       {show && resultados.length > 0 && (
         <ul className="absolute z-20 w-full mt-1 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg shadow-lg max-h-60 overflow-y-auto">
           {resultados.map(p => {
-            const precioBase = moneda === "VES" && p.precio_bcv && p.precio_bcv > 0
+            const pBcv = p.precio_bcv && p.precio_bcv > 0
               ? p.precio_bcv
-              : p.precio_venta;
+              : (p.precio_costo > 0 ? Math.round((p.precio_costo / (1 - 0.38)) * 100) / 100 : Math.round(p.precio_venta * 1.15 * 100) / 100);
+            const pDivisas = p.precio_venta;
+            const precioBase = tipoUtilidad === "BCV" ? pBcv : pDivisas;
 
             return (
               <li key={p.id}>
@@ -88,15 +94,22 @@ function BuscadorInline({
                     <p className="text-xs text-[var(--ts-text-muted)]">SKU: {p.codigo_sku} · Stock: {p.stock ?? 0}</p>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className="text-sm font-bold text-emerald-400">{formatUSD(precioBase)}</span>
-                    {moneda === "VES" && tasaBcv > 0 ? (
-                      <span className="text-[10px] font-mono text-cyan-400 font-semibold">
-                        ≈ {formatBs(precioBase * tasaBcv)}
-                      </span>
+                    {moneda === "VES" ? (
+                      <>
+                        <span className="text-sm font-bold text-cyan-400">
+                          {formatBs(precioBase * (tasaBcv || 1))}
+                        </span>
+                        <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold">
+                          ≈ ${precioBase.toFixed(2)} {tipoUtilidad === "BCV" ? "BCV" : "Divisas"}
+                        </span>
+                      </>
                     ) : (
-                      <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold">
-                        {moneda === "VES" ? "P. BCV" : "P. Divisas"}
-                      </span>
+                      <>
+                        <span className="text-sm font-bold text-emerald-400">{formatUSD(precioBase)}</span>
+                        <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold">
+                          {tipoUtilidad === "BCV" ? "P. BCV ($)" : "P. Divisas ($)"}
+                        </span>
+                      </>
                     )}
                   </div>
                 </button>
@@ -146,11 +159,35 @@ export default function FacturadorWizard() {
   const [error, setError]                 = useState<string | null>(null);
   const [generando, setGenerando]         = useState(false);
   const [facturaGenerada, setFacturaGenerada] = useState<string | null>(null);
-  const [moneda, setMoneda]               = useState<"USD" | "VES">("USD");
-  const [mostrarNotaBcv, setMostrarNotaBcv] = useState<boolean>(false);
+  const [tipoUtilidad, setTipoUtilidad]   = useState<"BCV" | "DIVISAS">("BCV");
+  const [moneda, setMoneda]               = useState<"USD" | "VES">("VES");
+  const [mostrarNotaBcv, setMostrarNotaBcv] = useState<boolean>(true);
   const [tasaBcv, setTasaBcv]             = useState<number>(0);
   const [cargandoTasa, setCargandoTasa]   = useState(false);
   const [metodoPago, setMetodoPago]       = useState<"bs_transferencia" | "usd_efectivo" | "zelle" | "binance">("bs_transferencia");
+
+  // ── Recálculo dinámico de utilidad en venta directa ──
+  const handleCambioTipoUtilidad = (nuevoTipo: "BCV" | "DIVISAS") => {
+    setTipoUtilidad(nuevoTipo);
+    setLineasDirectas(prev => prev.map(l => {
+      if (l.tipo_item === "servicio" || !l.producto_id) return l;
+      const nuevoPrecio = nuevoTipo === "BCV" ? (l.precio_bcv ?? l.precio_unitario) : (l.precio_divisas ?? l.precio_unitario);
+      return {
+        ...l,
+        precio_unitario: nuevoPrecio,
+        subtotal: l.cantidad * nuevoPrecio,
+      };
+    }));
+  };
+
+  const handleMetodoPagoChange = (nuevoMetodo: "bs_transferencia" | "usd_efectivo" | "zelle" | "binance") => {
+    setMetodoPago(nuevoMetodo);
+    if (nuevoMetodo === "bs_transferencia") {
+      handleCambioTipoUtilidad("BCV");
+    } else {
+      handleCambioTipoUtilidad("DIVISAS");
+    }
+  };
 
   // ── BCV ──
   const fetchBCVRate = async () => {
@@ -164,10 +201,17 @@ export default function FacturadorWizard() {
   };
 
   useEffect(() => {
-    if (modo === "venta_directa" && tasaBcv === 0) {
-      fetchBCVRate();
+    fetchBCVRate();
+  }, []);
+
+  // Pre-carga si viene de URL (?cotizacion_id=... o ?cot=...)
+  useEffect(() => {
+    const cotParam = searchParams.get("cotizacion_id") || searchParams.get("cot");
+    if (cotParam) {
+      setQuery(cotParam);
+      buscarCotizacion(undefined, cotParam);
     }
-  }, [modo]);
+  }, [searchParams]);
 
   useEffect(() => {
     if (initialModo === "venta_directa" && searchParams.get("cliente_id")) {
@@ -204,24 +248,39 @@ export default function FacturadorWizard() {
   }, [searchParams]);
 
   // ── Buscar cotización ──
-  const buscarCotizacion = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!query.trim()) return;
+  const buscarCotizacion = async (e?: React.FormEvent, cotQueryOverride?: string) => {
+    if (e) e.preventDefault();
+    const q = (cotQueryOverride || query).trim();
+    if (!q) return;
     setBuscando(true);
     setError(null);
     setFacturaGenerada(null);
     setCotizacion(null);
-    setTasaBcv(0);
 
     const { data, error: err } = await supabase
       .from("cotizaciones")
       .select("*, clientes (*), cotizacion_detalles (*)")
-      .ilike("numero_cotizacion", `%${query.trim()}%`)
+      .ilike("numero_cotizacion", `%${q}%`)
       .single();
 
     setBuscando(false);
     if (err || !data) { setError("No se encontró ninguna cotización con ese número."); return; }
     setCotizacion(data);
+
+    // Detectar si la cotización vino con utilidad BCV o Divisas
+    const notasStr = data.notas || "";
+    const esCotizacionBCV = notasStr.includes("Dólares Ref. BCV") || notasStr.includes("Bolívares") || notasStr.includes("[MODO_COTIZACION:USD_BCV]") || notasStr.includes("[MODO_COTIZACION:VES]");
+    setTipoUtilidad(esCotizacionBCV ? "BCV" : "DIVISAS");
+
+    // Predeterminar facturación en Bolívares conforme a ley venezolana
+    setMoneda("VES");
+    setMostrarNotaBcv(true);
+
+    if (data.tasa_bcv && Number(data.tasa_bcv) > 0) {
+      setTasaBcv(Number(data.tasa_bcv));
+    }
+    fetchBCVRate();
+
     if (data.clientes?.es_contribuyente_especial) {
       setAplicaRetencionIva(true);
       if (typeof data.clientes.retencion_iva_pct === "number") setRetencionIvaPct(data.clientes.retencion_iva_pct);
@@ -230,14 +289,15 @@ export default function FacturadorWizard() {
         setAplicaRetencionIslr(true);
       }
     }
-    if (data.estado !== "facturada") fetchBCVRate();
   };
 
   // ── Venta directa: agregar producto ──
   const agregarProductoDirecto = (p: Producto) => {
-    const precioUnitario = moneda === "VES" && p.precio_bcv && p.precio_bcv > 0
+    const pBcv = p.precio_bcv && p.precio_bcv > 0
       ? p.precio_bcv
-      : p.precio_venta;
+      : (p.precio_costo > 0 ? Math.round((p.precio_costo / (1 - 0.38)) * 100) / 100 : Math.round(p.precio_venta * 1.15 * 100) / 100);
+    const pDivisas = p.precio_venta;
+    const precioUnitario = tipoUtilidad === "BCV" ? pBcv : pDivisas;
 
     const existe = lineasDirectas.findIndex(l => l.producto_id === p.id);
     if (existe >= 0) {
@@ -255,6 +315,8 @@ export default function FacturadorWizard() {
         precio_unitario: precioUnitario,
         subtotal:       precioUnitario,
         tipo_item:      "producto",
+        precio_divisas: pDivisas,
+        precio_bcv:     pBcv,
       }]);
     }
   };
@@ -460,8 +522,15 @@ export default function FacturadorWizard() {
           : null
       ].filter(Boolean).join(" | ");
 
+      const modoFactura: ModoCotizacion = moneda === "VES" 
+        ? "VES" 
+        : (tipoUtilidad === "BCV" ? "USD_BCV" : "USD_DIVISAS");
+
       const tagsMoneda = [
+        `[MODO_FACTURA:${modoFactura}]`,
+        `[UTILIDAD:${tipoUtilidad}]`,
         `[MONEDA:${moneda}]`,
+        `[TASA_BCV:${tasaBcv}]`,
         !mostrarNotaBcv ? `[SIN_NOTA_BCV]` : null,
       ].filter(Boolean).join(" ");
 
@@ -553,6 +622,7 @@ export default function FacturadorWizard() {
         cliente:        cotizacion.clientes,
         lineas:         cotizacion.cotizacion_detalles,
         moneda,
+        modoFactura,
         mostrarNotaBcv,
         tasaBcv:        tasaBcv || 1,
         subtotalBs,
@@ -614,8 +684,15 @@ export default function FacturadorWizard() {
           : null
       ].filter(Boolean).join(" | ");
 
+      const modoFactura: ModoCotizacion = moneda === "VES" 
+        ? "VES" 
+        : (tipoUtilidad === "BCV" ? "USD_BCV" : "USD_DIVISAS");
+
       const tagsMoneda = [
+        `[MODO_FACTURA:${modoFactura}]`,
+        `[UTILIDAD:${tipoUtilidad}]`,
         `[MONEDA:${moneda}]`,
+        `[TASA_BCV:${tasaBcv}]`,
         !mostrarNotaBcv ? `[SIN_NOTA_BCV]` : null,
       ].filter(Boolean).join(" ");
 
@@ -720,6 +797,7 @@ export default function FacturadorWizard() {
           tipo_item:       "producto",
         })),
         moneda,
+        modoFactura,
         mostrarNotaBcv,
         tasaBcv:        tasaBcv || 1,
         subtotalBs,
@@ -783,12 +861,106 @@ export default function FacturadorWizard() {
         </span>
       </div>
 
-      {/* ── Selector de Moneda de Emisión ── */}
+      {/* ── 1. Selector de Estructura de Utilidad (según método de pago) ── */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="block text-xs font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
+            1. Estructura de Utilidad (Según Forma de Pago del Cliente)
+          </label>
+          <span className="text-[10px] text-[var(--ts-text-muted)] font-semibold">
+            {modo === "desde_cotizacion" ? "Sincronizada con la cotización" : "Afecta los precios de venta"}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => handleCambioTipoUtilidad("BCV")}
+            className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
+              tipoUtilidad === "BCV"
+                ? "border-cyan-500 bg-cyan-500/10 ring-1 ring-cyan-500"
+                : "border-[var(--ts-border)] bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)]"
+            }`}
+          >
+            <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+              tipoUtilidad === "BCV" ? "border-cyan-500" : "border-[var(--ts-border)]"
+            }`}>
+              {tipoUtilidad === "BCV" && <div className="w-2 h-2 rounded-full bg-cyan-500" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-sm font-bold text-[var(--ts-text-primary)]">Utilidad BCV (~38%)</span>
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                  Pago en Bolívares
+                </span>
+              </div>
+              <p className="text-xs text-[var(--ts-text-muted)] mt-1">
+                Utilidad calculada con fórmula BCV para transferencias o Pago Móvil. Protege el margen contra devaluación.
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleCambioTipoUtilidad("DIVISAS")}
+            className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
+              tipoUtilidad === "DIVISAS"
+                ? "border-emerald-500 bg-emerald-500/10 ring-1 ring-emerald-500"
+                : "border-[var(--ts-border)] bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)]"
+            }`}
+          >
+            <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+              tipoUtilidad === "DIVISAS" ? "border-emerald-500" : "border-[var(--ts-border)]"
+            }`}>
+              {tipoUtilidad === "DIVISAS" && <div className="w-2 h-2 rounded-full bg-emerald-500" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-sm font-bold text-[var(--ts-text-primary)]">Utilidad Divisas (~28%)</span>
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  Descuento en Divisas
+                </span>
+              </div>
+              <p className="text-xs text-[var(--ts-text-muted)] mt-1">
+                Aplica la utilidad especial con descuento para clientes que pagan en Dólares Efectivo, Zelle o Binance.
+              </p>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* ── 2. Selector de Moneda de Emisión Fiscal (SENIAT) ── */}
       <div className="space-y-2">
         <label className="block text-xs font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
-          Moneda de Emisión de la Factura
+          2. Moneda de Emisión Fiscal de la Factura (SENIAT)
         </label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => { setMoneda("VES"); setMostrarNotaBcv(true); }}
+            className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
+              moneda === "VES"
+                ? "border-[var(--ts-red)] bg-[var(--ts-red)]/10 ring-1 ring-[var(--ts-red)]"
+                : "border-[var(--ts-border)] bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)]"
+            }`}
+          >
+            <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+              moneda === "VES" ? "border-[var(--ts-red)]" : "border-[var(--ts-border)]"
+            }`}>
+              {moneda === "VES" && <div className="w-2 h-2 rounded-full bg-[var(--ts-red)]" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-sm font-bold text-[var(--ts-text-primary)]">Bolívares (Bs. / VES)</span>
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">
+                  Requerido por Ley
+                </span>
+              </div>
+              <p className="text-xs text-[var(--ts-text-muted)] mt-1">
+                Todo el documento se expresa 100% en Bolívares (Bs.) al cambio oficial BCV. Aplica tanto si el cliente pagó en Bs. como si pagó en divisas pero se factura legalmente en Bs.
+              </p>
+            </div>
+          </button>
+
           <button
             type="button"
             onClick={() => setMoneda("USD")}
@@ -806,34 +978,12 @@ export default function FacturadorWizard() {
             <div>
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-sm font-bold text-[var(--ts-text-primary)]">Dólares ($ / USD)</span>
-                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                  Recomendado para divisas
+                <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  Operación en Divisas
                 </span>
               </div>
               <p className="text-xs text-[var(--ts-text-muted)] mt-1">
-                Expresada en USD. <strong>NO incluye</strong> la cláusula de cobro obligatorio a tasa BCV (ideal para pagos en efectivo o a tasas pactadas).
-              </p>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMoneda("VES")}
-            className={`p-3.5 rounded-xl border text-left transition-all flex items-start gap-3 ${
-              moneda === "VES"
-                ? "border-[var(--ts-red)] bg-[var(--ts-red)]/10 ring-1 ring-[var(--ts-red)]"
-                : "border-[var(--ts-border)] bg-[var(--ts-surface)] hover:bg-[var(--ts-surface-2)]"
-            }`}
-          >
-            <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
-              moneda === "VES" ? "border-[var(--ts-red)]" : "border-[var(--ts-border)]"
-            }`}>
-              {moneda === "VES" && <div className="w-2 h-2 rounded-full bg-[var(--ts-red)]" />}
-            </div>
-            <div>
-              <span className="text-sm font-bold text-[var(--ts-text-primary)]">Bolívares (Bs. / VES)</span>
-              <p className="text-xs text-[var(--ts-text-muted)] mt-1">
-                Expresada en Bolívares convertidos según la tasa de cambio establecida.
+                Expresada formalmente en USD ($). Permite desglosar IGTF (3%) y nota de cambio referencial.
               </p>
             </div>
           </button>
@@ -845,10 +995,12 @@ export default function FacturadorWizard() {
         <div>
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-semibold text-[var(--ts-text-muted)]">
-              {moneda === "USD" ? "Tasa de Cambio Referencial (Opcional)" : "Tasa de Cambio BCV (Requerida)"}
+              {moneda === "USD" ? "Tasa de Cambio Referencial (Opcional)" : "Tasa de Cambio Oficial BCV (Requerida)"}
             </label>
-            {moneda === "USD" && (
+            {moneda === "USD" ? (
               <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">Opcional en USD</span>
+            ) : (
+              <span className="text-[10px] text-emerald-400 font-medium">Oficial del día</span>
             )}
           </div>
           <div className="relative">
@@ -862,7 +1014,7 @@ export default function FacturadorWizard() {
             <button
               type="button" onClick={fetchBCVRate} disabled={cargandoTasa}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--ts-red)] hover:text-red-700 disabled:opacity-50"
-              title="Obtener tasa BCV"
+              title="Obtener tasa oficial BCV"
             >
               <RefreshCw className={`w-4 h-4 ${cargandoTasa ? "animate-spin" : ""}`} />
             </button>
@@ -879,7 +1031,7 @@ export default function FacturadorWizard() {
           <label className="block text-xs font-semibold text-[var(--ts-text-muted)] mb-1">Método de Pago</label>
           <select
             value={metodoPago}
-            onChange={e => setMetodoPago(e.target.value as any)}
+            onChange={e => handleMetodoPagoChange(e.target.value as any)}
             className="w-full px-3 py-2 border border-[var(--ts-border)] rounded-lg text-sm focus:outline-none focus:border-[var(--ts-red)] bg-[var(--ts-surface)]"
           >
             <option value="bs_transferencia">Transferencia / Pago Móvil (Bolívares)</option>
@@ -1484,13 +1636,24 @@ export default function FacturadorWizard() {
             <div className="bg-[var(--ts-surface)] rounded-xl border border-[var(--ts-border)] shadow-sm overflow-hidden">
               <div className="p-6 border-b border-[var(--ts-border)] bg-[var(--ts-surface-2)] flex justify-between items-start">
                 <div>
-                  <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full mb-2 ${
-                    cotizacion.estado === "facturada"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-[var(--ts-red)]/10 text-[var(--ts-red)]"
-                  }`}>
-                    {cotizacion.estado === "facturada" ? "YA FACTURADA" : "LISTA PARA FACTURAR"}
-                  </span>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${
+                      cotizacion.estado === "facturada"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-[var(--ts-red)]/10 text-[var(--ts-red)]"
+                    }`}>
+                      {cotizacion.estado === "facturada" ? "YA FACTURADA" : "LISTA PARA FACTURAR"}
+                    </span>
+                    {tipoUtilidad === "BCV" ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                        🏛️ Utilidad BCV (~38%)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        💵 Utilidad Divisas (Descuento)
+                      </span>
+                    )}
+                  </div>
                   <h3 className="text-xl font-bold text-[var(--ts-text-primary)]">{cotizacion.numero_cotizacion}</h3>
                   <p className="text-[var(--ts-text-muted)] mt-1 text-sm">
                     Cliente: <strong className="text-[var(--ts-text-primary)]">
@@ -1501,6 +1664,11 @@ export default function FacturadorWizard() {
                 <div className="text-right">
                   <p className="text-xs text-[var(--ts-text-muted)] uppercase font-semibold">Total Base (USD)</p>
                   <p className="text-2xl font-extrabold text-[var(--ts-text-primary)] mt-1">{formatUSD(subtotalUsd)}</p>
+                  {tasaBcv > 0 && (
+                    <p className="text-xs font-mono font-bold text-cyan-400 mt-0.5">
+                      ≈ {formatBs(subtotalUsd * tasaBcv)}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1553,11 +1721,40 @@ export default function FacturadorWizard() {
           {/* ── Buscador de productos ── */}
           <div className="bg-[var(--ts-surface)] p-5 rounded-xl border border-[var(--ts-border)] shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide mb-3">
-                Agregar Productos del Stock
-              </h2>
+              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                <h2 className="text-sm font-bold text-[var(--ts-text-primary)] uppercase tracking-wide">
+                  Agregar Productos del Stock
+                </h2>
+                <div className="flex items-center gap-1 bg-[var(--ts-surface-2)] p-0.5 rounded-lg border border-[var(--ts-border)]">
+                  <button
+                    type="button"
+                    onClick={() => handleCambioTipoUtilidad("BCV")}
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+                      tipoUtilidad === "BCV"
+                        ? "bg-cyan-500 text-black shadow-sm"
+                        : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                    }`}
+                    title="Utilidad para pago en Bolívares (~38%)"
+                  >
+                    🏛️ P. BCV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleCambioTipoUtilidad("DIVISAS")}
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+                      tipoUtilidad === "DIVISAS"
+                        ? "bg-emerald-500 text-black shadow-sm"
+                        : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                    }`}
+                    title="Descuento especial por pago en Divisas (~28%)"
+                  >
+                    💵 Divisas
+                  </button>
+                </div>
+              </div>
               <BuscadorInline
                 onAdd={agregarProductoDirecto}
+                tipoUtilidad={tipoUtilidad}
                 moneda={moneda}
                 tasaBcv={tasaBcv}
               />
@@ -1705,7 +1902,13 @@ export default function FacturadorWizard() {
                       <Package className="w-4 h-4 text-[var(--ts-text-muted)] shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-[var(--ts-text-primary)] truncate">{linea.descripcion}</p>
-                        <p className="text-xs text-[var(--ts-text-muted)]">{formatUSD(linea.precio_unitario)} c/u</p>
+                        <p className="text-xs text-[var(--ts-text-muted)]">
+                          {moneda === "VES" && tasaBcv > 0 ? (
+                            <span>{formatBs(linea.precio_unitario * tasaBcv)} c/u <span className="opacity-70 font-mono">(${linea.precio_unitario.toFixed(2)})</span></span>
+                          ) : (
+                            <span>{formatUSD(linea.precio_unitario)} c/u</span>
+                          )}
+                        </p>
                       </div>
                       {/* Controles de cantidad */}
                       <div className="flex items-center gap-1">
@@ -1725,8 +1928,8 @@ export default function FacturadorWizard() {
                           <Plus className="w-3 h-3" />
                         </button>
                       </div>
-                      <span className="text-sm font-bold text-[var(--ts-red)] w-20 text-right">
-                        {formatUSD(linea.subtotal)}
+                      <span className="text-sm font-bold text-[var(--ts-red)] w-28 text-right">
+                        {moneda === "VES" && tasaBcv > 0 ? formatBs(linea.subtotal * tasaBcv) : formatUSD(linea.subtotal)}
                       </span>
                       <button
                         type="button"
@@ -1740,8 +1943,15 @@ export default function FacturadorWizard() {
                 })}
               </div>
               <div className="px-5 py-3 bg-[var(--ts-surface-2)] border-t border-[var(--ts-border)] flex justify-between items-center">
-                <span className="text-sm font-semibold text-[var(--ts-text-muted)]">Subtotal USD</span>
-                <span className="text-lg font-extrabold text-[var(--ts-text-primary)]">{formatUSD(totalDirecto)}</span>
+                <div>
+                  <span className="text-sm font-semibold text-[var(--ts-text-muted)]">Subtotal a Facturar</span>
+                  {moneda === "VES" && tasaBcv > 0 && (
+                    <span className="block text-[11px] text-[var(--ts-text-muted)]">Base: {formatUSD(totalDirecto)} USD</span>
+                  )}
+                </div>
+                <span className="text-lg font-extrabold text-[var(--ts-text-primary)]">
+                  {moneda === "VES" && tasaBcv > 0 ? formatBs(totalDirecto * tasaBcv) : formatUSD(totalDirecto)}
+                </span>
               </div>
             </div>
           )}

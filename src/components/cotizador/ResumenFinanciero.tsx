@@ -1,7 +1,7 @@
 "use client";
 
-import { AlertCircle, TrendingUp, Building2, CreditCard, RefreshCw, DollarSign, Coins } from "lucide-react";
-import type { ResumenCotizacion } from "@/lib/types";
+import { AlertCircle, TrendingUp, Building2, CreditCard, RefreshCw, DollarSign, Coins, Landmark } from "lucide-react";
+import type { ModoCotizacion, ResumenCotizacion } from "@/lib/types";
 import { formatUSD, formatBs } from "@/lib/utils";
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
   // Moneda y tasa
   moneda?: "USD" | "VES";
   onMonedaChange?: (val: "USD" | "VES") => void;
+  modoCotizacion?: ModoCotizacion;
+  onModoCotizacionChange?: (val: ModoCotizacion) => void;
   tasaBcv?: number;
   onTasaBcvChange?: (val: number) => void;
   onRefreshTasa?: () => void;
@@ -42,6 +44,8 @@ export default function ResumenFinanciero({
   onDescuentoChange,
   moneda = "USD",
   onMonedaChange,
+  modoCotizacion = "USD_DIVISAS",
+  onModoCotizacionChange,
   tasaBcv = 0,
   onTasaBcvChange,
   onRefreshTasa,
@@ -63,7 +67,8 @@ export default function ResumenFinanciero({
   incluirEsquemaPago = true,
   onIncluirEsquemaPagoChange,
 }: Props) {
-  const isVES = moneda === "VES";
+  const isVES = modoCotizacion === "VES" || moneda === "VES";
+  const esModoBCV = modoCotizacion === "USD_BCV" || modoCotizacion === "VES" || isVES;
   const factor = isVES && tasaBcv > 0 ? tasaBcv : 1;
 
   const fmt = (usdAmount: number) => {
@@ -71,6 +76,14 @@ export default function ResumenFinanciero({
       return formatBs(usdAmount * factor);
     }
     return formatUSD(usdAmount);
+  };
+
+  const handleSelectModo = (nuevoModo: ModoCotizacion) => {
+    if (onModoCotizacionChange) {
+      onModoCotizacionChange(nuevoModo);
+    } else if (onMonedaChange) {
+      onMonedaChange(nuevoModo === "VES" ? "VES" : "USD");
+    }
   };
 
   return (
@@ -97,44 +110,74 @@ export default function ResumenFinanciero({
       </div>
 
       <div className="p-5 space-y-4">
-        {/* Selector de Moneda (USD vs Bolívares) */}
-        {onMonedaChange && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-[var(--ts-text-muted)]">Moneda de Emisión:</span>
-              <div className="flex gap-1 bg-[var(--ts-surface-2)] p-1 rounded-lg border border-[var(--ts-border)]">
+        {/* Selector de Modo de Cotización (Divisas vs Ref. BCV vs Bolívares) */}
+        {(onModoCotizacionChange || onMonedaChange) && (
+          <div className="space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-[var(--ts-text-muted)]">Modo & Moneda de Emisión:</span>
+              <div className="grid grid-cols-3 gap-1 bg-[var(--ts-surface-2)] p-1 rounded-lg border border-[var(--ts-border)]">
                 <button
                   type="button"
-                  onClick={() => onMonedaChange("USD")}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold transition-all ${
-                    moneda === "USD"
+                  onClick={() => handleSelectModo("USD_DIVISAS")}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 px-2.5 py-1.5 rounded text-xs font-bold transition-all text-center ${
+                    modoCotizacion === "USD_DIVISAS"
                       ? "bg-[var(--ts-surface)] text-[var(--ts-red)] shadow-sm"
                       : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
                   }`}
+                  title="Pago en efectivo / Zelle con utilidad estándar de divisas"
                 >
-                  <DollarSign className="w-3.5 h-3.5" />
-                  Dólares (USD)
+                  <DollarSign className="w-3.5 h-3.5 shrink-0" />
+                  <span>$ Divisas</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => onMonedaChange("VES")}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold transition-all ${
-                    moneda === "VES"
+                  onClick={() => handleSelectModo("USD_BCV")}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 px-2.5 py-1.5 rounded text-xs font-bold transition-all text-center ${
+                    modoCotizacion === "USD_BCV"
+                      ? "bg-amber-500 text-slate-950 font-black shadow-sm"
+                      : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
+                  }`}
+                  title="Cotización emitida en $ con utilidad alta de BCV (referencial a tasa oficial)"
+                >
+                  <Landmark className="w-3.5 h-3.5 shrink-0" />
+                  <span>$ Ref. BCV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectModo("VES")}
+                  className={`flex flex-col sm:flex-row items-center justify-center gap-1 px-2.5 py-1.5 rounded text-xs font-bold transition-all text-center ${
+                    modoCotizacion === "VES"
                       ? "bg-[var(--ts-red)] text-white shadow-sm"
                       : "text-[var(--ts-text-muted)] hover:text-[var(--ts-text-primary)]"
                   }`}
+                  title="Cotización emitida en Bolívares con tasa oficial del BCV"
                 >
-                  <Coins className="w-3.5 h-3.5" />
-                  Bolívares (Bs.)
+                  <Coins className="w-3.5 h-3.5 shrink-0" />
+                  <span>Bs. BCV</span>
                 </button>
               </div>
             </div>
 
-            {/* Tasa BCV si está en Bolívares */}
-            {isVES && onTasaBcvChange && (
+            {/* Aviso informativo de modo */}
+            {modoCotizacion === "USD_BCV" && (
+              <div className="bg-amber-500/10 border border-amber-500/25 rounded-lg p-2.5 text-xs text-amber-300 flex items-start gap-2">
+                <Landmark className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                <div>
+                  <p className="font-bold text-amber-300">Modo Dólares Ref. BCV Activo</p>
+                  <p className="text-[11px] text-amber-200/80 mt-0.5">
+                    Los productos usan la utilidad alta de BCV, reflejados en Dólares ($). Si el cliente paga en Bs, se liquida a la tasa oficial del día.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Tasa BCV si está en Bolívares o Ref. BCV */}
+            {esModoBCV && onTasaBcvChange && (
               <div className="flex items-center justify-between bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-[var(--ts-text-primary)]">Tasa BCV:</span>
+                  <span className="text-xs font-bold text-[var(--ts-text-primary)]">Tasa BCV del día:</span>
                   <div className="flex items-center gap-1">
                     <span className="text-xs font-bold text-[var(--ts-text-muted)]">Bs.</span>
                     <input
@@ -254,7 +297,14 @@ export default function ResumenFinanciero({
             <span className="font-bold text-[var(--ts-text-primary)] text-sm">TOTAL PRESUPUESTO</span>
             {isVES && tasaBcv > 0 && (
               <p className="text-[10px] text-[var(--ts-text-muted)]">
-                Ref: {formatUSD(resumen.total)} (Tasa: {tasaBcv.toFixed(2)})
+                Ref. Base USD: {formatUSD(resumen.total)} (Tasa: {tasaBcv.toFixed(2)})
+              </p>
+            )}
+            {modoCotizacion === "USD_BCV" && (
+              <p className="text-[11px] text-amber-400 font-semibold mt-0.5">
+                {tasaBcv > 0
+                  ? `Equiv. en Bs: ${formatBs(resumen.total * tasaBcv)} (Tasa BCV: ${tasaBcv.toFixed(2)})`
+                  : "Ref. Liquidable a Tasa Oficial BCV"}
               </p>
             )}
           </div>

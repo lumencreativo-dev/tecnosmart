@@ -2,6 +2,7 @@ import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image as PDFImage, Font, pdf } from "@react-pdf/renderer";
 import { formatUSD, formatFecha } from "@/lib/utils";
 import { ISOLOGO_ROJO_B64 } from "@/lib/assets/isologo-rojo-b64"; // Isologo rojo para la factura
+import type { ModoCotizacion } from "@/lib/types";
 
 const S = StyleSheet.create({
   page: { padding: 40, fontFamily: "Helvetica", backgroundColor: "#ffffff" },
@@ -70,6 +71,7 @@ export interface FacturaFiscalProps {
   cliente: any;
   lineas: any[];
   moneda?: "USD" | "VES";
+  modoFactura?: ModoCotizacion;
   mostrarNotaBcv?: boolean;
   tasaBcv?: number;
   subtotalBs?: number;
@@ -102,6 +104,7 @@ export const FacturaFiscalDocument = ({
   cliente,
   lineas,
   moneda = "VES",
+  modoFactura,
   mostrarNotaBcv,
   tasaBcv = 1,
   subtotalBs = 0,
@@ -127,9 +130,10 @@ export const FacturaFiscalDocument = ({
   totalNetoUsd,
 }: FacturaFiscalProps) => {
   const esUSD = moneda === "USD";
+  const isUsdBCV = modoFactura === "USD_BCV" || (esUSD && Boolean(mostrarNotaBcv));
 
-  // Si no se especifica explícitamente, en USD se oculta la nota BCV y en VES se muestra si hay tasa
-  const debeMostrarNotaBcv = mostrarNotaBcv !== undefined ? mostrarNotaBcv : !esUSD;
+  // Si no se especifica explícitamente, en VES y en USD_BCV se muestra nota BCV
+  const debeMostrarNotaBcv = mostrarNotaBcv !== undefined ? mostrarNotaBcv : (!esUSD || isUsdBCV);
 
   const fmt = (num: number) => {
     if (esUSD) {
@@ -186,7 +190,7 @@ export const FacturaFiscalDocument = ({
             <Text style={S.facturaSerie}>FACTURA SERIE N° {numeroFactura}</Text>
             <Text style={[S.facturaSerie, { fontSize: 9 }]}>FECHA DE EMISIÓN: {formatFecha(fecha)}</Text>
             <Text style={[S.facturaSerie, { fontSize: 8, color: "#6e6e6e", marginTop: 2 }]}>
-              MONEDA: {esUSD ? "DÓLARES AMERICANOS (USD)" : "BOLÍVARES (VES)"}
+              MONEDA: {modoFactura === "USD_BCV" ? "DÓLARES AMERICANOS (USD REF. BCV)" : esUSD ? "DÓLARES AMERICANOS (USD)" : "BOLÍVARES (VES)"}
             </Text>
           </View>
         </View>
@@ -223,11 +227,22 @@ export const FacturaFiscalDocument = ({
           <View style={S.resumenLeft}>
             <Text>ESTE DOCUMENTO VA SIN TACHADURA NI ENMIENDA</Text>
             
-            {/* Solo se imprime la tasa del BCV si NO es factura en USD y debeMostrarNotaBcv es true */}
+            {/* Tasa del BCV y notas referenciales */}
             {debeMostrarNotaBcv && tasaBcv > 0 ? (
-              <Text style={{ marginTop: 10 }}>
-                Tasa oficial de cambio BCV del día: {tasaBcv.toLocaleString("es-VE")} Bs/USD
-              </Text>
+              <View style={{ marginTop: 8 }}>
+                <Text style={{ fontSize: 8, color: "#334155", fontWeight: 700 }}>
+                  Tasa oficial de cambio BCV: {tasaBcv.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs/USD
+                </Text>
+                {esUSD ? (
+                  <Text style={{ fontSize: 7.5, color: "#64748b", marginTop: 2 }}>
+                    Contravalor referencial: {formatBs(displayTotal * tasaBcv)} (Pagadero a la tasa oficial BCV de la fecha efectiva de pago)
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 7, color: "#64748b", marginTop: 1 }}>
+                    Factura emitida y liquidada en Bolívares conforme a normativa fiscal SENIAT.
+                  </Text>
+                )}
+              </View>
             ) : null}
 
             {Boolean(aplicaRetencionIva || aplicaRetencionIslr) && (

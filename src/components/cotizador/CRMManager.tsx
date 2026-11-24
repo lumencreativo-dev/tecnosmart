@@ -163,6 +163,8 @@ export default function CRMManager() {
       const aplicaEsquemaPago = total > 500;
 
       const isVES = Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares"));
+      const isUsdBCV = Boolean(!isVES && (cot.notas?.includes("Dólares Ref. BCV") || cot.notas?.includes("Dolares Ref. BCV")));
+      const modoCot: "USD_DIVISAS" | "USD_BCV" | "VES" = isVES ? "VES" : (isUsdBCV ? "USD_BCV" : "USD_DIVISAS");
       const cotTasaBcv = Number(cot.tasa_bcv || tasaBcvHoy || 0);
 
       const { exportarCotizacionPDF } = await import("@/components/pdf/CotizacionPDF");
@@ -179,11 +181,13 @@ export default function CRMManager() {
           saldo:            aplicaEsquemaPago ? total * 0.3 : 0,
           aplicaEsquemaPago,
           moneda: isVES ? "VES" : "USD",
-          tasaBcv: isVES ? cotTasaBcv : undefined,
+          modoCotizacion: modoCot,
+          tasaBcv: (isVES || isUsdBCV) ? cotTasaBcv : undefined,
         },
         notas: cot.notas || undefined,
         moneda: isVES ? "VES" : "USD",
-        tasaBcv: isVES ? cotTasaBcv : undefined,
+        modoCotizacion: modoCot,
+        tasaBcv: (isVES || isUsdBCV) ? cotTasaBcv : undefined,
       });
     } catch (e) {
       console.error("Error al re-generar PDF de cotización:", e);
@@ -199,9 +203,14 @@ export default function CRMManager() {
     }
     setReliquidando(true);
     try {
+      const isVES = Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares"));
+      const isUsdBCV = Boolean(!isVES && (cot.notas?.includes("Dólares Ref. BCV") || cot.notas?.includes("Dolares Ref. BCV")));
+
       // Limpiar nota previa de tasa y agregar la actualizada
-      const notasLimpias = (cot.notas || "").replace(/\[Cotización (emitida|actualizada) en Bolívares.*?\]/g, "").trim();
-      const nuevaNota = `[Cotización actualizada a Tasa BCV: Bs. ${tasaBcvHoy.toFixed(2)} | Liquidable a tasa BCV del día de pago]`;
+      const notasLimpias = (cot.notas || "").replace(/\[Cotización (emitida|actualizada) en.*?\]/g, "").trim();
+      const nuevaNota = isVES
+        ? `[Cotización actualizada a Tasa BCV: Bs. ${tasaBcvHoy.toFixed(2)} | Liquidable a tasa BCV del día de pago]`
+        : `[Cotización actualizada a Dólares Ref. BCV | Tasa BCV: Bs. ${tasaBcvHoy.toFixed(2)} | Liquidable a tasa BCV del día de pago]`;
       const notasFinales = [notasLimpias, nuevaNota].filter(Boolean).join(" ");
 
       const { error } = await supabase
@@ -286,11 +295,15 @@ export default function CRMManager() {
         <div className="flex justify-between items-center mt-3 pt-2.5 border-t border-[var(--ts-border-2)]">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-extrabold text-[var(--ts-text-primary)]">{formatUSD(cot.total)}</span>
-            {Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares")) && (
+            {Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares")) ? (
               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/30 rounded" title={`Tasa BCV: Bs. ${Number(cot.tasa_bcv || 0).toFixed(2)}`}>
                 VES
               </span>
-            )}
+            ) : (cot.notas?.includes("Dólares Ref. BCV") || cot.notas?.includes("Dolares Ref. BCV")) ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded" title={`Ref. Tasa BCV: Bs. ${Number(cot.tasa_bcv || 0).toFixed(2)}`}>
+                $ BCV
+              </span>
+            ) : null}
           </div>
 
           <select
@@ -470,11 +483,15 @@ export default function CRMManager() {
                         </td>
                         <td className="px-5 py-3 text-sm font-bold text-right">
                           <div>{formatUSD(cot.total)}</div>
-                          {Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares")) && (
+                          {Boolean(cot.notas?.toLowerCase().includes("bolívares") || cot.notas?.toLowerCase().includes("bolivares")) ? (
                             <span className="inline-block text-[9px] font-semibold text-blue-400">
                               VES · {cot.tasa_bcv ? `Bs. ${Number(cot.tasa_bcv).toFixed(1)}` : "BCV"}
                             </span>
-                          )}
+                          ) : (cot.notas?.includes("Dólares Ref. BCV") || cot.notas?.includes("Dolares Ref. BCV")) ? (
+                            <span className="inline-block text-[9px] font-semibold text-amber-400">
+                              $ Ref. BCV · {cot.tasa_bcv ? `Bs. ${Number(cot.tasa_bcv).toFixed(1)}` : ""}
+                            </span>
+                          ) : null}
                         </td>
                         <td className="px-5 py-3 text-center">
                           <select
@@ -576,6 +593,8 @@ export default function CRMManager() {
       {/* ── DRAWER DETALLE COTIZACIÓN ── */}
       {selected && (() => {
         const isSelectedVES = Boolean(selected.notas?.toLowerCase().includes("bolívares") || selected.notas?.toLowerCase().includes("bolivares"));
+        const isSelectedUsdBCV = Boolean(!isSelectedVES && (selected.notas?.includes("Dólares Ref. BCV") || selected.notas?.includes("Dolares Ref. BCV")));
+        const isModoBCV = isSelectedVES || isSelectedUsdBCV;
         const cotTasaBcv = Number(selected.tasa_bcv || 0);
         const totalUsd = Number(selected.total || 0);
         const totalBsEmision = cotTasaBcv > 0 ? totalUsd * cotTasaBcv : 0;
@@ -726,11 +745,11 @@ export default function CRMManager() {
                 </div>
 
                 {/* Bloque especial de Indexación BCV / Bolívares */}
-                {isSelectedVES && (
-                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 space-y-3">
+                {isModoBCV && (
+                  <div className={`border rounded-xl p-4 space-y-3 ${isSelectedUsdBCV ? "bg-amber-500/10 border-amber-500/30" : "bg-blue-500/10 border-blue-500/30"}`}>
                     <div className="flex items-center justify-between">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40">
-                        🇻🇪 Cotización en Bolívares (VES)
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${isSelectedUsdBCV ? "bg-amber-500/20 text-amber-400 border border-amber-500/40" : "bg-blue-500/20 text-blue-400 border border-blue-500/40"}`}>
+                        {isSelectedUsdBCV ? "🏛️ Dólares Ref. BCV ($)" : "🇻🇪 Cotización en Bolívares (VES)"}
                       </span>
                       <span className="text-[10px] text-[var(--ts-text-muted)] font-medium">
                         Vigencia: 24h hábiles
@@ -771,7 +790,9 @@ export default function CRMManager() {
                               Variación de Tasa: {pctVariacion > 0 ? `+${pctVariacion.toFixed(2)}%` : `${pctVariacion.toFixed(2)}%`}
                             </p>
                             <p className="text-[11px] text-[var(--ts-text-muted)] mt-0.5">
-                              La cotización original sumaba {totalBsEmision.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs. A la tasa de hoy son {totalBsHoy.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs ({difBs > 0 ? `+${difBs.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs` : `${difBs.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs`}).
+                              {isSelectedUsdBCV
+                                ? `Cotización en $${totalUsd.toFixed(2)} USD. El equivalente en Bs. subió de ${totalBsEmision.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs. a ${totalBsHoy.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.`
+                                : `La cotización original sumaba ${totalBsEmision.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs. A la tasa de hoy son ${totalBsHoy.toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Bs.`}
                             </p>
                           </div>
                         </div>
@@ -852,11 +873,13 @@ export default function CRMManager() {
                     href={`https://wa.me/${selected.clientes.telefono.replace(/\D/g, "")}?text=${encodeURIComponent(
                       isSelectedVES
                         ? `Hola, adjunto la cotización ${selected.numero_cotizacion} de TecnoSmart VZL por un total de Bs. ${(totalBsHoy > 0 ? totalBsHoy : totalBsEmision).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (Ref. $${totalUsd.toFixed(2)} USD liquidable a Tasa BCV del día de pago).`
+                        : isSelectedUsdBCV
+                        ? `Hola, adjunto la cotización ${selected.numero_cotizacion} de TecnoSmart VZL por un total de $${totalUsd.toFixed(2)} USD (Referencia BCV Bs. ${(tasaBcvHoy > 0 ? tasaBcvHoy : cotTasaBcv).toFixed(2)}: Bs. ${(totalBsHoy > 0 ? totalBsHoy : totalBsEmision).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} liquidable al día de pago).`
                         : `Hola, adjunto la cotización ${selected.numero_cotizacion} de TecnoSmart VZL por un total de ${formatUSD(selected.total)}.`
                     )}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20b858] text-white text-xs font-bold py-2.5 rounded-xl transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 bg-[#25D366] hover:bg-[#20b858] text-white text-xs font-bold py-2.5 rounded-xl transition-colors"
                   >
                     <MessageCircle className="w-4 h-4" />
                     Enviar por WhatsApp

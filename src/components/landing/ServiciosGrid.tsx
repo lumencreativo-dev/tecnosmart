@@ -193,23 +193,50 @@ export default function ServiciosGrid() {
           })}
         </div>
 
-        {/* ── STRIP DE MARCAS TECNOLÓGICAS CON ANIMACIÓN ── */}
+        {/* ── STRIP DE MARCAS TECNOLÓGICAS: MARQUEE INFINITO FLUIDO ── */}
         <ScrollReveal direction="up" delay={200}>
           <div className="mt-20 pt-12 border-t border-[#1f1f28]">
-            <p className="text-center text-xs font-bold uppercase tracking-widest text-[#7a7a88] mb-8">
-              Equipos y componentes de fabricantes reconocidos mundialmente
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12 opacity-80 hover:opacity-100 transition-opacity">
-              {ALL_BRANDS.map(({ name, Logo }) => (
-                <div
-                  key={name}
-                  className="flex items-center justify-center text-[#90909c] hover:text-white transition-all duration-200 hover:scale-110"
-                  title={name}
-                >
-                  <Logo className="h-6 w-auto" />
-                </div>
-              ))}
+            <div className="text-center mb-8">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 bg-white/[0.03] border border-white/10 px-3.5 py-1.5 rounded-full inline-flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--ts-red)] animate-pulse" />
+                Equipos y componentes de fabricantes reconocidos mundialmente
+              </span>
             </div>
+
+            {/* Carrusel continuo tipo ticker tape con máscara de desvanecimiento lateral */}
+            <div className="relative w-full overflow-hidden mask-marquee-fade py-3">
+              <div className="animate-marquee-infinite flex items-center gap-12 sm:gap-16">
+                {/* Primer ciclo de marcas */}
+                {ALL_BRANDS.map(({ name, category, Logo }) => (
+                  <div
+                    key={`${name}-1`}
+                    className="flex-shrink-0 flex items-center justify-center opacity-65 hover:opacity-100 transition-all duration-300 hover:scale-105 cursor-pointer group"
+                    title={`${name} — ${category}`}
+                  >
+                    <div className="h-8 max-w-[150px] flex items-center justify-center text-slate-300 group-hover:text-white transition-colors">
+                      <Logo className="h-7 w-auto object-contain max-h-7" />
+                    </div>
+                  </div>
+                ))}
+
+                {/* Segundo ciclo duplicado para empalme infinito sin saltos */}
+                {ALL_BRANDS.map(({ name, category, Logo }) => (
+                  <div
+                    key={`${name}-2`}
+                    className="flex-shrink-0 flex items-center justify-center opacity-65 hover:opacity-100 transition-all duration-300 hover:scale-105 cursor-pointer group"
+                    title={`${name} — ${category}`}
+                  >
+                    <div className="h-8 max-w-[150px] flex items-center justify-center text-slate-300 group-hover:text-white transition-colors">
+                      <Logo className="h-7 w-auto object-contain max-h-7" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-center text-[11px] text-[#606070] mt-5">
+              Pasa el cursor o pulsa para pausar · Instalación bajo especificaciones oficiales de cada fabricante
+            </p>
           </div>
         </ScrollReveal>
 

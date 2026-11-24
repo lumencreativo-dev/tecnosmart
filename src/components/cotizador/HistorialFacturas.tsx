@@ -152,8 +152,10 @@ export default function HistorialFacturas() {
       }
 
       const esUSD = f.moneda === "USD" || f.notas?.includes("[MONEDA:USD]");
-      const sinNotaBcv = f.notas?.includes("[SIN_NOTA_BCV]") || esUSD;
-      const mostrarNotaBcv = !sinNotaBcv;
+      const esUsdBCV = f.notas?.includes("USD_BCV") || f.notas?.includes("Dólares Ref. BCV");
+      const sinNotaBcv = f.notas?.includes("[SIN_NOTA_BCV]") || (esUSD && !esUsdBCV);
+      const mostrarNotaBcv = !sinNotaBcv || esUsdBCV;
+      const modoFactura = esUsdBCV ? "USD_BCV" : (esUSD ? "USD_DIVISAS" : "VES");
 
       const tasa = Number(f.tasa_bcv || 0);
       const subtotalUsd = Number(f.subtotal_usd || f.cotizaciones?.subtotal || f.cotizaciones?.total || 0);
@@ -179,6 +181,7 @@ export default function HistorialFacturas() {
         cliente,
         lineas,
         moneda:         esUSD ? "USD" : "VES",
+        modoFactura,
         mostrarNotaBcv,
         tasaBcv:        tasa,
         subtotalBs:     Number(f.subtotal_bs || 0),

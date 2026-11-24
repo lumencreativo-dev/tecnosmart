@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Search, Plus, X } from "lucide-react";
-import type { LineaDetalle, Producto } from "@/lib/types";
+import type { LineaDetalle, ModoCotizacion, Producto } from "@/lib/types";
 import { tempId } from "@/lib/utils";
 import { buscarProductos } from "@/lib/supabase/servicios";
 
@@ -11,6 +11,7 @@ interface Props {
   clienteTipo?: "cliente_normal" | "tecnico";
   descuentoTecnico?: number; // porcentaje de descuento, ej: 15
   moneda?: "USD" | "VES";
+  modoCotizacion?: ModoCotizacion;
   tasaBcv?: number;
 }
 
@@ -19,6 +20,7 @@ export default function BuscadorProductos({
   clienteTipo,
   descuentoTecnico = 15,
   moneda = "USD",
+  modoCotizacion = "USD_DIVISAS",
   tasaBcv = 0,
 }: Props) {
   const [query, setQuery] = useState("");
@@ -26,6 +28,42 @@ export default function BuscadorProductos({
   const [loading, setLoading] = useState(false);
   const [showList, setShowList] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const esModoBCV = modoCotizacion === "USD_BCV" || modoCotizacion === "VES" || moneda === "VES";
+
+  const getPreciosProducto = (p: Producto) => {
+    // 1. Precio Divisas base (utilidad habitual)
+    const pDivisas = p.precio_venta && p.precio_venta > 0
+      ? p.precio_venta
+      : (p.precio_costo > 0 ? Math.round((p.precio_costo / (1 - 0.28)) * 100) / 100 : 0);
+
+    // 2. Precio BCV base (utilidad alta para operaciones en Bs / Facturación oficial)
+    let pBcv = p.precio_bcv && p.precio_bcv > 0 ? p.precio_bcv : 0;
+    if (!pBcv && p.precio_costo > 0) {
+      pBcv = Math.round((p.precio_costo / (1 - 0.38)) * 100) / 100;
+    }
+    if (!pBcv && pDivisas > 0) {
+      pBcv = Math.round(pDivisas * 1.15 * 100) / 100;
+    }
+
+    const precioBase = esModoBCV ? pBcv : pDivisas;
+
+    let precioFinal = precioBase;
+    if (clienteTipo === "tecnico") {
+      if (p.precio_tecnico != null && p.precio_tecnico > 0) {
+        precioFinal = p.precio_tecnico;
+      } else {
+        precioFinal = precioBase * (1 - descuentoTecnico / 100);
+      }
+    }
+
+    return {
+      pDivisas,
+      pBcv,
+      precioBase,
+      precioFinal: parseFloat(precioFinal.toFixed(2)),
+    };
+  };
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
@@ -44,28 +82,19 @@ export default function BuscadorProductos({
   }, [query]);
 
   const handleSelect = (p: Producto) => {
-    // Si la cotización es en VES (Bolívares), usar precio_bcv si está definido; si no, precio_venta
-    const precioBase = moneda === "VES" && p.precio_bcv && p.precio_bcv > 0
-      ? p.precio_bcv
-      : p.precio_venta;
+    const { pDivisas, pBcv, precioFinal } = getPreciosProducto(p);
 
-    // Si es técnico: usar precio_tecnico si existe, si no calcular el descuento sobre precioBase
-    let precio = precioBase;
-    if (clienteTipo === "tecnico") {
-      if (p.precio_tecnico != null && p.precio_tecnico > 0) {
-        precio = p.precio_tecnico;
-      } else {
-        precio = precioBase * (1 - descuentoTecnico / 100);
-      }
-    }
     onAdd({
       id: tempId(),
       tipo_item: "producto",
       item_id: p.id,
       descripcion: `${p.codigo_sku} — ${p.nombre}`,
       cantidad: 1,
-      precio_unitario: parseFloat(precio.toFixed(2)),
-      subtotal: parseFloat(precio.toFixed(2)),
+      precio_unitario: precioFinal,
+      subtotal: precioFinal,
+      precio_divisas: pDivisas,
+      precio_bcv: pBcv,
+      precio_tecnico: p.precio_tecnico,
     });
     setQuery("");
     setResultados([]);
@@ -103,12 +132,7 @@ export default function BuscadorProductos({
       {showList && resultados.length > 0 && (
         <ul className="absolute z-20 w-full mt-1 bg-[var(--ts-surface)] border border-[var(--ts-border)] rounded-lg shadow-lg max-h-64 overflow-y-auto">
           {resultados.map((p) => {
-            const precioBase = moneda === "VES" && p.precio_bcv && p.precio_bcv > 0
-              ? p.precio_bcv
-              : p.precio_venta;
-            const precioFinal = clienteTipo === "tecnico"
-              ? (p.precio_tecnico != null && p.precio_tecnico > 0 ? p.precio_tecnico : precioBase * (1 - descuentoTecnico / 100))
-              : precioBase;
+            const { precioFinal } = getPreciosProducto(p);
 
             return (
               <li key={p.id}>
@@ -127,13 +151,13 @@ export default function BuscadorProductos({
                       <span className="text-sm font-bold text-emerald-400">
                         ${precioFinal.toFixed(2)}
                       </span>
-                      {moneda === "VES" && tasaBcv > 0 ? (
+                      {esModoBCV && tasaBcv > 0 ? (
                         <span className="text-[10px] font-mono text-cyan-400 font-semibold">
                           ≈ Bs. {(precioFinal * tasaBcv).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-[var(--ts-text-muted)]">
-                          {moneda === "VES" ? "P. BCV" : "P. Divisas"}
+                        <span className={`text-[10px] font-semibold ${esModoBCV ? "text-amber-400" : "text-[var(--ts-text-muted)]"}`}>
+                          {modoCotizacion === "USD_BCV" ? "Ref. BCV ($)" : (esModoBCV ? "P. BCV" : "P. Divisas ($)")}
                         </span>
                       )}
                     </div>

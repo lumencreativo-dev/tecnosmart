@@ -172,6 +172,32 @@
     animation: shineSweep 0.8s ease-in-out;
   }
 
+  /* ── Infinite Brand Marquee Ticker ── */
+  @keyframes marqueeLeft {
+    0% {
+      transform: translateX(0%);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-marquee-infinite {
+    display: flex;
+    width: max-content;
+    animation: marqueeLeft 38s linear infinite;
+    will-change: transform;
+  }
+
+  .animate-marquee-infinite:hover {
+    animation-play-state: paused;
+  }
+
+  .mask-marquee-fade {
+    mask-image: linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%);
+  }
+
   /* ── Modal Pop & Slide Transitions (UI/UX Micro-Interactions) ── */
   @keyframes modalEnter {
     0% {
